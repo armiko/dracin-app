@@ -1,9 +1,10 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { 
   Play, X, Search, Home, Clock, Flame, 
   ChevronRight, SkipBack, SkipForward, AlertTriangle, 
   Loader2, Trophy, Star, Filter, Check, Plus,
-  Pause, Volume2, VolumeX, Share2, ChevronLeft
+  Pause, Volume2, VolumeX, Share2, ChevronLeft,
+  Gauge
 } from 'lucide-react';
 
 /**
@@ -259,7 +260,7 @@ const DetailModal = ({ isOpen, onClose, bookId, onPlayEpisode, onTagClick }) => 
                 )}
 
                 <div className="mt-auto">
-                  <h3 className="text-lg font-bold text-white mb-3">Daftar Episode</h3>
+                  <h3 className="text-lg font-bold text-white mb-3 tracking-tight">Daftar Episode</h3>
                   <div className="bg-black/20 rounded-xl p-4 border border-white/5">
                     <div className="grid grid-cols-5 sm:grid-cols-8 md:grid-cols-8 gap-2 max-h-[200px] overflow-y-auto pr-2 custom-scroll">
                       {data.chapters?.map((ch) => (
@@ -282,22 +283,24 @@ const DetailModal = ({ isOpen, onClose, bookId, onPlayEpisode, onTagClick }) => 
 /**
  * --- CUSTOM PLAYER PAGE ---
  */
-const CustomPlayerPage = ({ book, chapters, initialEp, onBack }) => {
+const CustomPlayerPage = ({ book, chapters, initialEp, onBack, audioSettings, setAudioSettings }) => {
   const [currentEp, setCurrentEp] = useState(initialEp);
   const [videoUrl, setVideoUrl] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
-  const [autoNext, setAutoNext] = useState(true);
   const [isPlaying, setIsPlaying] = useState(false);
-  const [volume, setVolume] = useState(1);
-  const [isMuted, setIsMuted] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
-  const [showControls, setShowControls] = useState(true);
   
   const videoRef = useRef(null);
   const requestRef = useRef(0);
-  const controlsTimeout = useRef(null);
+
+  const formatTime = (seconds) => {
+    if (isNaN(seconds)) return "00:00";
+    const mins = Math.floor(seconds / 60);
+    const secs = Math.floor(seconds % 60);
+    return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+  };
 
   const loadEpisode = useCallback(async (epNum) => {
     setLoading(true); setError(false); setVideoUrl(''); setIsPlaying(false);
@@ -323,207 +326,199 @@ const CustomPlayerPage = ({ book, chapters, initialEp, onBack }) => {
 
   useEffect(() => { loadEpisode(currentEp); }, [currentEp, loadEpisode]);
 
+  // Sinkronisasi audioSettings global ke elemen video
+  useEffect(() => {
+    if (videoRef.current && videoUrl) {
+      videoRef.current.volume = audioSettings.volume;
+      videoRef.current.muted = audioSettings.isMuted;
+      videoRef.current.playbackRate = audioSettings.playbackRate;
+    }
+  }, [videoUrl, audioSettings]);
+
   const togglePlay = () => {
-    if (videoRef.current) {
-      if (isPlaying) videoRef.current.pause();
-      else videoRef.current.play();
-      setIsPlaying(!isPlaying);
+    if (!videoRef.current) return;
+    if (isPlaying) videoRef.current.pause();
+    else videoRef.current.play();
+    setIsPlaying(!isPlaying);
+  };
+
+  const handleNext = () => {
+    if (currentEp < (chapters?.length || 999)) {
+      setCurrentEp(prev => prev + 1);
     }
   };
 
-  const handleTimeUpdate = () => {
-    if (videoRef.current) setCurrentTime(videoRef.current.currentTime);
+  const handlePrev = () => {
+    if (currentEp > 1) {
+      setCurrentEp(prev => prev - 1);
+    }
   };
 
-  const handleLoadedMetadata = () => {
-    if (videoRef.current) setDuration(videoRef.current.duration);
+  const togglePlaybackRate = () => {
+    const nextRate = audioSettings.playbackRate === 1 ? 1.5 : audioSettings.playbackRate === 1.5 ? 2 : 1;
+    setAudioSettings(prev => ({ ...prev, playbackRate: nextRate }));
   };
 
-  const handleProgressChange = (e) => {
+  const handleVolumeChange = (e) => {
+    const val = parseFloat(e.target.value);
+    setAudioSettings(prev => ({ ...prev, volume: val, isMuted: val === 0 }));
+  };
+
+  const handleSeek = (e) => {
     const time = parseFloat(e.target.value);
     setCurrentTime(time);
     if (videoRef.current) videoRef.current.currentTime = time;
   };
 
-  const handleVolumeChange = (e) => {
-    const val = parseFloat(e.target.value);
-    setVolume(val);
-    if (videoRef.current) {
-      videoRef.current.volume = val;
-      setIsMuted(val === 0);
-    }
-  };
-
-  const toggleMute = () => {
-    if (videoRef.current) {
-      const nextMute = !isMuted;
-      setIsMuted(nextMute);
-      videoRef.current.volume = nextMute ? 0 : volume;
-    }
-  };
-
   const handleShare = async () => {
     const shareData = {
-      title: book.bookName || 'Nonton Dracin',
-      text: `Nonton ${book.bookName} Episode ${currentEp} di NontonDracin!`,
-      url: window.location.href,
+      title: book.bookName,
+      text: `Nonton drama ${book.bookName} episode ${currentEp}`,
+      url: window.location.href
     };
-    try {
-      if (navigator.share) await navigator.share(shareData);
-      else {
-        await navigator.clipboard.writeText(window.location.href);
-        // Custom notification could go here
-      }
-    } catch (err) { console.error(err); }
-  };
-
-  const resetControlsTimeout = () => {
-    setShowControls(true);
-    if (controlsTimeout.current) clearTimeout(controlsTimeout.current);
-    controlsTimeout.current = setTimeout(() => {
-      if (isPlaying) setShowControls(false);
-    }, 3000);
-  };
-
-  const formatTime = (time) => {
-    const mins = Math.floor(time / 60);
-    const secs = Math.floor(time % 60);
-    return `${mins}:${secs.toString().padStart(2, '0')}`;
+    if (navigator.share) {
+      try { await navigator.share(shareData); } catch (e) {}
+    } else {
+      const el = document.createElement('textarea');
+      el.value = window.location.href;
+      document.body.appendChild(el);
+      el.select();
+      document.execCommand('copy');
+      document.body.removeChild(el);
+    }
   };
 
   return (
-    <div 
-      className="fixed inset-0 z-[100] bg-black flex flex-col select-none overflow-hidden h-screen w-screen"
-      onMouseMove={resetControlsTimeout}
-      onClick={resetControlsTimeout}
-    >
-      {/* Header */}
-      <div className={`absolute top-0 left-0 right-0 p-4 z-50 flex justify-between items-center transition-opacity duration-500 ${showControls ? 'opacity-100' : 'opacity-0'}`}>
-        <div className="flex items-center gap-3">
-            <button onClick={onBack} className="p-2 bg-black/40 hover:bg-black/60 rounded-full text-white backdrop-blur-md transition">
-                <ChevronLeft size={24} />
-            </button>
-            <div className="max-w-[200px] sm:max-w-md">
-                <h3 className="text-white font-bold text-sm truncate">{book.bookName}</h3>
-                <p className="text-white/60 text-xs">Episode {currentEp}</p>
-            </div>
+    <div className="fixed inset-0 z-[100] bg-black flex flex-col items-center justify-center">
+      {/* Header Player (Bukan Main Navbar) */}
+      <div className="absolute top-0 left-0 right-0 p-4 z-50 flex items-center justify-between bg-gradient-to-b from-black/80 to-transparent">
+        <button onClick={onBack} className="text-white p-2 bg-white/10 rounded-full hover:bg-white/20 transition">
+          <ChevronLeft size={24} />
+        </button>
+        <div className="text-center">
+          <h2 className="text-white font-bold text-sm truncate max-w-[200px]">{book.bookName}</h2>
+          <p className="text-gray-400 text-[10px] font-bold uppercase tracking-wider">Episode {currentEp}</p>
         </div>
-        <button onClick={handleShare} className="p-2 bg-black/40 hover:bg-black/60 rounded-full text-white backdrop-blur-md transition">
+        <button onClick={handleShare} className="text-white p-2 bg-white/10 rounded-full hover:bg-white/20 transition">
           <Share2 size={20} />
         </button>
       </div>
 
-      {/* Video Container (Portrait Focused) */}
-      <div className="flex-1 flex justify-center items-center relative bg-black overflow-hidden">
+      {/* Video Content (Portrait) */}
+      <div className="relative w-full max-w-[450px] aspect-[9/16] bg-slate-900 shadow-2xl flex items-center justify-center overflow-hidden">
         {loading ? (
-          <div className="flex flex-col items-center gap-4">
+          <div className="flex flex-col items-center gap-3">
             <Loader2 className="animate-spin text-blue-500" size={48} />
-            <p className="text-white/40 text-xs font-bold animate-pulse">MENYIAPKAN EPISODE...</p>
+            <p className="text-white/50 text-[10px] font-bold uppercase tracking-[0.2em]">Memuat Video...</p>
           </div>
         ) : error ? (
           <div className="text-center p-6 flex flex-col items-center">
             <AlertTriangle className="text-yellow-500 mb-4" size={48} />
-            <p className="text-white mb-4 font-bold">Gagal Memuat Video</p>
-            <button onClick={() => loadEpisode(currentEp)} className="px-8 py-2 bg-blue-600 text-white rounded-full font-bold">Coba Lagi</button>
+            <p className="text-white mb-4 font-bold">Gagal memuat episode</p>
+            <button onClick={() => loadEpisode(currentEp)} className="px-8 py-2 bg-blue-600 text-white rounded-full font-bold">ULANGI</button>
           </div>
         ) : (
-          <div className="relative h-full w-full max-w-[450px] aspect-[9/16] bg-black shadow-2xl">
+          <>
             <video 
               ref={videoRef}
               src={videoUrl}
-              autoPlay={autoNext}
-              className="w-full h-full object-cover"
-              onTimeUpdate={handleTimeUpdate}
-              onLoadedMetadata={handleLoadedMetadata}
+              autoPlay={audioSettings.autoNext}
+              className="w-full h-full object-cover cursor-pointer"
+              onClick={togglePlay}
               onPlay={() => setIsPlaying(true)}
               onPause={() => setIsPlaying(false)}
-              onEnded={() => {
-                if (autoNext && currentEp < (chapters?.length || 999)) {
-                  setCurrentEp(prev => prev + 1);
-                } else {
-                  setIsPlaying(false);
-                }
+              onTimeUpdate={() => setCurrentTime(videoRef.current.currentTime)}
+              onLoadedMetadata={() => {
+                setDuration(videoRef.current.duration);
+                videoRef.current.volume = audioSettings.volume;
+                videoRef.current.playbackRate = audioSettings.playbackRate;
+                videoRef.current.muted = audioSettings.isMuted;
               }}
-              onClick={togglePlay}
+              onEnded={() => audioSettings.autoNext && handleNext()}
+              playsInline
             />
-            
-            {/* Play/Pause Large Overlay */}
-            {!isPlaying && !loading && (
-              <div className="absolute inset-0 flex items-center justify-center bg-black/20" onClick={togglePlay}>
-                <div className="w-20 h-20 bg-white/10 backdrop-blur-md rounded-full flex items-center justify-center border border-white/20 scale-110">
-                  <Play size={40} fill="white" className="text-white ml-2" />
+            {!isPlaying && (
+              <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                <div className="bg-black/40 p-6 rounded-full backdrop-blur-sm border border-white/20 scale-110">
+                  <Play size={40} fill="white" className="text-white ml-1" />
                 </div>
               </div>
             )}
-          </div>
+          </>
         )}
       </div>
 
-      {/* Custom Controls Bar */}
-      <div className={`absolute bottom-0 left-0 right-0 p-4 bg-gradient-to-t from-black via-black/80 to-transparent pt-12 transition-opacity duration-500 ${showControls ? 'opacity-100' : 'opacity-0'}`}>
-        {/* Progress Bar */}
-        <div className="mb-4">
+      {/* Control Bar (Bukan Footer Utama) */}
+      <div className="absolute bottom-0 left-0 right-0 p-6 bg-gradient-to-t from-black/90 via-black/50 to-transparent flex flex-col gap-4">
+        {/* Scroll / Seek Bar */}
+        <div className="flex flex-col gap-1.5">
           <input 
-            type="range"
-            min="0"
-            max={duration || 0}
-            value={currentTime}
-            onChange={handleProgressChange}
-            className="w-full h-1 bg-white/20 rounded-full appearance-none cursor-pointer accent-blue-600"
+            type="range" min="0" max={duration || 0} step="0.1" 
+            value={currentTime} 
+            onChange={handleSeek}
+            className="w-full accent-blue-600 h-1.5 bg-white/10 rounded-full appearance-none cursor-pointer"
           />
-          <div className="flex justify-between mt-1 text-[10px] text-white/60 font-mono">
+          <div className="flex justify-between text-[9px] font-mono text-gray-400">
             <span>{formatTime(currentTime)}</span>
             <span>{formatTime(duration)}</span>
           </div>
         </div>
 
-        <div className="flex items-center justify-between">
-            <div className="flex items-center gap-4">
-                <button onClick={togglePlay} className="text-white hover:text-blue-400 transition">
-                    {isPlaying ? <Pause size={28} fill="currentColor" /> : <Play size={28} fill="currentColor" />}
-                </button>
-                <button 
-                  disabled={currentEp <= 1} 
-                  onClick={() => setCurrentEp(prev => prev - 1)} 
-                  className="text-white disabled:opacity-30 hover:text-blue-400 transition"
-                >
-                    <SkipBack size={24} fill="currentColor" />
-                </button>
-                <button 
-                  disabled={currentEp >= (chapters?.length || 999)} 
-                  onClick={() => setCurrentEp(prev => prev + 1)} 
-                  className="text-white disabled:opacity-30 hover:text-blue-400 transition"
-                >
-                    <SkipForward size={24} fill="currentColor" />
-                </button>
-            </div>
+        <div className="flex items-center justify-between gap-4">
+          <div className="flex items-center gap-4 sm:gap-6">
+            <button 
+              disabled={currentEp <= 1}
+              onClick={handlePrev}
+              className="text-white hover:text-blue-400 transition transform active:scale-90 disabled:opacity-20"
+            >
+              <SkipBack size={24} fill="currentColor" />
+            </button>
+            <button onClick={togglePlay} className="text-white hover:text-blue-400 transition transform active:scale-90">
+              {isPlaying ? <Pause size={36} fill="currentColor" /> : <Play size={36} fill="currentColor" />}
+            </button>
+            <button 
+              disabled={currentEp >= (chapters?.length || 999)}
+              onClick={handleNext}
+              className="text-white hover:text-blue-400 transition transform active:scale-90 disabled:opacity-20"
+            >
+              <SkipForward size={24} fill="currentColor" />
+            </button>
+          </div>
 
-            <div className="flex items-center gap-6">
-                <div className="hidden sm:flex items-center gap-3">
-                    <button onClick={toggleMute} className="text-white/70">
-                        {isMuted ? <VolumeX size={20} /> : <Volume2 size={20} />}
-                    </button>
-                    <input 
-                        type="range" 
-                        min="0" 
-                        max="1" 
-                        step="0.01" 
-                        value={isMuted ? 0 : volume}
-                        onChange={handleVolumeChange}
-                        className="w-20 h-1 bg-white/20 rounded-full appearance-none cursor-pointer accent-white"
-                    />
-                </div>
-                
-                <label className="flex items-center gap-2 cursor-pointer">
-                    <span className="text-[10px] font-bold text-white/60 uppercase tracking-widest">Auto</span>
-                    <div 
-                        className={`w-10 h-5 rounded-full p-1 transition-colors ${autoNext ? 'bg-blue-600' : 'bg-white/20'}`}
-                        onClick={() => setAutoNext(!autoNext)}
-                    >
-                        <div className={`w-3 h-3 bg-white rounded-full transition-transform ${autoNext ? 'translate-x-5' : 'translate-x-0'}`}></div>
-                    </div>
-                </label>
+          <div className="flex items-center gap-4">
+            {/* Speed Selector */}
+            <button 
+              onClick={togglePlaybackRate}
+              className="px-2.5 py-1.5 bg-white/10 rounded-lg border border-white/5 text-[10px] font-bold text-white hover:bg-white/20 transition flex items-center gap-1.5"
+            >
+              <Gauge size={14} /> {audioSettings.playbackRate}X
+            </button>
+
+            {/* Volume Control */}
+            <div className="hidden sm:flex items-center gap-3">
+              <button onClick={() => setAudioSettings(prev => ({ ...prev, isMuted: !prev.isMuted }))} className="text-white/70 hover:text-white transition">
+                {audioSettings.isMuted ? <VolumeX size={20} /> : <Volume2 size={20} />}
+              </button>
+              <input 
+                type="range" min="0" max="1" step="0.01" 
+                value={audioSettings.isMuted ? 0 : audioSettings.volume} 
+                onChange={handleVolumeChange}
+                className="w-20 accent-white h-1 bg-white/20 rounded-full appearance-none"
+              />
             </div>
+          </div>
+        </div>
+
+        <div className="flex items-center justify-between border-t border-white/5 pt-4">
+          <div className="flex items-center gap-2">
+            <input 
+              id="auto-play" type="checkbox" checked={audioSettings.autoNext} 
+              onChange={(e) => setAudioSettings(prev => ({ ...prev, autoNext: e.target.checked }))} 
+              className="w-4 h-4 accent-blue-600 rounded"
+            />
+            <label htmlFor="auto-play" className="text-[10px] font-bold text-white uppercase tracking-widest cursor-pointer select-none">Auto Next</label>
+          </div>
+          <p className="text-[10px] text-gray-500 font-bold uppercase tracking-widest">NontonDracin Player</p>
         </div>
       </div>
     </div>
@@ -553,6 +548,14 @@ export default function App() {
     sort: 'popular'
   });
 
+  // --- AUDIO SETTINGS (PERSISTENSI) ---
+  const [audioSettings, setAudioSettings] = useState({
+    volume: 1,
+    isMuted: false,
+    playbackRate: 1,
+    autoNext: true
+  });
+
   const [searchQuery, setSearchQuery] = useState('');
   const [rankTab, setRankTab] = useState('trending');
   const [loading, setLoading] = useState(false);
@@ -563,7 +566,6 @@ export default function App() {
   const [detailModalOpen, setDetailModalOpen] = useState(false);
   const [selectedBookId, setSelectedBookId] = useState(null);
   
-  // Player state
   const [playerState, setPlayerState] = useState({ book: {}, chapters: [], ep: 1 });
 
   const getToken = useCallback(async () => {
@@ -639,7 +641,12 @@ export default function App() {
       let fid = type === 'popular' ? CONFIG.FEED_IDS.POPULAR : type === 'latest' ? CONFIG.FEED_IDS.LATEST : CONFIG.FEED_IDS.TRENDING;
       const res = await core.doClassify(CONFIG.API_BASE, CONFIG.LOCALE_API, device, tokenInfo.token, fid, pageNum * CONFIG.PER_PAGE);
       
-      setHasMoreRank(res && res.length >= pageNum * CONFIG.PER_PAGE);
+      if (res && res.length >= pageNum * CONFIG.PER_PAGE) {
+        setHasMoreRank(true);
+      } else {
+        setHasMoreRank(false);
+      }
+
       setRankData(res || []);
     } catch (e) {
       console.error(e);
@@ -684,11 +691,8 @@ export default function App() {
     fetchSearch(searchQuery, nextPage);
   };
 
-  const openDetail = (item) => { 
-    setSelectedBookId(item.bookId || item.id); 
-    setDetailModalOpen(true); 
-  };
-
+  const openDetail = (item) => { setSelectedBookId(item.bookId || item.id); setDetailModalOpen(true); };
+  
   const onPlayEpisode = (epNum, book, chapters) => { 
     setPlayerState({ book, chapters, ep: epNum }); 
     setDetailModalOpen(false); 
@@ -763,13 +767,17 @@ export default function App() {
     );
   };
 
-  // Switch between views
+  /**
+   * --- ROUTING ---
+   */
   if (view === 'player') {
     return (
       <CustomPlayerPage 
         {...playerState} 
         initialEp={playerState.ep} 
         onBack={() => setView(previousView)} 
+        audioSettings={audioSettings}
+        setAudioSettings={setAudioSettings}
       />
     );
   }
@@ -783,7 +791,7 @@ export default function App() {
   );
 
   if (!scriptLoaded) return (
-    <div className="min-h-screen bg-[#0f172a] flex flex-col items-center justify-center text-blue-500 font-bold">
+    <div className="min-h-screen bg-[#0f172a] flex flex-col items-center justify-center text-blue-500 font-bold px-6">
       <Loader2 className="animate-spin mb-4" size={48} />
       <p className="animate-pulse">Menghubungkan ke Server...</p>
     </div>
@@ -799,11 +807,17 @@ export default function App() {
             <span className="text-xl font-bold tracking-tight text-white hidden sm:block">Nonton<span className="text-blue-400">Dracin</span></span>
           </button>
           <div className="flex items-center gap-1 bg-white/5 p-1 rounded-full border border-white/5">
-            {[ { id: 'home', label: 'Beranda', icon: Home }, { id: 'rank', label: 'Peringkat', icon: Trophy } ].map((nav) => (
-              <button key={nav.id} onClick={() => setView(nav.id)} className={`px-4 py-1.5 rounded-full text-xs font-bold flex items-center gap-2 transition-all ${view === nav.id ? 'bg-blue-600 text-white shadow-md' : 'text-slate-400 hover:text-white'}`}>
-                <nav.icon size={14} /> <span className="hidden xs:inline">{nav.label}</span>
-              </button>
-            ))}
+            {[ 
+              { id: 'home', label: 'Beranda', icon: Home }, 
+              { id: 'rank', label: 'Peringkat', icon: Trophy } 
+            ].map((menuItem) => {
+              const Icon = menuItem.icon;
+              return (
+                <button key={menuItem.id} onClick={() => setView(menuItem.id)} className={`px-4 py-1.5 rounded-full text-xs font-bold flex items-center gap-2 transition-all ${view === menuItem.id ? 'bg-blue-600 text-white shadow-md' : 'text-slate-400 hover:text-white'}`}>
+                  <Icon size={14} /> <span className="hidden xs:inline">{menuItem.label}</span>
+                </button>
+              );
+            })}
             <button onClick={() => setView('filter')} className={`px-4 py-1.5 rounded-full text-xs font-bold flex items-center gap-2 transition-all ${view === 'filter' ? 'bg-blue-600 text-white shadow-md' : 'text-slate-400 hover:text-white'}`}>
               <Filter size={14} /> <span className="hidden xs:inline">Filter</span>
             </button>
