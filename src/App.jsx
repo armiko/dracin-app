@@ -18,7 +18,7 @@ const CONFIG = {
   }
 };
 
-// --- DATA LABEL FILTER (Fallback) ---
+// --- DATA LABEL FILTER ---
 const FILTER_LABELS = {
   region: [
     { display: 'Semua', value: '' },
@@ -57,25 +57,79 @@ const cleanIntro = (html) => {
     .trim();
 };
 
-const extractVideoUrl = (chapter) => {
-  if (!chapter) return '';
-  let src = chapter.raw || chapter;
-  const cdnList = src.cdnList || [];
-  let candidates = [];
-  cdnList.forEach((cdn) => {
-    (cdn.videoPathList || []).forEach((v) => {
-      candidates.push({
-        url: v.videoPath,
-        quality: v.quality || 0,
-        isDefault: v.isDefault || 0,
-        isVip: v.isVipEquity || 0,
-        isCdnDefault: cdn.isDefault || 0,
-      });
-    });
-  });
-  if (!candidates.length) return '';
-  candidates.sort((a, b) => (a.isVip - b.isVip) || (b.isDefault - a.isDefault) || (b.quality - a.quality));
-  return candidates[0].url || '';
+/**
+ * Logika Ekstraksi Video (Diambil dari logika script yang Anda berikan)
+ */
+const extractVideoUrl = (ch) => {
+  if (!ch || typeof ch !== 'object') return '';
+
+  // 1. Properti standar langsung
+  if (typeof ch.mp4 === 'string' && ch.mp4) return ch.mp4;
+  if (typeof ch.m3u8Url === 'string' && ch.m3u8Url) return ch.m3u8Url;
+  if (typeof ch.playUrl === 'string' && ch.playUrl) return ch.playUrl;
+  if (typeof ch.videoUrl === 'string' && ch.videoUrl) return ch.videoUrl;
+  if (typeof ch.url === 'string' && ch.url) return ch.url;
+
+  // Helper untuk ambil path dari videoPathList
+  const getPath = (entry) => {
+    if (!entry) return '';
+    if (typeof entry === 'string') return entry;
+    return entry.videoPath || entry.path || entry.url || entry.playUrl || '';
+  };
+
+  // 2. Cek cdnList (Logika Utama dari script Anda)
+  const sources = [ch, ch.raw, ch.data, ch.rawBatch].filter(s => s && typeof s === 'object');
+  
+  for (const src of sources) {
+    const cdnList = src.cdnList || [];
+    if (Array.isArray(cdnList) && cdnList.length > 0) {
+      // Cari CDN default atau yang pertama
+      const cdn = cdnList.find(x => x.isDefault === 1) || cdnList[0];
+      if (cdn && Array.isArray(cdn.videoPathList) && cdn.videoPathList.length > 0) {
+        let candidates = [];
+        cdn.videoPathList.forEach(v => {
+          let path = getPath(v);
+          if (path) {
+            candidates.push({
+              url: path,
+              quality: v.quality || 0,
+              isDefault: v.isDefault || 0,
+              isVip: v.isVipEquity || 0,
+              isCdnDefault: cdn.isDefault || 0,
+              domain: cdn.cdnDomain || ''
+            });
+          }
+        });
+
+        if (candidates.length > 0) {
+          // Sortir: Non-VIP > Default > Kualitas
+          candidates.sort((a, b) => {
+            if (a.isVip !== b.isVip) return a.isVip - b.isVip;
+            if (a.isDefault !== b.isDefault) return b.isDefault - a.isDefault;
+            return b.quality - a.quality;
+          });
+
+          const best = candidates[0];
+          let finalUrl = best.url;
+
+          // Gabungkan dengan cdnDomain jika URL bukan absolut
+          if (finalUrl && !/^https?:\/\//i.test(finalUrl) && best.domain) {
+            const base = best.domain.startsWith('http') ? best.domain : 'https://' + best.domain;
+            finalUrl = base.replace(/\/+$/, '') + '/' + finalUrl.replace(/^\/+/, '');
+          }
+          return finalUrl;
+        }
+      }
+    }
+  }
+
+  // 3. Fallback ke nested properties lainnya
+  if (ch.chapterVideo && typeof ch.chapterVideo === 'object') {
+    const v = ch.chapterVideo;
+    return v.mp4 || v.m3u8Url || v.videoUrl || v.playUrl || '';
+  }
+
+  return '';
 };
 
 // --- HOOK: Muat Skrip Eksternal ---
@@ -112,7 +166,8 @@ const useExternalScript = (url) => {
   return state;
 };
 
-// --- KOMPONEN: Grup Filter ---
+// --- KOMPONEN ---
+
 const FilterGroup = ({ title, type, options, active, onToggle }) => (
   <div className="mb-4">
     <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2">{title}</p>
@@ -132,7 +187,6 @@ const FilterGroup = ({ title, type, options, active, onToggle }) => (
   </div>
 );
 
-// --- KOMPONEN: Kartu Drama ---
 const DramaCard = ({ item, onClick, rank }) => {
   const cover = String(item.coverWap || item.cover || item.poster || item.image || 'https://via.placeholder.com/300x450');
   const title = String(item.bookName || item.title || item.name || 'Tanpa Judul');
@@ -164,7 +218,6 @@ const DramaCard = ({ item, onClick, rank }) => {
   );
 };
 
-// --- KOMPONEN: Modal Detail ---
 const DetailModal = ({ isOpen, onClose, bookId, onPlayEpisode }) => {
   const [loading, setLoading] = useState(true);
   const [data, setData] = useState(null);
@@ -225,7 +278,6 @@ const DetailModal = ({ isOpen, onClose, bookId, onPlayEpisode }) => {
   );
 };
 
-// --- KOMPONEN: Modal Player ---
 const PlayerModal = ({ isOpen, onClose, book, chapters, initialEp }) => {
   const [currentEp, setCurrentEp] = useState(initialEp);
   const [videoUrl, setVideoUrl] = useState('');
@@ -237,19 +289,50 @@ const PlayerModal = ({ isOpen, onClose, book, chapters, initialEp }) => {
   const loadEpisode = useCallback(async (epNum) => {
     setLoading(true); setError(false); setVideoUrl(''); 
     const requestId = ++requestRef.current;
+    
     try {
       const core = window.DramaboxCore;
-      const apiIndex = epNum - 1;
+      const apiIndex = epNum - 1; 
+      
       const batchRes = await core.loadViaBatch({
-        apiBase: CONFIG.API_BASE, localeApi: CONFIG.LOCALE_API, bookId: book.bookId || book.id, index: apiIndex, 
+        apiBase: CONFIG.API_BASE, localeApi: CONFIG.LOCALE_API, bookId: book.bookId || book.id, index: epNum, 
       });
+
       if (requestId !== requestRef.current) return;
-      const list = batchRes.chapterList || batchRes.chapters || [];
-      const ch = list.find(item => item.index == apiIndex || item.num == epNum) || list[0];
+
+      const data = batchRes.data || batchRes;
+      const list = data.chapterList || data.chapters || data.list || (Array.isArray(batchRes) ? batchRes : []);
+      
+      // Cari chapter yang sesuai dengan nomor episode
+      const ch = list.find(item => 
+        String(item.num) === String(epNum) || 
+        item.index === apiIndex || 
+        String(item.chapterNum) === String(epNum)
+      ) || list[0];
+
+      if (!ch) throw new Error("Data episode tidak ditemukan.");
+
+      // Gabungkan data dari Webfic detail jika perlu
+      const wfCh = chapters.find(c => String(c.num) === String(epNum)) || chapters[apiIndex];
+      if (ch && wfCh) ch.rawWebfic = wfCh.raw || wfCh;
+
+      // Ambil URL dengan logika yang diperkuat
       let url = core.pickVideoUrlFromChapter ? core.pickVideoUrlFromChapter(ch) : extractVideoUrl(ch);
-      if (url) setVideoUrl(url); else throw new Error();
-    } catch (e) { if (requestId === requestRef.current) setError(true); } finally { if (requestId === requestRef.current) setLoading(false); }
-  }, [book]);
+      
+      if (url) {
+        setVideoUrl(url);
+      } else {
+        throw new Error("URL Video tidak tersedia.");
+      }
+    } catch (e) { 
+      if (requestId === requestRef.current) {
+        console.error("Player Error:", e);
+        setError(true); 
+      }
+    } finally { 
+      if (requestId === requestRef.current) setLoading(false); 
+    }
+  }, [book, chapters]);
 
   useEffect(() => { if (isOpen) setCurrentEp(initialEp); }, [isOpen, initialEp]);
   useEffect(() => { if (isOpen && currentEp) loadEpisode(currentEp); }, [isOpen, currentEp, loadEpisode]);
@@ -258,19 +341,26 @@ const PlayerModal = ({ isOpen, onClose, book, chapters, initialEp }) => {
   return (
     <div className="fixed inset-0 z-[70] bg-black flex flex-col">
       <div className="p-4 flex justify-between items-center z-50 bg-gradient-to-b from-black/80 to-transparent text-white">
-        <h3 className="font-bold truncate max-w-[70%]">{String(book?.bookName)} Ep {currentEp}</h3>
+        <h3 className="font-bold truncate max-w-[70%]">{String(book?.bookName || 'Memutar...')} Ep {currentEp}</h3>
         <button onClick={onClose} className="p-2 hover:bg-white/10 rounded-full transition"><X size={20} /></button>
       </div>
       <div className="flex-1 flex justify-center items-center relative bg-black">
         {loading ? <Loader2 className="animate-spin text-blue-500" size={48} /> : 
-         error ? <div className="text-center p-6"><p className="text-white mb-4">Gagal memuat video.</p><button onClick={() => loadEpisode(currentEp)} className="px-6 py-2 bg-blue-600 text-white rounded-full">Retry</button></div> :
+         error ? (
+           <div className="text-center p-6 flex flex-col items-center">
+             <AlertTriangle className="text-yellow-500 mb-4" size={48} />
+             <p className="text-white mb-2 font-bold">Video Gagal Dimuat</p>
+             <p className="text-gray-400 text-sm mb-6 max-w-xs">Pastikan koneksi internet stabil atau coba muat ulang episode ini.</p>
+             <button onClick={() => loadEpisode(currentEp)} className="px-8 py-2 bg-blue-600 text-white rounded-full font-bold hover:bg-blue-500 transition shadow-lg">Coba Lagi</button>
+           </div>
+         ) :
          <video key={videoUrl} src={videoUrl} controls autoPlay className="w-full h-full max-h-screen object-contain" onEnded={() => autoNext && currentEp < (chapters?.length || 0) && setCurrentEp(prev => prev + 1)} />}
       </div>
       <div className="p-4 bg-[#0f172a] border-t border-gray-800 text-white flex justify-between items-center">
         <label className="flex items-center gap-2 cursor-pointer text-sm text-gray-400"><input type="checkbox" checked={autoNext} onChange={e => setAutoNext(e.target.checked)} className="rounded" /> Auto Next</label>
         <div className="flex gap-3">
-          <button disabled={currentEp <= 1} onClick={() => setCurrentEp(prev => prev - 1)} className="px-4 py-2 bg-gray-800 rounded-lg disabled:opacity-30 flex items-center gap-1"><SkipBack size={18} /> Sblm</button>
-          <button disabled={currentEp >= (chapters?.length || 0)} onClick={() => setCurrentEp(prev => prev + 1)} className="px-4 py-2 bg-blue-600 rounded-lg disabled:opacity-30 flex items-center gap-1">Brkt <SkipForward size={18} /></button>
+          <button disabled={currentEp <= 1} onClick={() => setCurrentEp(prev => prev - 1)} className="px-4 py-2 bg-gray-800 rounded-lg disabled:opacity-30 flex items-center gap-1 hover:bg-gray-700 transition"><SkipBack size={18} /> Sblm</button>
+          <button disabled={currentEp >= (chapters?.length || 0)} onClick={() => setCurrentEp(prev => prev + 1)} className="px-4 py-2 bg-blue-600 rounded-lg disabled:opacity-30 flex items-center gap-1 hover:bg-blue-500 transition">Brkt <SkipForward size={18} /></button>
         </div>
       </div>
     </div>
@@ -410,8 +500,6 @@ export default function App() {
 
   return (
     <div className="bg-[#0f172a] min-h-screen text-slate-200 font-sans selection:bg-blue-500/30">
-      
-      {/* NAVBAR */}
       <nav className="fixed w-full z-40 bg-[#0f172a]/95 backdrop-blur-md border-b border-white/5 top-0 h-16 flex items-center">
         <div className="container mx-auto px-4 flex justify-between items-center">
           <button onClick={() => setView('home')} className="flex items-center gap-2 group">
@@ -420,18 +508,12 @@ export default function App() {
           </button>
           
           <div className="flex items-center gap-1 bg-white/5 p-1 rounded-full border border-white/5">
-            {[ 
-              { id: 'home', label: 'Beranda', icon: Home }, 
-              { id: 'rank', label: 'Peringkat', icon: Trophy },
-            ].map((nav) => (
+            {[ { id: 'home', label: 'Beranda', icon: Home }, { id: 'rank', label: 'Peringkat', icon: Trophy } ].map((nav) => (
               <button key={nav.id} onClick={() => setView(nav.id)} className={`px-4 py-1.5 rounded-full text-xs font-bold flex items-center gap-2 transition-all ${view === nav.id ? 'bg-blue-600 text-white shadow-md' : 'text-slate-400 hover:text-white'}`}><nav.icon size={14} /> {nav.label}</button>
             ))}
-
             <button onClick={() => setView('filter')} className={`px-4 py-1.5 rounded-full text-xs font-bold flex items-center gap-2 transition-all ${view === 'filter' ? 'bg-blue-600 text-white shadow-md' : 'text-slate-400 hover:text-white'}`}><Filter size={14} /> Kategori</button>
-
             <button onClick={() => setSearchModalOpen(true)} className={`p-2 rounded-full transition-all ${view === 'search' ? 'bg-blue-600 text-white shadow-md' : 'text-slate-400 hover:text-white'}`} title="Cari Drama"><Search size={16} /></button>
           </div>
-
           <div className="hidden sm:block w-32"></div>
         </div>
       </nav>
@@ -450,8 +532,6 @@ export default function App() {
       )}
 
       <div className="pt-20 pb-10">
-        
-        {/* VIEW: HOME */}
         {view === 'home' && (
           <div className="container mx-auto px-4 animate-in fade-in duration-500">
             {homeData.popular[0] && (
@@ -469,40 +549,25 @@ export default function App() {
                     </div>
                   </div>
                   <div className="w-full md:w-2/3 text-center md:text-left">
-                    <div className="inline-flex items-center gap-1 px-3 py-1 bg-red-600/90 text-white text-xs font-bold rounded-full mb-4">
-                      <Flame size={12} fill="white" /> #1 POPULER
-                    </div>
+                    <div className="inline-flex items-center gap-1 px-3 py-1 bg-red-600/90 text-white text-xs font-bold rounded-full mb-4"><Flame size={12} fill="white" /> #1 POPULER</div>
                     <h1 className="text-3xl md:text-5xl font-bold text-white mb-4 leading-tight">{String(homeData.popular[0].bookName)}</h1>
-                    <p className="text-gray-300 mb-6 max-w-2xl mx-auto md:mx-0 line-clamp-3 text-sm md:text-base">
-                      {cleanIntro(homeData.popular[0].introduction || homeData.popular[0].desc)}
-                    </p>
-                    <button onClick={() => openDetail(homeData.popular[0])} className="bg-blue-600 hover:bg-blue-700 text-white px-8 py-3 rounded-xl font-bold transition shadow-lg shadow-blue-600/30 flex items-center justify-center gap-2 mx-auto md:mx-0">
-                      <Play size={20} fill="white" /> Lihat Detail
-                    </button>
+                    <p className="text-gray-300 mb-6 max-w-2xl mx-auto md:mx-0 line-clamp-3 text-sm md:text-base">{cleanIntro(homeData.popular[0].introduction || homeData.popular[0].desc)}</p>
+                    <button onClick={() => openDetail(homeData.popular[0])} className="bg-blue-600 hover:bg-blue-700 text-white px-8 py-3 rounded-xl font-bold transition shadow-lg shadow-blue-600/30 flex items-center justify-center gap-2 mx-auto md:mx-0"><Play size={20} fill="white" /> Lihat Detail</button>
                   </div>
                 </div>
               </div>
             )}
-            
             <div className="mb-12">
-              <div className="flex items-center justify-between mb-6 border-l-4 border-red-500 pl-3">
-                <h2 className="text-xl font-bold text-white">Paling Populer</h2>
-                <button onClick={() => setView('rank')} className="text-blue-400 text-xs font-bold hover:text-blue-300 flex items-center gap-1">Lihat Peringkat <ChevronRight size={14}/></button>
-              </div>
+              <div className="flex items-center justify-between mb-6 border-l-4 border-red-500 pl-3"><h2 className="text-xl font-bold text-white">Paling Populer</h2><button onClick={() => setView('rank')} className="text-blue-400 text-xs font-bold hover:text-blue-300 flex items-center gap-1">Lihat Peringkat <ChevronRight size={14}/></button></div>
               {renderGrid(homeData.popular.slice(1), loadingHome)}
             </div>
-
             <div className="mb-12">
-              <div className="flex items-center justify-between mb-6 border-l-4 border-red-500 pl-3">
-                <h2 className="text-xl font-bold text-white">Update Terbaru</h2>
-                <button onClick={() => setView('filter')} className="text-blue-400 text-xs font-bold hover:text-blue-300 flex items-center gap-1">Semua Kategori <ChevronRight size={14}/></button>
-              </div>
+              <div className="flex items-center justify-between mb-6 border-l-4 border-red-500 pl-3"><h2 className="text-xl font-bold text-white">Update Terbaru</h2><button onClick={() => setView('filter')} className="text-blue-400 text-xs font-bold hover:text-blue-300 flex items-center gap-1">Semua Kategori <ChevronRight size={14}/></button></div>
               {renderGrid(homeData.latest, loadingHome)}
             </div>
           </div>
         )}
 
-        {/* VIEW: RANK */}
         {view === 'rank' && (
           <div className="container mx-auto px-4 animate-in slide-in-from-bottom-4 duration-500 text-center">
             <h1 className="text-3xl font-bold text-white mb-8">Papan Peringkat</h1>
@@ -515,7 +580,6 @@ export default function App() {
           </div>
         )}
 
-        {/* VIEW: FILTER */}
         {view === 'filter' && (
           <div className="container mx-auto px-4 animate-in fade-in duration-500">
             <div className="bg-slate-900/40 border border-white/5 rounded-2xl p-6 mb-10 backdrop-blur-md shadow-2xl">
@@ -523,9 +587,7 @@ export default function App() {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-x-12 text-left">
                    {dynamicFilterOptions.length > 0 ? dynamicFilterOptions.map(group => (
                      <FilterGroup key={group.key} title={group.name} type={group.key} options={group.items} active={activeFilters[group.key]} onToggle={toggleFilter} />
-                   )) : (
-                     <p className="text-slate-500 text-sm animate-pulse">Menghubungkan ke API Filter...</p>
-                   )}
+                   )) : <p className="text-slate-500 text-sm animate-pulse">Menghubungkan ke API Filter...</p>}
                 </div>
             </div>
             <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-6">{filterData.map((item, idx) => <DramaCard key={idx} item={item} onClick={openDetail} />)}</div>
@@ -533,10 +595,9 @@ export default function App() {
           </div>
         )}
 
-        {/* VIEW: SEARCH RESULTS */}
         {view === 'search' && (
           <div className="container mx-auto px-4 animate-in fade-in duration-500 min-h-[60vh]">
-            <h1 className="text-2xl font-bold text-white mb-8">Hasil Pencarian: <span className="text-blue-500">"{searchQuery}"</span></h1>
+            <h1 className="text-2xl font-bold text-white mb-8">Hasil Pencarian: <span className="text-blue-400">"{searchQuery}"</span></h1>
             <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-6 text-left">{searchData.map((item, idx) => <DramaCard key={idx} item={item} onClick={openDetail} />)}</div>
           </div>
         )}
@@ -544,23 +605,12 @@ export default function App() {
 
       <footer className="border-t border-gray-800 bg-[#0f172a] py-10 mt-10">
         <div className="container mx-auto px-4 text-center">
-          <div className="flex justify-center items-center gap-2 mb-4">
-            <div className="w-6 h-6 bg-blue-600 rounded flex items-center justify-center text-white font-bold text-xs">D</div>
-            <span className="text-lg font-bold text-white">NontonDracin</span>
-          </div>
-          <p className="text-gray-400 text-sm mb-4 max-w-2xl mx-auto leading-relaxed">
-            NontonDracin merupakan platform streaming drama Asia modern yang menghadirkan ribuan judul favorit dengan sistem pembaruan data secara real-time untuk memastikan pengalaman menonton Anda selalu yang tercepat dan terdepan.
-          </p>
+          <div className="flex justify-center items-center gap-2 mb-4"><div className="w-6 h-6 bg-blue-600 rounded flex items-center justify-center text-white font-bold text-xs">D</div><span className="text-lg font-bold text-white">NontonDracin</span></div>
+          <p className="text-gray-400 text-sm mb-4 max-w-2xl mx-auto leading-relaxed">NontonDracin merupakan platform streaming drama Asia modern yang menghadirkan ribuan judul favorit dengan sistem pembaruan data secara real-time untuk memastikan pengalaman menonton Anda selalu yang tercepat dan terdepan.</p>
           <p className="text-gray-600 text-xs mb-4">&copy; 2026 NontonDracin.</p>
-          
           <div className="max-w-2xl mx-auto text-[10px] text-gray-500 leading-relaxed space-y-2 border-t border-gray-800/50 pt-4">
-            <p>
-              We do not host or stream any video content. All trademarks and copyrighted materials are owned by their respective owners. 
-              This site is for information, reviews, and references only. Please watch content through official and legal streaming services.
-            </p>
-            <p className="font-semibold text-gray-400">
-              API by <a href="https://drachin.dicky.app" target="_blank" rel="noopener noreferrer" className="hover:text-blue-400">https://drachin.dicky.app</a>
-            </p>
+            <p>We do not host or stream any video content. All trademarks and copyrighted materials are owned by their respective owners. This site is for information, reviews, and references only. Please watch content through official and legal streaming services.</p>
+            <p className="font-semibold text-gray-400">API by <a href="https://drachin.dicky.app" target="_blank" rel="noopener noreferrer" className="hover:text-blue-400">https://drachin.dicky.app</a></p>
           </div>
         </div>
       </footer>
