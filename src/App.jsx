@@ -18,34 +18,6 @@ const CONFIG = {
   }
 };
 
-// --- DATA LABEL FILTER ---
-const FILTER_LABELS = {
-  region: [
-    { display: 'Semua', value: '' },
-    { display: 'China', value: '1332' },
-    { display: 'Amerika', value: '1332' }, 
-    { display: 'Korea', value: '1333' },
-    { display: 'Jepang', value: '1334' },
-    { display: 'Thailand', value: '1335' }
-  ],
-  genre: [
-    { display: 'Semua', value: '' },
-    { display: 'Romantis', value: '1361' },
-    { display: 'CEO', value: '1362' },
-    { display: 'Balas Dendam', value: '1363' },
-    { display: 'Aksi', value: '1364' },
-    { display: 'Sejarah', value: '1365' },
-    { display: 'Fantasi', value: '1366' },
-    { display: 'Urban', value: '1367' },
-    { display: 'Keluarga', value: '1370' }
-  ],
-  sort: [
-    { display: 'Terpopuler', value: '1' },
-    { display: 'Terbaru', value: '2' },
-    { display: 'Rating Tinggi', value: '3' }
-  ]
-};
-
 // --- HELPER: Utilitas ---
 const cleanIntro = (html) => {
   if (!html) return '';
@@ -58,75 +30,74 @@ const cleanIntro = (html) => {
 };
 
 /**
- * Logika Ekstraksi Video (Diambil dari logika script yang Anda berikan)
+ * LOGIKA EKSTRAKSI VIDEO (Diambil dari skrip HTML referensi)
+ * Menangani cdnList, videoPathList, dan penggabungan domain.
  */
-const extractVideoUrl = (ch) => {
-  if (!ch || typeof ch !== 'object') return '';
+const extractVideoUrlFromChapter = (chapter) => {
+  if (!chapter) return '';
 
-  // 1. Properti standar langsung
-  if (typeof ch.mp4 === 'string' && ch.mp4) return ch.mp4;
-  if (typeof ch.m3u8Url === 'string' && ch.m3u8Url) return ch.m3u8Url;
-  if (typeof ch.playUrl === 'string' && ch.playUrl) return ch.playUrl;
-  if (typeof ch.videoUrl === 'string' && ch.videoUrl) return ch.videoUrl;
-  if (typeof ch.url === 'string' && ch.url) return ch.url;
+  // 1. Ambil sumber data (raw atau root)
+  let src = chapter.raw || chapter;
+  
+  // 2. Coba ambil URL langsung jika tersedia
+  if (typeof src.mp4 === 'string' && src.mp4) return src.mp4;
+  if (typeof src.m3u8Url === 'string' && src.m3u8Url) return src.m3u8Url;
+  if (typeof src.videoUrl === 'string' && src.videoUrl) return src.videoUrl;
+  if (typeof src.url === 'string' && src.url) return src.url;
 
-  // Helper untuk ambil path dari videoPathList
-  const getPath = (entry) => {
+  // 3. Logika Parsing cdnList (Sesuai script referensi)
+  const cdnList = src.cdnList || [];
+  let candidates = [];
+
+  const extractPath = (entry) => {
     if (!entry) return '';
     if (typeof entry === 'string') return entry;
-    return entry.videoPath || entry.path || entry.url || entry.playUrl || '';
+    if (typeof entry === 'object') {
+      return entry.videoPath || entry.path || entry.url || entry.playUrl || entry.videoUrl || '';
+    }
+    return '';
   };
 
-  // 2. Cek cdnList (Logika Utama dari script Anda)
-  const sources = [ch, ch.raw, ch.data, ch.rawBatch].filter(s => s && typeof s === 'object');
-  
-  for (const src of sources) {
-    const cdnList = src.cdnList || [];
-    if (Array.isArray(cdnList) && cdnList.length > 0) {
-      // Cari CDN default atau yang pertama
-      const cdn = cdnList.find(x => x.isDefault === 1) || cdnList[0];
-      if (cdn && Array.isArray(cdn.videoPathList) && cdn.videoPathList.length > 0) {
-        let candidates = [];
-        cdn.videoPathList.forEach(v => {
-          let path = getPath(v);
-          if (path) {
-            candidates.push({
-              url: path,
-              quality: v.quality || 0,
-              isDefault: v.isDefault || 0,
-              isVip: v.isVipEquity || 0,
-              isCdnDefault: cdn.isDefault || 0,
-              domain: cdn.cdnDomain || ''
-            });
-          }
+  cdnList.forEach((cdn) => {
+    (cdn.videoPathList || []).forEach((v) => {
+      const path = extractPath(v);
+      if (path) {
+        candidates.push({
+          url: path,
+          quality: v.quality || 0,
+          isDefault: v.isDefault || 0,
+          isVip: v.isVipEquity || 0,
+          isCdnDefault: cdn.isDefault || 0,
+          domain: cdn.cdnDomain || ''
         });
-
-        if (candidates.length > 0) {
-          // Sortir: Non-VIP > Default > Kualitas
-          candidates.sort((a, b) => {
-            if (a.isVip !== b.isVip) return a.isVip - b.isVip;
-            if (a.isDefault !== b.isDefault) return b.isDefault - a.isDefault;
-            return b.quality - a.quality;
-          });
-
-          const best = candidates[0];
-          let finalUrl = best.url;
-
-          // Gabungkan dengan cdnDomain jika URL bukan absolut
-          if (finalUrl && !/^https?:\/\//i.test(finalUrl) && best.domain) {
-            const base = best.domain.startsWith('http') ? best.domain : 'https://' + best.domain;
-            finalUrl = base.replace(/\/+$/, '') + '/' + finalUrl.replace(/^\/+/, '');
-          }
-          return finalUrl;
-        }
       }
+    });
+  });
+
+  if (candidates.length > 0) {
+    // Urutkan: Non-VIP > Default Video > Default CDN > Kualitas Tertinggi
+    candidates.sort((a, b) => {
+      if (a.isVip !== b.isVip) return a.isVip - b.isVip;
+      if (a.isDefault !== b.isDefault) return b.isDefault - a.isDefault;
+      if (a.isCdnDefault !== b.isCdnDefault) return b.isCdnDefault - a.isCdnDefault;
+      return b.quality - a.quality;
+    });
+
+    const best = candidates[0];
+    let finalUrl = best.url;
+
+    // Cek apakah URL bersifat relatif (tidak diawali http)
+    if (finalUrl && !/^https?:\/\//i.test(finalUrl) && best.domain) {
+      const base = best.domain.startsWith('http') ? best.domain : 'https://' + best.domain;
+      finalUrl = base.replace(/\/+$/, '') + '/' + finalUrl.replace(/^\/+/, '');
     }
+    return finalUrl;
   }
 
-  // 3. Fallback ke nested properties lainnya
-  if (ch.chapterVideo && typeof ch.chapterVideo === 'object') {
-    const v = ch.chapterVideo;
-    return v.mp4 || v.m3u8Url || v.videoUrl || v.playUrl || '';
+  // 4. Fallback ke properti video lainnya
+  if (src.chapterVideo && typeof src.chapterVideo === 'object') {
+    const cv = src.chapterVideo;
+    return cv.mp4 || cv.m3u8Url || cv.videoUrl || '';
   }
 
   return '';
@@ -166,22 +137,24 @@ const useExternalScript = (url) => {
   return state;
 };
 
-// --- KOMPONEN ---
+// --- KOMPONEN UI ---
 
-const FilterGroup = ({ title, type, options, active, onToggle }) => (
-  <div className="mb-4">
-    <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2">{title}</p>
-    <div className="flex flex-wrap gap-1.5">
+const FilterGroup = ({ title, type, options, active, onToggle, scrollable }) => (
+  <div className="mb-5">
+    <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-widest mb-3">{title}</p>
+    <div className={`flex ${scrollable ? 'overflow-x-auto pb-2 gap-2' : 'flex-wrap gap-2'}`}>
       {options.map((opt, i) => (
         <button
           key={i}
           onClick={() => onToggle(type, opt.value)}
-          className={`px-3 py-1 rounded-full text-[11px] font-medium transition-all border ${
-            active === String(opt.value) 
-              ? 'bg-blue-600 border-blue-500 text-white shadow-lg' 
-              : 'bg-slate-800 border-slate-700 text-slate-400 hover:border-slate-500'
+          className={`px-4 py-1.5 rounded-full text-[12px] whitespace-nowrap transition-all duration-200 border ${
+            String(active) === String(opt.value) 
+              ? 'bg-gradient-to-r from-orange-500 via-pink-500 to-indigo-600 border-transparent text-white shadow-lg' 
+              : 'bg-slate-800/50 border-slate-700 text-slate-300 hover:border-pink-500/50 hover:text-white'
           }`}
-        >{opt.display}</button>
+        >
+          {opt.display}
+        </button>
       ))}
     </div>
   </div>
@@ -221,19 +194,18 @@ const DramaCard = ({ item, onClick, rank }) => {
 const DetailModal = ({ isOpen, onClose, bookId, onPlayEpisode }) => {
   const [loading, setLoading] = useState(true);
   const [data, setData] = useState(null);
-  const [error, setError] = useState(null);
 
   useEffect(() => {
     if (!isOpen || !bookId) return;
     const fetchDetail = async () => {
-      setLoading(true); setError(null);
+      setLoading(true);
       try {
         const core = window.DramaboxCore;
         const result = await core.loadDetailWithRecommend({
           apiBase: CONFIG.API_BASE, localeApi: CONFIG.LOCALE_API, bookId: bookId, webficBase: 'https://www.webfic.com',
         });
         setData(result);
-      } catch (err) { setError("Gagal memuat detail."); } finally { setLoading(false); }
+      } catch (err) { console.error(err); } finally { setLoading(false); }
     };
     fetchDetail();
   }, [isOpen, bookId]);
@@ -253,7 +225,9 @@ const DetailModal = ({ isOpen, onClose, bookId, onPlayEpisode }) => {
             </div>
           ) : data ? (
             <div className="flex flex-col md:flex-row">
-              <div className="w-full md:w-1/3 relative"><img src={data.book?.cover || data.book?.image} alt="Poster" className="w-full h-full object-cover aspect-[2/3]" /></div>
+              <div className="w-full md:w-1/3 relative bg-black/20">
+                <img src={data.book?.cover || data.book?.image} alt="Poster" className="w-full h-full object-cover aspect-[2/3]" />
+              </div>
               <div className="w-full md:w-2/3 p-6 md:p-8 flex flex-col bg-[#1e293b]">
                 <h2 className="text-2xl md:text-4xl font-bold text-white mb-2">{String(data.book?.bookName || data.book?.title)}</h2>
                 <p className="text-gray-300 mb-6 text-sm md:text-base line-clamp-4">{cleanIntro(data.book?.introduction || data.book?.desc)}</p>
@@ -294,40 +268,53 @@ const PlayerModal = ({ isOpen, onClose, book, chapters, initialEp }) => {
       const core = window.DramaboxCore;
       const apiIndex = epNum - 1; 
       
+      // 1. Panggil Batch API (Sesuai script referensi)
       const batchRes = await core.loadViaBatch({
-        apiBase: CONFIG.API_BASE, localeApi: CONFIG.LOCALE_API, bookId: book.bookId || book.id, index: epNum, 
+        apiBase: CONFIG.API_BASE, 
+        localeApi: CONFIG.LOCALE_API, 
+        bookId: book.bookId || book.id, 
+        index: epNum, // Script referensi mengirim index sebagai nomor episode
       });
 
       if (requestId !== requestRef.current) return;
 
+      // 2. Cari data chapter dari hasil batch
       const data = batchRes.data || batchRes;
       const list = data.chapterList || data.chapters || data.list || (Array.isArray(batchRes) ? batchRes : []);
       
-      // Cari chapter yang sesuai dengan nomor episode
-      const ch = list.find(item => 
+      const batchCh = list.find(item => 
         String(item.num) === String(epNum) || 
         item.index === apiIndex || 
         String(item.chapterNum) === String(epNum)
       ) || list[0];
 
-      if (!ch) throw new Error("Data episode tidak ditemukan.");
+      if (!batchCh) throw new Error("Data episode tidak ditemukan");
 
-      // Gabungkan data dari Webfic detail jika perlu
+      // 3. Gabungkan dengan data Webfic (Daftar Chapter yang tersimpan di state)
       const wfCh = chapters.find(c => String(c.num) === String(epNum)) || chapters[apiIndex];
-      if (ch && wfCh) ch.rawWebfic = wfCh.raw || wfCh;
+      if (batchCh && wfCh) {
+        batchCh.rawWebfic = wfCh.raw || wfCh;
+      }
 
-      // Ambil URL dengan logika yang diperkuat
-      let url = core.pickVideoUrlFromChapter ? core.pickVideoUrlFromChapter(ch) : extractVideoUrl(ch);
+      // 4. Ekstraksi URL menggunakan logika pickVideoUrlFromChapter atau extract manual
+      let url = '';
+      if (core.pickVideoUrlFromChapter) {
+        url = core.pickVideoUrlFromChapter(batchCh);
+      }
       
+      if (!url) {
+        url = extractVideoUrlFromChapter(batchCh);
+      }
+
       if (url) {
         setVideoUrl(url);
       } else {
-        throw new Error("URL Video tidak tersedia.");
+        throw new Error("URL Video tidak tersedia");
       }
     } catch (e) { 
       if (requestId === requestRef.current) {
         console.error("Player Error:", e);
-        setError(true); 
+        setError(true);
       }
     } finally { 
       if (requestId === requestRef.current) setLoading(false); 
@@ -339,7 +326,7 @@ const PlayerModal = ({ isOpen, onClose, book, chapters, initialEp }) => {
 
   if (!isOpen) return null;
   return (
-    <div className="fixed inset-0 z-[70] bg-black flex flex-col">
+    <div className="fixed inset-0 z-[70] bg-black flex flex-col animate-in fade-in duration-300">
       <div className="p-4 flex justify-between items-center z-50 bg-gradient-to-b from-black/80 to-transparent text-white">
         <h3 className="font-bold truncate max-w-[70%]">{String(book?.bookName || 'Memutar...')} Ep {currentEp}</h3>
         <button onClick={onClose} className="p-2 hover:bg-white/10 rounded-full transition"><X size={20} /></button>
@@ -350,7 +337,6 @@ const PlayerModal = ({ isOpen, onClose, book, chapters, initialEp }) => {
            <div className="text-center p-6 flex flex-col items-center">
              <AlertTriangle className="text-yellow-500 mb-4" size={48} />
              <p className="text-white mb-2 font-bold">Video Gagal Dimuat</p>
-             <p className="text-gray-400 text-sm mb-6 max-w-xs">Pastikan koneksi internet stabil atau coba muat ulang episode ini.</p>
              <button onClick={() => loadEpisode(currentEp)} className="px-8 py-2 bg-blue-600 text-white rounded-full font-bold hover:bg-blue-500 transition shadow-lg">Coba Lagi</button>
            </div>
          ) :
@@ -359,8 +345,8 @@ const PlayerModal = ({ isOpen, onClose, book, chapters, initialEp }) => {
       <div className="p-4 bg-[#0f172a] border-t border-gray-800 text-white flex justify-between items-center">
         <label className="flex items-center gap-2 cursor-pointer text-sm text-gray-400"><input type="checkbox" checked={autoNext} onChange={e => setAutoNext(e.target.checked)} className="rounded" /> Auto Next</label>
         <div className="flex gap-3">
-          <button disabled={currentEp <= 1} onClick={() => setCurrentEp(prev => prev - 1)} className="px-4 py-2 bg-gray-800 rounded-lg disabled:opacity-30 flex items-center gap-1 hover:bg-gray-700 transition"><SkipBack size={18} /> Sblm</button>
-          <button disabled={currentEp >= (chapters?.length || 0)} onClick={() => setCurrentEp(prev => prev + 1)} className="px-4 py-2 bg-blue-600 rounded-lg disabled:opacity-30 flex items-center gap-1 hover:bg-blue-500 transition">Brkt <SkipForward size={18} /></button>
+          <button disabled={currentEp <= 1} onClick={() => setCurrentEp(prev => prev - 1)} className="px-4 py-2 bg-gray-800 rounded-lg disabled:opacity-30 flex items-center gap-1 hover:bg-gray-700 transition font-bold text-xs"><SkipBack size={16} /> SBLM</button>
+          <button disabled={currentEp >= (chapters?.length || 0)} onClick={() => setCurrentEp(prev => prev + 1)} className="px-4 py-2 bg-blue-600 rounded-lg disabled:opacity-30 flex items-center gap-1 hover:bg-blue-500 transition font-bold text-xs">BRKT <SkipForward size={16} /></button>
         </div>
       </div>
     </div>
@@ -377,7 +363,8 @@ export default function App() {
   const [searchData, setSearchData] = useState([]);
   const [filterData, setFilterData] = useState([]);
   
-  const [activeFilters, setActiveFilters] = useState({ region: '', voice: '', member: '', genre: '', sort: '1' });
+  // State Filter Dinamis
+  const [activeFilters, setActiveFilters] = useState({ region: '', voice: '', member: '', genre: '', theme: '', sort: '1' });
   const [dynamicFilterOptions, setDynamicFilterOptions] = useState([]);
   const [filterPage, setFilterPage] = useState(1);
   const [filterHasMore, setFilterHasMore] = useState(false);
@@ -427,6 +414,7 @@ export default function App() {
     } catch (e) {} finally { setLoading(false); }
   }, [getToken]);
 
+  // LOGIKA KATEGORI DINAMIS (Sesuai script filter-page yang diberikan)
   const fetchFilterData = useCallback(async (isLoadMore = false) => {
     if (!window.DramaboxCore) return;
     setLoading(true);
@@ -435,37 +423,47 @@ export default function App() {
       const device = await core.getDevice();
       const tokenInfo = await getToken();
       const nextPage = isLoadMore ? filterPage + 1 : 1;
+      
       const typeList = [
-        { type: 1, value: activeFilters.region }, { type: 2, value: activeFilters.voice },
-        { type: 3, value: activeFilters.member }, { type: 4, value: activeFilters.genre },
+        { type: 1, value: activeFilters.region },
+        { type: 2, value: activeFilters.voice },
+        { type: 3, value: activeFilters.member },
+        { type: 4, value: activeFilters.genre },
+        { type: 4, value: activeFilters.theme },
         { type: 5, value: activeFilters.sort }
       ];
+
       const ts = Date.now().toString();
-      const body = { typeList, showLabels: true, pageNo: nextPage, pageSize: 24 };
+      const body = { typeList, showLabels: true, pageNo: nextPage, pageSize: 18 };
       const bodyJson = JSON.stringify(body);
       const baseString = 'timestamp=' + ts + bodyJson + device.deviceId + device.androidId + tokenInfo.token;
       const sn = await core.getSign(CONFIG.API_BASE, baseString);
+      
       const res = await fetch(`${CONFIG.API_BASE}/api/proxy.php/drama-box/he001/classify?timestamp=${ts}`, {
         method: 'POST', headers: { 'tn': tokenInfo.token, 'sn': sn, 'device-id': device.deviceId, 'content-type': 'application/json' }, body: bodyJson
       });
       const json = await res.json();
-      const records = json.data?.classifyBookList?.records || [];
+      const data = json.data || {};
+      const records = (data.classifyBookList && data.classifyBookList.records) || [];
       
-      if (dynamicFilterOptions.length === 0 && json.data?.classifyList) {
-        const raw = json.data.classifyList;
-        const map = { 1: 'region', 2: 'voice', 3: 'member', 5: 'sort' };
+      if (dynamicFilterOptions.length === 0 && data.classifyList) {
+        const groups = { 1: 'region', 2: 'voice', 3: 'member', 5: 'sort' };
         const processed = [];
-        raw.forEach(g => {
-          if (map[g.type]) processed.push({ key: map[g.type], name: g.name, items: g.showList.map(o => ({ value: o.value, display: o.display })) });
-          else if (g.type === 4) processed.push({ key: 'genre', name: 'Genre', items: g.showList.map(o => ({ value: o.value, display: o.display })) });
+        data.classifyList.forEach(g => {
+          if (groups[g.type]) {
+            processed.push({ key: groups[g.type], name: g.name, items: g.showList.map(o => ({ value: o.value, display: o.display })) });
+          }
         });
+        const type4Groups = data.classifyList.filter(f => f.type === 4);
+        if (type4Groups.length >= 1) processed.push({ key: 'genre', name: 'Genre', items: type4Groups[0].showList.map(o => ({ value: o.value, display: o.display })) });
+        if (type4Groups.length >= 2) processed.push({ key: 'theme', name: 'Tema', items: type4Groups[1].showList.map(o => ({ value: o.value, display: o.display })) });
         setDynamicFilterOptions(processed);
       }
 
       setFilterData(prev => isLoadMore ? [...prev, ...records] : records);
-      setFilterHasMore(!!json.data?.classifyBookList?.isMore);
+      setFilterHasMore(!!(data.classifyBookList && data.classifyBookList.isMore));
       setFilterPage(nextPage);
-    } catch (e) {} finally { setLoading(false); }
+    } catch (e) { console.error(e); } finally { setLoading(false); }
   }, [getToken, activeFilters, filterPage, dynamicFilterOptions.length]);
 
   const fetchSearch = useCallback(async (keyword) => {
@@ -479,16 +477,16 @@ export default function App() {
 
   const renderGrid = (items, loadingGrid) => {
     if (loadingGrid && (!items || items.length === 0)) {
-      return <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">{[...Array(6)].map((_, i) => <div key={i} className="aspect-[2/3] bg-slate-800 rounded-xl animate-pulse" />)}</div>;
+      return <div className="grid grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3 md:gap-4">{[...Array(12)].map((_, i) => <div key={i} className="aspect-[2/3] bg-slate-800 rounded-xl animate-pulse" />)}</div>;
     }
-    if (!items || items.length === 0) return <div className="text-slate-500 text-center col-span-full py-20">Tidak ada konten tersedia.</div>;
-    return <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">{items.map((item, idx) => <DramaCard key={idx} item={item} onClick={openDetail} />)}</div>;
+    if (!items || items.length === 0) return <div className="text-slate-500 text-center col-span-full py-20 italic">Tidak ada konten yang ditemukan.</div>;
+    return <div className="grid grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3 md:gap-4">{items.map((item, idx) => <DramaCard key={idx} item={item} onClick={openDetail} />)}</div>;
   };
 
   const openDetail = (item) => { setSelectedBookId(item.bookId || item.id); setDetailModalOpen(true); };
   const onPlayEpisode = (epNum, book, chapters) => { setPlayerState({ book, chapters, ep: epNum }); setDetailModalOpen(false); setPlayerOpen(true); };
 
-  useEffect(() => { if (scriptLoaded && !scriptError) fetchHome(); }, [scriptLoaded, scriptError, fetchHome]);
+  useEffect(() => { if (scriptLoaded) fetchHome(); }, [scriptLoaded, fetchHome]);
   useEffect(() => { if (view === 'rank') fetchRank(rankTab); }, [view, rankTab, fetchRank]);
   useEffect(() => { if (view === 'filter') fetchFilterData(false); }, [view, activeFilters]);
 
@@ -499,14 +497,14 @@ export default function App() {
   if (!scriptLoaded) return <div className="min-h-screen bg-[#0f172a] flex flex-col items-center justify-center text-blue-500 font-bold"><Loader2 className="animate-spin mb-4" size={48} /><p className="animate-pulse">Menghubungkan ke Server...</p></div>;
 
   return (
-    <div className="bg-[#0f172a] min-h-screen text-slate-200 font-sans selection:bg-blue-500/30">
+    <div className="bg-[#0f172a] min-h-screen text-slate-200 font-sans selection:bg-blue-500/30 flex flex-col">
+      
       <nav className="fixed w-full z-40 bg-[#0f172a]/95 backdrop-blur-md border-b border-white/5 top-0 h-16 flex items-center">
         <div className="container mx-auto px-4 flex justify-between items-center">
           <button onClick={() => setView('home')} className="flex items-center gap-2 group">
             <div className="w-8 h-8 bg-gradient-to-br from-blue-600 to-cyan-500 rounded-lg flex items-center justify-center text-white font-bold shadow-lg">D</div>
             <span className="text-xl font-bold tracking-tight text-white hidden sm:block">Nonton<span className="text-blue-400">Dracin</span></span>
           </button>
-          
           <div className="flex items-center gap-1 bg-white/5 p-1 rounded-full border border-white/5">
             {[ { id: 'home', label: 'Beranda', icon: Home }, { id: 'rank', label: 'Peringkat', icon: Trophy } ].map((nav) => (
               <button key={nav.id} onClick={() => setView(nav.id)} className={`px-4 py-1.5 rounded-full text-xs font-bold flex items-center gap-2 transition-all ${view === nav.id ? 'bg-blue-600 text-white shadow-md' : 'text-slate-400 hover:text-white'}`}><nav.icon size={14} /> {nav.label}</button>
@@ -531,7 +529,7 @@ export default function App() {
         </div>
       )}
 
-      <div className="pt-20 pb-10">
+      <div className="pt-20 pb-10 flex-1">
         {view === 'home' && (
           <div className="container mx-auto px-4 animate-in fade-in duration-500">
             {homeData.popular[0] && (
@@ -557,14 +555,8 @@ export default function App() {
                 </div>
               </div>
             )}
-            <div className="mb-12">
-              <div className="flex items-center justify-between mb-6 border-l-4 border-red-500 pl-3"><h2 className="text-xl font-bold text-white">Paling Populer</h2><button onClick={() => setView('rank')} className="text-blue-400 text-xs font-bold hover:text-blue-300 flex items-center gap-1">Lihat Peringkat <ChevronRight size={14}/></button></div>
-              {renderGrid(homeData.popular.slice(1), loadingHome)}
-            </div>
-            <div className="mb-12">
-              <div className="flex items-center justify-between mb-6 border-l-4 border-red-500 pl-3"><h2 className="text-xl font-bold text-white">Update Terbaru</h2><button onClick={() => setView('filter')} className="text-blue-400 text-xs font-bold hover:text-blue-300 flex items-center gap-1">Semua Kategori <ChevronRight size={14}/></button></div>
-              {renderGrid(homeData.latest, loadingHome)}
-            </div>
+            <div className="mb-12"><div className="flex items-center justify-between mb-6 border-l-4 border-red-500 pl-3"><h2 className="text-xl font-bold text-white">Paling Populer</h2><button onClick={() => setView('rank')} className="text-blue-400 text-xs font-bold hover:text-blue-300 flex items-center gap-1">Lihat Peringkat <ChevronRight size={14}/></button></div>{renderGrid(homeData.popular.slice(1), loadingHome)}</div>
+            <div className="mb-12"><div className="flex items-center justify-between mb-6 border-l-4 border-blue-500 pl-3"><h2 className="text-xl font-bold text-white">Update Terbaru</h2><button onClick={() => setView('filter')} className="text-blue-400 text-xs font-bold hover:text-blue-300 flex items-center gap-1">Semua Kategori <ChevronRight size={14}/></button></div>{renderGrid(homeData.latest, loadingHome)}</div>
           </div>
         )}
 
@@ -576,34 +568,34 @@ export default function App() {
                 <button key={tab.id} onClick={() => setRankTab(tab.id)} className={`px-6 py-2 rounded-xl text-sm font-bold flex items-center gap-2 transition-all whitespace-nowrap ${rankTab === tab.id ? 'bg-blue-600 text-white shadow-md' : 'text-slate-400 hover:text-slate-200'}`}><tab.icon size={14} /> {tab.label}</button>
               ))}
             </div>
-            <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-6 text-left">{rankData.map((item, idx) => <DramaCard key={idx} item={item} rank={idx + 1} onClick={openDetail} />)}</div>
+            <div className="grid grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4 text-left">{rankData.map((item, idx) => <DramaCard key={idx} item={item} rank={idx + 1} onClick={openDetail} />)}</div>
           </div>
         )}
 
         {view === 'filter' && (
           <div className="container mx-auto px-4 animate-in fade-in duration-500">
+            <div className="filter-head mb-4 text-left"><h1 className="text-2xl font-bold text-white">Eksplorasi Kategori</h1><p className="text-slate-400 text-sm italic">Cari drama favorit berdasarkan preferensi Anda.</p></div>
             <div className="bg-slate-900/40 border border-white/5 rounded-2xl p-6 mb-10 backdrop-blur-md shadow-2xl">
-                <h2 className="text-xl font-bold text-white mb-6 flex items-center gap-2 border-b border-white/5 pb-4"><Filter size={20} className="text-blue-500"/> Eksplorasi Kategori</h2>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-x-12 text-left">
-                   {dynamicFilterOptions.length > 0 ? dynamicFilterOptions.map(group => (
-                     <FilterGroup key={group.key} title={group.name} type={group.key} options={group.items} active={activeFilters[group.key]} onToggle={toggleFilter} />
-                   )) : <p className="text-slate-500 text-sm animate-pulse">Menghubungkan ke API Filter...</p>}
-                </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-x-12 text-left">
+                {dynamicFilterOptions.length > 0 ? dynamicFilterOptions.map(group => (
+                  <FilterGroup key={group.key} title={group.name} type={group.key} options={[{ display: 'Semua', value: '' }, ...group.items]} active={activeFilters[group.key]} onToggle={toggleFilter} scrollable={group.key === 'genre' || group.key === 'theme'} />
+                )) : <div className="col-span-full py-10 flex flex-col items-center justify-center text-slate-500 italic"><Loader2 className="animate-spin mb-2" /> Menghubungkan ke API Filter...</div>}
+              </div>
             </div>
-            <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-6">{filterData.map((item, idx) => <DramaCard key={idx} item={item} onClick={openDetail} />)}</div>
-            {filterHasMore && !loading && <div className="flex justify-center mt-12"><button onClick={() => fetchFilterData(true)} className="px-10 py-3 bg-blue-600 hover:bg-blue-500 text-white rounded-xl font-bold transition shadow-xl shadow-blue-600/20">Muat Lebih Banyak</button></div>}
+            {renderGrid(filterData, loading)}
+            {filterHasMore && !loading && <div className="flex justify-center mt-12"><button onClick={() => fetchFilterData(true)} className="px-10 py-3 bg-gradient-to-r from-orange-500 via-pink-500 to-indigo-600 text-white rounded-xl font-bold transition shadow-xl hover:scale-105">Muat Lebih Banyak</button></div>}
           </div>
         )}
 
         {view === 'search' && (
           <div className="container mx-auto px-4 animate-in fade-in duration-500 min-h-[60vh]">
             <h1 className="text-2xl font-bold text-white mb-8">Hasil Pencarian: <span className="text-blue-400">"{searchQuery}"</span></h1>
-            <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-6 text-left">{searchData.map((item, idx) => <DramaCard key={idx} item={item} onClick={openDetail} />)}</div>
+            {renderGrid(searchData, loading)}
           </div>
         )}
       </div>
 
-      <footer className="border-t border-gray-800 bg-[#0f172a] py-10 mt-10">
+      <footer className="border-t border-gray-800 bg-[#0f172a] py-10 mt-auto">
         <div className="container mx-auto px-4 text-center">
           <div className="flex justify-center items-center gap-2 mb-4"><div className="w-6 h-6 bg-blue-600 rounded flex items-center justify-center text-white font-bold text-xs">D</div><span className="text-lg font-bold text-white">NontonDracin</span></div>
           <p className="text-gray-400 text-sm mb-4 max-w-2xl mx-auto leading-relaxed">NontonDracin merupakan platform streaming drama Asia modern yang menghadirkan ribuan judul favorit dengan sistem pembaruan data secara real-time untuk memastikan pengalaman menonton Anda selalu yang tercepat dan terdepan.</p>
