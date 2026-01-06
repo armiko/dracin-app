@@ -5,8 +5,7 @@ import {
   Loader2, Trophy, Star, Filter, Plus,
   Pause, Volume2, VolumeX, Share2, ChevronLeft,
   Volume1, Gamepad2, CheckCircle2, ExternalLink,
-  LogOut, LogIn, User as UserIcon, AlertCircle,
-  Bookmark, BookmarkCheck, History
+  LogOut, LogIn, User as UserIcon, AlertCircle
 } from 'lucide-react';
 
 /**
@@ -36,6 +35,9 @@ const firebaseConfig = {
 };
 
 const customAppId = '3KNDH1p5iIG6U7FmuGTS';
+const STORAGE_KEYS = {
+  SETTINGS: `dracin_settings_${customAppId}`
+};
 
 const STATIC_FILTERS = [
   {
@@ -248,7 +250,7 @@ const SanPoiPopup = ({ onClose }) => {
   );
 };
 
-const DramaCard = ({ item, onClick, rank, lastEp }) => {
+const DramaCard = ({ item, onClick, rank }) => {
   const title = item.bookName || item.title || 'Drama';
   const cover = item.coverWap || item.cover || item.coverUrl || 'https://via.placeholder.com/300x450';
   return (
@@ -264,18 +266,12 @@ const DramaCard = ({ item, onClick, rank, lastEp }) => {
         <div className="absolute bottom-1.5 right-1.5 bg-black/60 backdrop-blur-md text-white text-[7px] font-black px-1.5 py-0.5 rounded border border-white/10 uppercase">{item.chapterCount || '?'} EPS</div>
       </div>
       <h3 className="text-[10px] font-bold text-slate-200 line-clamp-2 leading-snug group-hover:text-blue-400 transition-colors px-0.5">{title}</h3>
-      {lastEp && (
-        <div className="mt-1 flex items-center gap-1 text-blue-400 font-black text-[7px] uppercase tracking-tighter px-0.5">
-          <History size={8} /> EP TERAKHIR: {lastEp}
-        </div>
-      )}
     </div>
   );
 };
 
-const DramaDetailPage = ({ bookId, onBack, onPlayEpisode, watchlist, onToggleWatchlist }) => {
+const DramaDetailPage = ({ bookId, onBack, onPlayEpisode }) => {
   const [data, setData] = useState(null);
-  const isInWatchlist = watchlist && watchlist.some(item => String(item.bookId) === String(bookId));
 
   useEffect(() => {
     const fetch = async () => {
@@ -294,13 +290,6 @@ const DramaDetailPage = ({ bookId, onBack, onPlayEpisode, watchlist, onToggleWat
     <div className="animate-in fade-in duration-500">
       <div className="flex items-center justify-between mb-6">
         <button onClick={onBack} className="flex items-center gap-1.5 text-slate-400 font-bold hover:text-white transition-colors text-[10px]"><ChevronLeft size={16}/> KEMBALI</button>
-        <button 
-          onClick={() => onToggleWatchlist(data.book)}
-          className={`flex items-center gap-2 px-4 py-2 rounded-xl text-[10px] font-black uppercase transition-all border ${isInWatchlist ? 'bg-blue-600 border-blue-600 text-white' : 'bg-white/5 border-white/10 text-slate-400 hover:text-white hover:bg-white/10'}`}
-        >
-          {isInWatchlist ? <BookmarkCheck size={14}/> : <Bookmark size={14}/>}
-          {isInWatchlist ? 'Tersimpan' : 'Simpan ke Watchlist'}
-        </button>
       </div>
       <div className="bg-slate-900/60 rounded-[1.5rem] overflow-hidden border border-white/5 flex flex-col md:flex-row shadow-2xl backdrop-blur-sm">
         <div className="w-full md:w-[280px] shrink-0"><img src={data.book?.cover} className="w-full h-full object-cover" alt="Cover" /></div>
@@ -327,7 +316,7 @@ const DramaDetailPage = ({ bookId, onBack, onPlayEpisode, watchlist, onToggleWat
 };
 
 // =============================
-// CUSTOM PLAYER PAGE (PERBAIKAN SPEED & HISTORY)
+// CUSTOM PLAYER PAGE
 // =============================
 const CustomPlayerPage = ({
   book,
@@ -335,8 +324,7 @@ const CustomPlayerPage = ({
   initialEp,
   onBack,
   audioSettings,
-  setAudioSettings,
-  onEpisodeChange
+  setAudioSettings
 }) => {
   const [currentEp, setCurrentEp] = useState(initialEp);
   const [videoUrl, setVideoUrl] = useState('');
@@ -399,7 +387,6 @@ const CustomPlayerPage = ({
 
     const startPlay = () => {
       if (video && video.src) {
-        // Terapkan setting audio sebelum play
         video.playbackRate = audioSettings.playbackRate || 1;
         video.volume = audioSettings.isMuted ? 0 : (audioSettings.volume || 1);
         video.play().catch(e => {
@@ -446,8 +433,7 @@ const CustomPlayerPage = ({
 
   useEffect(() => {
     loadEpisode(currentEp);
-    onEpisodeChange?.(currentEp); // Simpan riwayat otomatis
-  }, [currentEp, loadEpisode, onEpisodeChange]);
+  }, [currentEp, loadEpisode]);
 
   const togglePlay = (e) => {
     if (e) e.stopPropagation();
@@ -587,8 +573,6 @@ export default function App() {
   const [filterData, setFilterData] = useState([]);
   const [allDramaData, setAllDramaData] = useState([]);
   const [searchData, setSearchData] = useState([]);
-  const [watchlistData, setWatchlistData] = useState([]);
-  const [historyData, setHistoryData] = useState([]);
   
   const [user, setUser] = useState(null);
   const [loadingData, setLoadingData] = useState(false);
@@ -599,12 +583,14 @@ export default function App() {
   const [playerState, setPlayerState] = useState({ book: {}, chapters: [], ep: 1 });
   const [rankTab, setRankTab] = useState('popular');
   const [activeFilters, setActiveFilters] = useState({ voice: '', category: '', sort: 'popular' });
-  const [audioSettings, setAudioSettings] = useState({ volume: 1, isMuted: false, playbackRate: 1, autoNext: true });
+  const [audioSettings, setAudioSettings] = useState(() => {
+    const saved = localStorage.getItem(STORAGE_KEYS.SETTINGS);
+    return saved ? JSON.parse(saved) : { volume: 1, isMuted: false, playbackRate: 1, autoNext: true };
+  });
   const [authError, setAuthError] = useState(null);
   const [showAd, setShowAd] = useState(false);
 
   const { loaded: scriptLoaded } = useExternalScript(CONFIG.SCRIPT_URL);
-  const { loaded: hlsLoaded } = useExternalScript(CONFIG.HLS_URL);
   const { loaded: fbApp } = useExternalScript(CONFIG.FIREBASE_APP);
   const { loaded: fbAuth } = useExternalScript(CONFIG.FIREBASE_AUTH);
   const { loaded: fbStore } = useExternalScript(CONFIG.FIREBASE_FIRESTORE);
@@ -628,73 +614,17 @@ export default function App() {
     if (!fbReady || !window.firebase) return;
     try {
       await window.firebase.auth().signOut();
-      setWatchlistData([]);
-      setHistoryData([]);
       setView('home');
     } catch (e) { console.error("Gagal keluar:", e); }
   };
 
-  // LOGIKA WATCHLIST (SEPARATE COLLECTION)
-  const toggleWatchlist = async (drama) => {
-    if (!user || !fbReady || !window.firebase) return;
-    const fb = window.firebase;
-    const dramaId = String(drama.bookId || drama.id);
-    const watchlistDoc = fb.firestore().doc(`artifacts/${customAppId}/users/${user.uid}/watchlist/${dramaId}`);
-    
-    try {
-        const snap = await watchlistDoc.get();
-        if (snap.exists) {
-            await watchlistDoc.delete();
-        } else {
-            await watchlistDoc.set({
-                bookId: dramaId,
-                bookName: drama.bookName || drama.title,
-                coverWap: drama.coverWap || drama.cover || drama.coverUrl,
-                chapterCount: drama.chapterCount || drama.episodeCount || 0,
-                ts: Date.now()
-            });
-        }
-    } catch(e) { console.error("Watchlist toggle failed:", e); }
-  };
-
-  // LOGIKA HISTORY (SEPARATE COLLECTION)
-  const saveToHistory = async (drama, episode) => {
-    if (!user || !fbReady || !window.firebase) return;
-    const fb = window.firebase;
-    const dramaId = String(drama.bookId || drama.id);
-    const historyDoc = fb.firestore().doc(`artifacts/${customAppId}/users/${user.uid}/history/${dramaId}`);
-    
-    try {
-        await historyDoc.set({
-            bookId: dramaId,
-            bookName: drama.bookName || drama.title,
-            coverWap: drama.coverWap || drama.cover || drama.coverUrl,
-            chapterCount: drama.chapterCount || drama.episodeCount || 0,
-            lastEpisode: episode,
-            ts: Date.now()
-        });
-    } catch(e) { console.error("History save failed:", e); }
-  };
-
-  // PERSISTENCE AUDIO SETTINGS
   useEffect(() => {
-    if (!user || !fbReady || !window.firebase) return;
-    const fb = window.firebase;
-    const settingsRef = fb.firestore().doc(`artifacts/${customAppId}/users/${user.uid}/settings/audio`);
-    
-    settingsRef.set(audioSettings, { merge: true }).catch(() => {});
-  }, [audioSettings, user, fbReady]);
+    localStorage.setItem(STORAGE_KEYS.SETTINGS, JSON.stringify(audioSettings));
+  }, [audioSettings]);
 
-  const handleCloseAd = async (isPersistent) => {
+  const handleCloseAd = (isPersistent) => {
     setShowAd(false);
-    if (user && fbReady && window.firebase) {
-      try {
-        const fb = window.firebase;
-        await fb.firestore().doc(`artifacts/${customAppId}/users/${user.uid}/settings/ad_pref`).set({ 
-          ts: Date.now(), p: isPersistent 
-        });
-      } catch(e) {}
-    }
+    localStorage.setItem(`dracin_ad_${customAppId}`, JSON.stringify({ ts: Date.now(), p: isPersistent }));
   };
 
   const handleSearch = async (e) => {
@@ -744,7 +674,6 @@ export default function App() {
     } catch (e) { console.error("Rank fetch error:", e); } finally { setLoadingData(false); }
   }, []);
 
-  // FIREBASE INIT & LISTENERS
   useEffect(() => {
     if (!fbReady || !window.firebase) return;
     const fb = window.firebase;
@@ -753,43 +682,13 @@ export default function App() {
     const unsubscribeAuth = fb.auth().onAuthStateChanged(async (u) => {
         setUser(u);
         if (u) {
-            // Real-time Watchlist
-            const unsubWatchlist = fb.firestore().collection(`artifacts/${customAppId}/users/${u.uid}/watchlist`)
-                .onSnapshot(snap => {
-                    const list = [];
-                    snap.forEach(doc => list.push(doc.data()));
-                    setWatchlistData(list.sort((a,b) => b.ts - a.ts));
-                }, err => console.error("Watchlist snap error:", err));
-
-            // Real-time History
-            const unsubHistory = fb.firestore().collection(`artifacts/${customAppId}/users/${u.uid}/history`)
-                .onSnapshot(snap => {
-                    const list = [];
-                    snap.forEach(doc => list.push(doc.data()));
-                    setHistoryData(list.sort((a,b) => b.ts - a.ts));
-                }, err => console.error("History snap error:", err));
-
-            // Load Settings (Audio & Speed)
-            fb.firestore().doc(`artifacts/${customAppId}/users/${u.uid}/settings/audio`).get().then(snap => {
-              if (snap.exists) setAudioSettings(prev => ({ ...prev, ...snap.data() }));
-            });
-
-            // Ad Preferences
-            try {
-                const adRef = fb.firestore().doc(`artifacts/${customAppId}/users/${u.uid}/settings/ad_pref`);
-                const snap = await adRef.get();
-                if (snap.exists) {
-                    const d = snap.data();
-                    const diff = Date.now() - (d.ts || 0);
-                    if (d.p ? diff < 86400000 : diff < 3600000) return;
-                }
-                setTimeout(() => setShowAd(true), 3000);
-            } catch(e) { setTimeout(() => setShowAd(true), 3000); }
-
-            return () => {
-              unsubWatchlist();
-              unsubHistory();
-            };
+            const savedAd = localStorage.getItem(`dracin_ad_${customAppId}`);
+            if (savedAd) {
+                const d = JSON.parse(savedAd);
+                const diff = Date.now() - d.ts;
+                if (d.p ? diff < 86400000 : diff < 3600000) return;
+            }
+            setTimeout(() => setShowAd(true), 3000);
         } else {
           fb.auth().signInAnonymously();
         }
@@ -821,7 +720,6 @@ export default function App() {
         onBack={() => setView('detail')} 
         audioSettings={audioSettings} 
         setAudioSettings={setAudioSettings}
-        onEpisodeChange={(ep) => saveToHistory(playerState.book, ep)} 
     />
   );
 
@@ -843,16 +741,7 @@ export default function App() {
                 <m.icon size={12} /> <span className="hidden sm:inline">{m.label}</span>
               </button>
             ))}
-            {user && (
-                <>
-                    <button onClick={() => setView('watchlist')} className={`px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-wider flex items-center gap-1.5 transition-all ${view === 'watchlist' ? 'bg-blue-600 text-white shadow-lg' : 'text-slate-400 hover:text-white'}`}>
-                        <Bookmark size={12} /> <span className="hidden sm:inline">Watchlist</span>
-                    </button>
-                    <button onClick={() => setView('history')} className={`px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-wider flex items-center gap-1.5 transition-all ${view === 'history' ? 'bg-blue-600 text-white shadow-lg' : 'text-slate-400 hover:text-white'}`}>
-                        <History size={12} /> <span className="hidden sm:inline">Riwayat</span>
-                    </button>
-                </>
-            )}
+
             <button onClick={() => setSearchModalOpen(true)} className="p-2 rounded-full text-slate-400 hover:text-white transition-colors hover:bg-white/5"><Search size={16} /></button>
             <div className="h-6 w-[1px] bg-white/10 mx-1 hidden sm:block"></div>
             {user && !user.isAnonymous ? (
@@ -931,43 +820,6 @@ export default function App() {
                )}
             </div>
           )}
-          {view === 'watchlist' && (
-            <div className="animate-in fade-in duration-500">
-                <Section icon={Bookmark} title="Watchlist Saya">
-                    <div className="grid grid-cols-2 xs:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-5">
-                        {watchlistData.length > 0 ? watchlistData.map((item, idx) => (
-                            <DramaCard key={idx} item={{...item, id: item.bookId}} onClick={(it) => { setSelectedBookId(it.bookId); setPreviousView('watchlist'); setView('detail'); }} />
-                        )) : (
-                            <div className="col-span-full py-20 flex flex-col items-center gap-4 text-slate-500 text-center">
-                                <Bookmark size={48} className="opacity-20" />
-                                <p className="text-[10px] font-black uppercase tracking-widest">Belum ada drama yang disimpan.</p>
-                            </div>
-                        )}
-                    </div>
-                </Section>
-            </div>
-          )}
-          {view === 'history' && (
-            <div className="animate-in fade-in duration-500">
-                <Section icon={History} title="Riwayat Menonton">
-                    <div className="grid grid-cols-2 xs:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-5">
-                        {historyData.length > 0 ? historyData.map((item, idx) => (
-                            <div key={idx} className="flex flex-col">
-                                <DramaCard item={{...item, id: item.bookId}} onClick={() => { setSelectedBookId(item.bookId); setPreviousView('history'); setView('detail'); }} />
-                                <div className="mt-1 flex items-center gap-1 text-blue-400 font-black text-[8px] uppercase tracking-tighter px-1">
-                                    <Clock size={8} /> EP TERAKHIR: {item.lastEpisode || '?'}
-                                </div>
-                            </div>
-                        )) : (
-                            <div className="col-span-full py-20 flex flex-col items-center gap-4 text-slate-500 text-center">
-                                <History size={48} className="opacity-20" />
-                                <p className="text-[10px] font-black uppercase tracking-widest">Belum ada riwayat menonton.</p>
-                            </div>
-                        )}
-                    </div>
-                </Section>
-            </div>
-          )}
           {view === 'filter' && (
             <div className="animate-in fade-in duration-500">
                <div className="bg-slate-900/50 p-6 rounded-2xl border border-white/5 mb-8 grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -999,8 +851,6 @@ export default function App() {
           {view === 'detail' && (
             <DramaDetailPage 
                 bookId={selectedBookId} 
-                watchlist={watchlistData}
-                onToggleWatchlist={toggleWatchlist}
                 onBack={() => setView(previousView)} 
                 onPlayEpisode={(ep, b, c) => { 
                     setPlayerState({ book: b, chapters: c, ep }); 
