@@ -704,7 +704,7 @@ export default function App() {
                 <div className="animate-in fade-in duration-700 text-left">
                   <Section icon={Bookmark} title="Koleksi Favorit Saya">
                     {watchlist.length > 0 ? (
-                      <div className="grid grid-cols-3 xs:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3 md:gap-6 text-left text-left">
+                      <div className="grid grid-cols-3 xs:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3 md:gap-6 text-left">
                         {watchlist.map((item, idx) => <DramaCard key={idx} item={item} onRemove={() => handleToggleWatchlist(item)} onClick={(it) => { setSelectedBookId(it.bookId || it.id); setView('detail'); }} />)}
                       </div>
                     ) : <EmptyState icon={Bookmark} title="Favorit Kosong" message="Ayo simpan drama favoritmu agar mudah ditemukan kembali." actionText="CARI DRAMA" onAction={() => setView('home')} />}
@@ -715,7 +715,7 @@ export default function App() {
                 <div className="animate-in fade-in duration-700 text-left">
                   <Section icon={History} title="Sudah Ditonton">
                     {watchHistory.length > 0 ? (
-                      <div className="grid grid-cols-3 xs:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3 md:gap-6 text-left text-left">
+                      <div className="grid grid-cols-3 xs:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3 md:gap-6 text-left">
                         {watchHistory.map((item, idx) => <DramaCard key={idx} item={item} isHistory lastEpisode={item.lastEpisode} onRemove={clearHistoryItem} onClick={(it) => { setSelectedBookId(it.bookId); setView('detail'); }} />)}
                       </div>
                     ) : <EmptyState icon={History} title="Riwayat Kosong" message="Anda belum pernah menonton drama apa pun." actionText="NONTON SEKARANG" onAction={() => setView('home')} />}
@@ -725,7 +725,7 @@ export default function App() {
               {view === 'search-results' && (
                 <div className="animate-in fade-in duration-700 text-left">
                    <Section title={`Hasil Pencarian: ${searchQuery}`} icon={Search} onSeeAll={() => setView('home')}>
-                     <div className="grid grid-cols-3 xs:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3 md:gap-6 text-left text-left">
+                     <div className="grid grid-cols-3 xs:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3 md:gap-6 text-left">
                        {searchData.map((item, idx) => <DramaCard key={idx} item={item} onClick={(it) => { setSelectedBookId(it.bookId || it.id); setPreviousView('search-results'); setView('detail'); }} />)}
                      </div>
                    </Section>
@@ -802,7 +802,7 @@ const DramaDetailPage = ({ bookId, onBack, user, watchlist, history, onToggleWat
             <h4 className="text-[9px] font-black text-slate-500 uppercase tracking-[0.3em] mb-3">SINOPSIS</h4>
             <div className="p-5 bg-white/5 rounded-2xl border border-white/5 text-slate-400 text-xs leading-relaxed italic line-clamp-4 hover:line-clamp-none transition-all duration-300">{cleanIntro(data.book.introduction)}</div>
           </div>
-          <div className="text-left text-left">
+          <div className="text-left">
              <h4 className="text-[9px] font-black text-slate-500 uppercase tracking-[0.3em] mb-4 text-slate-400 text-left">DAFTAR EPISODE</h4>
              <div className="grid grid-cols-5 xs:grid-cols-6 sm:grid-cols-8 lg:grid-cols-12 gap-2 max-h-[160px] overflow-y-auto pr-3 no-scrollbar pb-2 text-left">
               {data.chapters?.map((ch, i) => {
@@ -894,7 +894,22 @@ const CustomPlayerPage = ({ book, initialEp, onBack, onEpisodeChange, audioSetti
     if (video) { video.playbackRate = audioSettings.playbackRate; video.volume = volume; }
   }, [audioSettings.playbackRate, volume]);
 
-  const togglePlay = () => isPlaying ? videoRef.current.pause() : videoRef.current.play();
+  const togglePlay = () => {
+    const video = videoRef.current;
+    if (!video) return;
+    if (video.paused) {
+      video.play().catch(() => {});
+    } else {
+      video.pause();
+    }
+  };
+
+  const handleOverlayClick = (e) => {
+    // Abaikan klik jika target adalah tombol atau slider range
+    if (e.target.closest('button') || e.target.closest('input[type="range"]')) return;
+    togglePlay();
+  };
+
   const toggleFullScreen = () => { if (!document.fullscreenElement) { containerRef.current.requestFullscreen().catch(err => console.error(err)); } else { document.exitFullscreen(); } };
   const handleNext = () => { const total = details?.book?.chapterCount || 0; if (currentEp < total) setCurrentEp(prev => prev + 1); };
   const handlePrev = () => { if (currentEp > 1) setCurrentEp(prev => prev - 1); };
@@ -927,7 +942,10 @@ const CustomPlayerPage = ({ book, initialEp, onBack, onEpisodeChange, audioSetti
               
               {loading && <div className="absolute inset-0 flex items-center justify-center bg-black/60 backdrop-blur-sm z-10"><Loader2 className="animate-spin text-blue-500" size={48} /></div>}
               
-              <div className={`absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-black/60 flex flex-col justify-between p-4 md:p-8 transition-opacity duration-500 ${showControls ? 'opacity-100' : 'opacity-0'}`}>
+              <div 
+                onClick={handleOverlayClick}
+                className={`absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-black/60 flex flex-col justify-between p-4 md:p-8 transition-opacity duration-500 ${showControls ? 'opacity-100' : 'opacity-0'}`}
+              >
                 <div className="flex justify-between items-center text-left">
                   <button onClick={onBack} className="p-2 md:p-2.5 bg-white/10 backdrop-blur-md rounded-full hover:bg-white/20 transition-all border border-white/10 active:scale-90"><ChevronLeft size={20}/></button>
                   <div className="text-center">
@@ -950,7 +968,7 @@ const CustomPlayerPage = ({ book, initialEp, onBack, onEpisodeChange, audioSetti
                     <div className="flex items-center gap-3">
                        <input type="range" min="0" max={duration || 0} step="0.1" value={currentTime} onChange={(e) => { if (videoRef.current) videoRef.current.currentTime = parseFloat(e.target.value); }} className="flex-1 h-1 md:h-1.5 accent-blue-600 bg-white/20 rounded-full appearance-none cursor-pointer" />
                        
-                       {/* VOLUME SLIDER (DIBERSIHKAN & MUNCUL KEMBALI) */}
+                       {/* VOLUME SLIDER */}
                        <div className="hidden sm:flex items-center gap-2 group/vol relative">
                          <div className="p-1.5 bg-white/10 rounded-lg hover:bg-white/20 transition-colors">
                            {volume === 0 ? <VolumeX size={16} /> : <Volume2 size={16} />}
@@ -1001,7 +1019,7 @@ const CustomPlayerPage = ({ book, initialEp, onBack, onEpisodeChange, audioSetti
                      <p className="text-[8px] font-bold text-slate-500 uppercase mt-0.5">{details?.book?.chapterCount || 0} Total Eps</p>
                    </div>
                 </div>
-                <div className="grid grid-cols-5 md:grid-cols-4 lg:grid-cols-4 gap-2 max-h-[300px] lg:max-h-[450px] overflow-y-auto no-scrollbar py-1 text-left">
+                <div className="grid grid-cols-5 md:grid-cols-4 lg:grid-cols-4 gap-2 max-h-[300px] lg:max-h-[450px] overflow-y-auto no-scrollbar py-1 text-left text-left">
                    {details?.chapters?.map((ch, i) => {
                      const num = ch.num || (i + 1);
                      return (
