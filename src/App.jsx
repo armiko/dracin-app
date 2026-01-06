@@ -4,22 +4,25 @@ import {
   ChevronRight, SkipBack, SkipForward, AlertTriangle, 
   Loader2, Trophy, Star, Filter, Plus,
   Pause, Volume2, VolumeX, Share2, ChevronLeft,
-  Volume1, Gamepad2, CheckCircle2, ExternalLink
+  Volume1, Gamepad2, CheckCircle2, ExternalLink,
+  LogOut, LogIn, User as UserIcon, AlertCircle
 } from 'lucide-react';
 
 /**
- * --- KONFIGURASI API ---
+ * --- KONFIGURASI API & FIREBASE ---
  */
 const CONFIG = {
   SCRIPT_URL: "https://cdn.jsdelivr.net/gh/armiko/dracin-app@169efe4fc99586d445cbf8780629c5ac210ca929/js/dramabox-core.js",
   HLS_URL: "https://cdn.jsdelivr.net/npm/hls.js@latest",
+  // Firebase Compat Scripts untuk stabilitas maksimal di berbagai environment
   FIREBASE_APP: "https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js",
   FIREBASE_AUTH: "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js",
   FIREBASE_FIRESTORE: "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js",
   API_BASE: "https://drachin.dicky.app",
   LOCALE_API: "in",
   FEED_IDS: { POPULAR: 1, LATEST: 2, TRENDING: 3 },
-  PER_PAGE: 24
+  PER_PAGE: 24,
+  GOOGLE_CLIENT_ID: "1045477518682-vvh8vnmbaib90h6ruoi6i02jmk9nffg5.apps.googleusercontent.com"
 };
 
 const STATIC_FILTERS = [
@@ -57,7 +60,7 @@ const STATIC_FILTERS = [
 ];
 
 /**
- * --- UTILS & HELPERS ---
+ * --- UTILS ---
  */
 const useExternalScript = (url) => {
   const [state, setState] = useState({ loaded: false, error: false });
@@ -65,11 +68,9 @@ const useExternalScript = (url) => {
     let script = document.querySelector(`script[src="${url}"]`);
     const handleLoad = () => setState({ loaded: true, error: false });
     const handleError = () => setState({ loaded: false, error: true });
-    
     if (!script) {
       script = document.createElement("script");
-      script.src = url; 
-      script.async = true;
+      script.src = url; script.async = true;
       document.body.appendChild(script);
     } else if (window.DramaboxCore || window.Hls || (url.includes('firebase') && window.firebase)) {
       handleLoad(); return;
@@ -116,7 +117,7 @@ const Section = ({ title, icon: IconComponent, onSeeAll, children }) => (
   <section className="mb-12">
     <div className="flex items-center justify-between mb-6">
       <div className="flex items-center gap-2">
-        <div className="p-1.5 bg-slate-900 rounded-lg border border-white/5 shadow-inner text-blue-400">
+        <div className="p-1.5 bg-slate-900 rounded-lg border border-white/5 shadow-inner">
            {IconComponent && <IconComponent size={16} className={title.includes('Populer') ? 'text-orange-500' : 'text-blue-400'} />}
         </div>
         <h2 className="text-lg font-black text-white uppercase tracking-tight">{title}</h2>
@@ -165,8 +166,8 @@ const SanPoiPopup = ({ onClose }) => {
           </div>
           <a href="https://sanpoi.com" target="_blank" rel="noopener noreferrer" className="block w-full bg-blue-600 hover:bg-blue-500 text-white py-2.5 rounded-lg font-black text-[10px] text-center shadow-lg transition-all active:scale-95 flex items-center justify-center gap-1.5 uppercase">TOP UP SEKARANG <ExternalLink size={12}/></a>
           <label className="mt-3 flex items-center justify-center gap-1.5 cursor-pointer group">
-            <input type="checkbox" checked={dontShowToday} onChange={(e) => setDontShowToday(e.target.checked)} className="w-3.5 h-3.5 border border-white/20 rounded bg-transparent text-blue-600 focus:ring-0 cursor-pointer" />
-            <span className="text-[8px] font-bold text-slate-500 group-hover:text-slate-300 uppercase tracking-wider">Jangan tampilkan hari ini</span>
+            <input type="checkbox" checked={dontShowToday} onChange={(e) => setDontShowToday(e.target.checked)} className="peer appearance-none w-3.5 h-3.5 border border-white/20 rounded bg-transparent checked:bg-blue-600 transition-all cursor-pointer" />
+            <span className="text-[8px] font-bold text-slate-500 group-hover:text-slate-300 uppercase tracking-wider cursor-pointer">Jangan tampilkan hari ini</span>
           </label>
         </div>
       </div>
@@ -383,6 +384,7 @@ export default function App() {
   const [rankTab, setRankTab] = useState('popular');
   const [activeFilters, setActiveFilters] = useState({ voice: '', category: '', sort: 'popular' });
   const [audioSettings, setAudioSettings] = useState({ volume: 1, isMuted: false, playbackRate: 1, autoNext: true });
+  const [authError, setAuthError] = useState(null);
 
   // Scripts Loading
   const { loaded: scriptLoaded } = useExternalScript(CONFIG.SCRIPT_URL);
@@ -394,15 +396,40 @@ export default function App() {
   const fbReady = fbApp && fbAuth && fbStore;
 
   /**
-   * --- FUNGSI AKSI (Pindahkan ke atas useEffect) ---
+   * --- LOGIKA AKSI (Didefinisikan sebelum dipanggil) ---
    */
+
+  const handleGoogleLogin = async () => {
+    if (!fbReady || !window.firebase) return;
+    setAuthError(null);
+    try {
+      const fb = window.firebase;
+      const provider = new fb.auth.GoogleAuthProvider();
+      provider.setCustomParameters({ 'client_id': CONFIG.GOOGLE_CLIENT_ID });
+      await fb.auth().signInWithPopup(provider);
+    } catch (e) {
+      console.error("Login error:", e);
+      if (e.code === 'auth/operation-not-supported-in-this-environment' || String(e).includes('location.protocol')) {
+        setAuthError("Login Google tidak didukung di lingkungan pratinjau (iframe/blob). Fitur ini akan berfungsi normal saat di-deploy ke domain HTTPS asli.");
+      } else {
+        setAuthError("Gagal masuk dengan Google. Silakan coba lagi.");
+      }
+    }
+  };
+
+  const handleLogout = async () => {
+    if (!fbReady || !window.firebase) return;
+    try {
+      await window.firebase.auth().signOut();
+    } catch (e) { console.error("Logout failed:", e); }
+  };
 
   const handleCloseAd = async (isPersistent) => {
     setShowAd(false);
     if (user && fbReady && window.firebase && window.firebase.apps.length) {
       try {
         const fb = window.firebase;
-        const config = JSON.parse(typeof __firebase_config !== 'undefined' ? __firebase_config : '{}');
+        const configRaw = typeof __firebase_config !== 'undefined' ? __firebase_config : '{}';
         const appIdStr = typeof __app_id !== 'undefined' ? __app_id : 'nontondracin-compact';
         await fb.firestore().doc(`artifacts/${appIdStr}/users/${user.uid}/settings/ad_pref`).set({ 
           ts: Date.now(), 
@@ -471,7 +498,10 @@ export default function App() {
   useEffect(() => {
     if (!fbReady || !window.firebase) return;
     const fb = window.firebase;
-    const fConfig = JSON.parse(typeof __firebase_config !== 'undefined' ? __firebase_config : '{}');
+    const configRaw = typeof __firebase_config !== 'undefined' ? __firebase_config : '{}';
+    let fConfig = {};
+    try { fConfig = JSON.parse(configRaw); } catch(e) {}
+    
     const appIdStr = typeof __app_id !== 'undefined' ? __app_id : 'nontondracin-compact';
     const initialToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
     
@@ -481,7 +511,7 @@ export default function App() {
     
     const initAuth = async () => {
       try {
-        if (fb.apps.length) {
+        if (fb.apps.length && !fb.auth().currentUser) {
             if (initialToken) await fb.auth().signInWithCustomToken(initialToken);
             else await fb.auth().signInAnonymously();
         }
@@ -497,7 +527,7 @@ export default function App() {
                     const adRef = fb.firestore().doc(`artifacts/${appIdStr}/users/${u.uid}/settings/ad_pref`);
                     const snap = await adRef.get();
                     let show = true;
-                    if (snap.exists) {
+                    if (snap.exists()) {
                         const d = snap.data();
                         const diff = Date.now() - (d.ts || 0);
                         if (d.p ? diff < 86400000 : diff < 3600000) show = false;
@@ -534,8 +564,8 @@ export default function App() {
       <nav className="flex-none h-16 bg-[#0f172a]/80 backdrop-blur-xl border-b border-white/5 flex items-center z-40 px-4 sm:px-8">
         <div className="container mx-auto flex justify-between items-center">
           <button onClick={() => setView('home')} className="flex items-center gap-2 group">
-            <div className="w-8 h-8 bg-gradient-to-br from-blue-600 to-indigo-500 rounded-lg flex items-center justify-center text-white font-black shadow-lg">D</div>
-            <span className="text-base font-black text-white hidden xs:block">Nonton<span className="text-blue-500">Dracin</span></span>
+            <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center text-white font-black shadow-lg">D</div>
+            <span className="text-base font-black text-white hidden xs:block">NontonDracin</span>
           </button>
           <div className="flex items-center gap-1.5 bg-white/5 p-1 rounded-full border border-white/10">
             {[ { id: 'home', label: 'Home', icon: Home }, { id: 'rank', label: 'Ranking', icon: Trophy }, { id: 'filter', label: 'Filter', icon: Filter } ].map((m) => (
@@ -544,9 +574,29 @@ export default function App() {
               </button>
             ))}
             <button onClick={() => setSearchModalOpen(true)} className="p-2 rounded-full text-slate-400 hover:text-white transition-colors hover:bg-white/5"><Search size={16} /></button>
+            
+            <div className="h-6 w-[1px] bg-white/10 mx-1 hidden sm:block"></div>
+            {user && !user.isAnonymous ? (
+              <div className="flex items-center gap-2 pl-1 pr-2">
+                <img src={user.photoURL} alt="User" className="w-6 h-6 rounded-full border border-white/20 shadow-lg" />
+                <button onClick={handleLogout} className="p-1.5 text-slate-400 hover:text-red-400 transition-colors" title="Logout"><LogOut size={14} /></button>
+              </div>
+            ) : (
+              <button onClick={handleGoogleLogin} className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/5 hover:bg-blue-600 text-slate-300 hover:text-white transition-all text-[10px] font-black uppercase tracking-wider"><LogIn size={12} /> <span className="hidden sm:inline">Login</span></button>
+            )}
           </div>
         </div>
       </nav>
+
+      {/* ERROR BAR */}
+      {authError && (
+        <div className="bg-orange-600/20 border-b border-orange-500/20 px-6 py-2 flex items-center justify-between">
+           <div className="flex items-center gap-2 text-orange-400 text-[9px] font-bold uppercase tracking-widest">
+              <AlertCircle size={14} /> <span>{authError}</span>
+           </div>
+           <button onClick={() => setAuthError(null)} className="text-orange-400/50 hover:text-orange-400"><X size={14}/></button>
+        </div>
+      )}
 
       {/* MAIN CONTENT */}
       <main className="flex-1 overflow-y-auto pt-4 pb-16 px-4 sm:px-8 no-scrollbar">
@@ -598,13 +648,8 @@ export default function App() {
                </div>
                {hasMoreRank && rankData.length > 0 && (
                  <div className="mt-12 flex justify-center">
-                    <button 
-                      onClick={handleLoadMoreRank}
-                      disabled={loadingData}
-                      className="px-8 py-3 bg-blue-600 hover:bg-blue-500 text-white rounded-xl font-black text-[10px] uppercase tracking-[0.2em] shadow-lg disabled:opacity-50 transition-all flex items-center gap-2"
-                    >
-                      {loadingData ? <Loader2 size={14} className="animate-spin"/> : <Plus size={14}/>} 
-                      Muat Lebih Banyak
+                    <button onClick={handleLoadMoreRank} disabled={loadingData} className="px-8 py-3 bg-blue-600 hover:bg-blue-500 text-white rounded-xl font-black text-[10px] uppercase tracking-[0.2em] shadow-lg disabled:opacity-50 transition-all flex items-center gap-2">
+                      {loadingData ? <Loader2 size={14} className="animate-spin"/> : <Plus size={14}/>} Muat Lebih Banyak
                     </button>
                  </div>
                )}
@@ -635,7 +680,7 @@ export default function App() {
             <div className="animate-in fade-in duration-700">
                <Section title={`Hasil: ${searchQuery}`} icon={Search} onSeeAll={() => setView('home')}>
                   <div className="grid grid-cols-2 xs:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-5">
-                    {searchData.length > 0 ? searchData.map((item, idx) => <DramaCard key={idx} item={item} onClick={(it) => { setSelectedBookId(it.bookId || it.id); setPreviousView('search-results'); setView('detail'); }} />) : <p className="text-slate-500 text-xs italic p-10 col-span-full text-center">Drama tidak ditemukan...</p>}
+                    {searchData.length > 0 ? searchData.map((item, idx) => <DramaCard key={idx} item={item} onClick={(it) => { setSelectedBookId(it.bookId || it.id); setPreviousView('search-results'); setView('detail'); }} />) : <p className="text-slate-500 text-[10px] font-bold uppercase italic p-10 col-span-full text-center tracking-widest">Drama tidak ditemukan...</p>}
                   </div>
                </Section>
             </div>
@@ -647,8 +692,8 @@ export default function App() {
         </div>
       </main>
 
-      <footer className="flex-none bg-[#0f172a] border-t border-white/5 py-6 px-4 overflow-hidden">
-        <div className="container mx-auto max-w-4xl flex flex-col items-center gap-2 text-center">
+      <footer className="flex-none bg-[#0f172a] border-t border-white/5 py-6 px-4 overflow-hidden text-center">
+        <div className="container mx-auto max-w-4xl flex flex-col items-center gap-2">
           <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest">
             © 2026 <a href="https://sanpoi.com" target="_blank" rel="noopener noreferrer" className="text-blue-400 hover:underline transition-all">SanPoi</a> | Made with AI
           </p>
@@ -663,22 +708,13 @@ export default function App() {
 
       {showAd && <SanPoiPopup onClose={handleCloseAd} />}
       
-      {/* SEARCH MODAL */}
       {searchModalOpen && (
         <div className="fixed inset-0 z-[100] flex items-start justify-center pt-32 px-4">
           <div className="absolute inset-0 bg-[#0f172a]/95 backdrop-blur-2xl" onClick={() => setSearchModalOpen(false)}></div>
           <div className="relative w-full max-w-2xl animate-in slide-in-from-top-8 duration-500">
              <div className="relative group">
                 <Search className="absolute left-6 top-1/2 -translate-y-1/2 text-slate-500 group-focus-within:text-blue-500 transition-colors" size={24} />
-                <input 
-                  autoFocus 
-                  type="text" 
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  onKeyDown={handleSearch}
-                  placeholder="Cari drama favorit..." 
-                  className="w-full bg-slate-900 border border-white/10 rounded-[1.5rem] pl-16 pr-8 py-5 text-lg font-bold text-white outline-none focus:border-blue-600 transition-all shadow-2xl" 
-                />
+                <input autoFocus type="text" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} onKeyDown={handleSearch} placeholder="Cari drama favorit..." className="w-full bg-slate-900 border border-white/10 rounded-[1.5rem] pl-16 pr-8 py-5 text-lg font-bold text-white outline-none focus:border-blue-600 transition-all shadow-2xl" />
              </div>
           </div>
         </div>
