@@ -8,9 +8,6 @@ import {
   LogOut, LogIn, User as UserIcon, AlertCircle,
   Bookmark, BookmarkCheck, History
 } from 'lucide-react';
-import { initializeApp } from 'firebase/app';
-import { getAuth, signInWithPopup, GoogleAuthProvider, onAuthStateChanged, signOut, signInAnonymously } from 'firebase/auth';
-import { getFirestore, doc, onSnapshot, setDoc, getDoc, updateDoc } from 'firebase/firestore';
 
 /**
  * --- KONFIGURASI API & FIREBASE ---
@@ -38,16 +35,7 @@ const firebaseConfig = {
   measurementId: "G-6B89Y55E2F"
 };
 
-// Inisialisasi Firebase
-const app = initializeApp(firebaseConfig);
-const auth = getAuth(app);
-const db = getFirestore(app);
-
-/**
- * PERINGATAN TEKNIS:
- * Sesuai Mandatory Rule 1, jalur Firestore HARUS dimulai dengan /artifacts/.
- * ID '3KNDH1p5iIG6U7FmuGTS' tetap digunakan sebagai ID Aplikasi unik Anda.
- */
+// MANDATORY RULE 1: Jalur penyimpanan persisten menggunakan ID Anda
 const customAppId = '3KNDH1p5iIG6U7FmuGTS';
 
 const STATIC_FILTERS = [
@@ -327,12 +315,16 @@ const CustomPlayerPage = ({ book, chapters, initialEp, onBack, audioSettings, se
     if (!videoRef.current || !videoUrl) return;
     const video = videoRef.current;
     if (hlsRef.current) hlsRef.current.destroy();
+    
     if (videoUrl.includes('.m3u8') && window.Hls && window.Hls.isSupported()) {
       const hls = new window.Hls({ enableWorker: true, lowLatencyMode: true });
       hls.loadSource(videoUrl); hls.attachMedia(video);
       hls.on(window.Hls.Events.MANIFEST_PARSED, () => video.play().catch(() => {}));
       hlsRef.current = hls;
-    } else { video.src = videoUrl; video.play().catch(() => {}); }
+    } else {
+      video.src = videoUrl;
+      video.play().catch(() => {});
+    }
     return () => hlsRef.current && hlsRef.current.destroy();
   }, [videoUrl]);
 
@@ -457,7 +449,7 @@ export default function App() {
   const [authError, setAuthError] = useState(null);
   const [showAd, setShowAd] = useState(false);
 
-  // Scripts Loading
+  // Scripts Loading via external hook
   const { loaded: scriptLoaded } = useExternalScript(CONFIG.SCRIPT_URL);
   const { loaded: hlsLoaded } = useExternalScript(CONFIG.HLS_URL);
   const { loaded: fbApp } = useExternalScript(CONFIG.FIREBASE_APP);
@@ -501,12 +493,12 @@ export default function App() {
     
     try {
         const snap = await profileRef.get();
-        const currentData = snap.exists ? snap.data() : { watchlist: [], history: [] };
-        const exists = (currentData.watchlist || []).some(item => String(item.bookId) === dramaId);
+        const data = snap.exists ? snap.data() : { watchlist: [], history: [] };
+        const exists = (data.watchlist || []).some(item => String(item.bookId) === dramaId);
         
         let newWatchlist;
         if (exists) {
-            newWatchlist = (currentData.watchlist || []).filter(item => String(item.bookId) !== dramaId);
+            newWatchlist = data.watchlist.filter(item => String(item.bookId) !== dramaId);
         } else {
             const newItem = {
                 bookId: dramaId,
@@ -515,9 +507,9 @@ export default function App() {
                 chapterCount: drama.chapterCount || drama.episodeCount || 0,
                 ts: Date.now()
             };
-            newWatchlist = [newItem, ...(currentData.watchlist || [])];
+            newWatchlist = [newItem, ...(data.watchlist || [])];
         }
-        await profileRef.set({ ...currentData, watchlist: newWatchlist });
+        await profileRef.set({ ...data, watchlist: newWatchlist });
     } catch(e) { console.error("Watchlist toggle failed:", e); }
   };
 
@@ -529,8 +521,8 @@ export default function App() {
     
     try {
         const snap = await profileRef.get();
-        const currentData = snap.exists ? snap.data() : { watchlist: [], history: [] };
-        const existingHistory = (currentData.history || []).filter(item => String(item.bookId) !== dramaId);
+        const data = snap.exists ? snap.data() : { watchlist: [], history: [] };
+        const existingHistory = (data.history || []).filter(item => String(item.bookId) !== dramaId);
         
         const newItem = {
             bookId: dramaId,
@@ -541,13 +533,13 @@ export default function App() {
             ts: Date.now()
         };
         const newHistory = [newItem, ...existingHistory].slice(0, 50);
-        await profileRef.set({ ...currentData, history: newHistory });
+        await profileRef.set({ ...data, history: newHistory });
     } catch(e) { console.error("History save failed:", e); }
   };
 
   const handleCloseAd = async (isPersistent) => {
     setShowAd(false);
-    if (user && fbReady && window.firebase && window.firebase.apps.length) {
+    if (user && fbReady && window.firebase) {
       try {
         const fb = window.firebase;
         await fb.firestore().doc(`artifacts/${customAppId}/users/${user.uid}/settings/ad_pref`).set({ 
@@ -619,7 +611,7 @@ export default function App() {
     if (!fbReady || !window.firebase) return;
     const fb = window.firebase;
     if (!fb.apps.length) {
-      try { fb.initializeApp(FIREBASE_CONFIG_OVERRIDE); } catch(e) {}
+      try { fb.initializeApp(firebaseConfig); } catch(e) {}
     }
     
     const initAuth = async () => {
