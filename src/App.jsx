@@ -372,6 +372,7 @@ const CustomPlayerPage = ({
     }
   }, [book]);
 
+  // Effect to load the video source (ONLY when videoUrl changes)
   useEffect(() => {
     const video = videoRef.current;
     if (!video || !videoUrl) return;
@@ -385,8 +386,9 @@ const CustomPlayerPage = ({
     video.removeAttribute('src');
     video.load();
 
-    const startPlay = () => {
-      if (video && video.src) {
+    const applyInitialSettingsAndPlay = () => {
+      if (video) {
+        // Apply current settings before starting
         video.playbackRate = audioSettings.playbackRate || 1;
         video.volume = audioSettings.isMuted ? 0 : (audioSettings.volume || 1);
         video.play().catch(e => {
@@ -406,7 +408,7 @@ const CustomPlayerPage = ({
 
       hls.loadSource(videoUrl);
       hls.attachMedia(video);
-      hls.on(window.Hls.Events.MANIFEST_PARSED, startPlay);
+      hls.on(window.Hls.Events.MANIFEST_PARSED, applyInitialSettingsAndPlay);
       
       hls.on(window.Hls.Events.ERROR, (event, data) => {
         if (data.fatal) {
@@ -420,7 +422,7 @@ const CustomPlayerPage = ({
       hlsRef.current = hls;
     } else {
       video.src = videoUrl;
-      setTimeout(startPlay, 50);
+      setTimeout(applyInitialSettingsAndPlay, 50);
     }
 
     return () => {
@@ -429,7 +431,16 @@ const CustomPlayerPage = ({
         hlsRef.current = null;
       }
     };
-  }, [videoUrl, audioSettings.playbackRate, audioSettings.volume, audioSettings.isMuted]);
+  }, [videoUrl]); // Removed audioSettings from dependencies to prevent re-load on speed change
+
+  // Effect to apply audio settings dynamically without reloading the source
+  useEffect(() => {
+    const video = videoRef.current;
+    if (video) {
+      video.playbackRate = audioSettings.playbackRate;
+      video.volume = audioSettings.isMuted ? 0 : audioSettings.volume;
+    }
+  }, [audioSettings.playbackRate, audioSettings.volume, audioSettings.isMuted]);
 
   useEffect(() => {
     loadEpisode(currentEp);
