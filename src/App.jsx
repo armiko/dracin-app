@@ -59,7 +59,7 @@ const STATIC_FILTERS = [
       { display: "Balas Dendam", value: "balas dendam" },
       { display: "CEO", value: "ceo" },
       { display: "Keluarga", value: "keluarga" },
-      { display: "Kekuatan Khusus", value: "kekuatan khusus" }
+      { display: "Kekuatan Khusus", value: "keluarga khusus" }
     ]
   },
   {
@@ -103,9 +103,10 @@ const cleanIntro = (h) => h ? String(h).replace(/<[^>]*>/g, ' ').replace(/&nbsp;
 const extractVideoUrl = (c) => {
   if (!c) return '';
   let s = c.raw || c;
-  // Perbaikan logika ekstraksi URL untuk kestabilan pemutaran
-  if (s.m3u8Url || s.playUrl || s.videoUrl) return s.m3u8Url || s.playUrl || s.videoUrl;
-  if (s.mp4) return s.mp4;
+  
+  // Mencoba berbagai kemungkinan field URL dari API
+  const directUrl = s.m3u8Url || s.playUrl || s.videoUrl || s.mp4;
+  if (directUrl) return directUrl;
   
   const cdn = s.cdnList?.[0];
   if (cdn) {
@@ -113,7 +114,7 @@ const extractVideoUrl = (c) => {
     const path = v?.videoPath || v?.path || s.path || '';
     if (path) {
       if (path.startsWith('http')) return path;
-      const domain = cdn.cdnDomain.startsWith('http') ? cdn.cdnDomain : 'https://' + cdn.cdnDomain;
+      const domain = cdn.cdnDomain ? (cdn.cdnDomain.startsWith('http') ? cdn.cdnDomain : 'https://' + cdn.cdnDomain) : '';
       return domain.replace(/\/+$/, '') + '/' + path.replace(/^\/+/, '');
     }
   }
@@ -223,7 +224,7 @@ const DramaDetailPage = ({ bookId, onBack, onPlayEpisode, watchlist, onToggleWat
       try {
         const res = await window.DramaboxCore.loadDetailWithRecommend({ apiBase: CONFIG.API_BASE, localeApi: 'in', bookId, webficBase: 'https://www.webfic.com' });
         setData(res);
-      } catch (e) { console.error("Gagal memuat detail:", e); }
+      } catch (e) { console.error("Detail load error:", e); }
     };
     fetch();
   }, [bookId]);
@@ -293,11 +294,11 @@ const CustomPlayerPage = ({ book, chapters, initialEp, onBack, audioSettings, se
       if (url) {
         setVideoUrl(url);
       } else {
-        throw new Error('Video URL not found');
+        throw new Error('URL Video Kosong');
       }
     } catch (e) { 
       if (requestId === requestRef.current) {
-        console.error("Playback load error:", e);
+        console.error("Kesalahan muat video:", e);
         setError(true); 
       }
     } finally { 
@@ -323,18 +324,18 @@ const CustomPlayerPage = ({ book, chapters, initialEp, onBack, audioSettings, se
         hls.loadSource(videoUrl);
         hls.attachMedia(video);
         hls.on(window.Hls.Events.MANIFEST_PARSED, () => {
-          video.play().catch(e => console.warn("Auto-play blocked:", e));
+          video.play().catch(e => console.warn("Pemutaran otomatis diblokir:", e));
         });
         hlsRef.current = hls;
       } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
         video.src = videoUrl;
-        video.play().catch(e => console.warn("Native auto-play blocked:", e));
+        video.play().catch(e => console.warn("Pemutaran otomatis diblokir:", e));
       } else {
         setError(true);
       }
     } else {
       video.src = videoUrl;
-      video.play().catch(e => console.warn("Direct play blocked:", e));
+      video.play().catch(e => console.warn("Pemutaran langsung diblokir:", e));
     }
 
     return () => {
@@ -370,7 +371,9 @@ const CustomPlayerPage = ({ book, chapters, initialEp, onBack, audioSettings, se
         {loading ? <Loader2 className="animate-spin text-blue-500" size={48} /> : error ? (
           <div className="flex flex-col items-center gap-4 text-center px-6">
             <AlertTriangle className="text-orange-500" size={48} />
-            <div className="text-white text-[10px] font-black bg-orange-600/40 px-8 py-4 rounded-2xl border border-orange-500/20 uppercase tracking-widest">Gagal Memutar Video di Browser Ini</div>
+            <div className="text-white text-[10px] font-black bg-orange-600/40 px-8 py-4 rounded-2xl border border-orange-500/20 uppercase tracking-widest leading-relaxed">
+              Tautan Video Tidak Valid atau Diblokir oleh Browser Lingkungan Pratinjau
+            </div>
           </div>
         ) : (
           <video ref={videoRef} className="w-full h-full object-contain cursor-pointer" onPlay={() => setIsPlaying(true)} onPause={() => setIsPlaying(false)} onTimeUpdate={() => setCurrentTime(videoRef.current?.currentTime || 0)} onLoadedMetadata={() => setDuration(videoRef.current?.duration || 0)} onEnded={() => audioSettings.autoNext && setCurrentEp(e => e + 1)} playsInline />
@@ -381,7 +384,7 @@ const CustomPlayerPage = ({ book, chapters, initialEp, onBack, audioSettings, se
       <div className={`absolute bottom-0 left-0 right-0 p-6 z-50 transition-all duration-500 ${showControls ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-8 pointer-events-none'}`}>
         <div className="max-w-4xl mx-auto flex flex-col gap-3">
           <div className="flex flex-col gap-1.5">
-            <input type="range" min="0" max={duration || 0} step="0.1" value={currentTime} onChange={(e) => { videoRef.current.currentTime = e.target.value; }} className="w-full h-1 accent-blue-600 bg-white/20 rounded-full appearance-none cursor-pointer hover:h-2 transition-all" />
+            <input type="range" min="0" max={duration || 0} step="0.1" value={currentTime} onChange={(e) => { videoRef.current.currentTime = e.target.value; }} className="w-full h-1 accent-blue-600 bg-white/20 rounded-full appearance-none cursor-pointer hover:h-1.5 transition-all" />
             <div className="flex justify-between items-center px-1 text-[9px] font-mono font-bold text-white/50 tracking-tighter">
               <span>{formatTime(currentTime)}</span>
               <span>{formatTime(duration)}</span>
@@ -503,6 +506,7 @@ export default function App() {
     if (!user || !fbReady || !window.firebase) return;
     const fb = window.firebase;
     const dramaId = String(drama.bookId || drama.id);
+    // Jalur penyimpanan yang benar menggunakan customAppId
     const watchlistRef = fb.firestore().doc(`artifacts/${customAppId}/users/${user.uid}/watchlist/${dramaId}`);
     
     const exists = watchlistData.some(item => String(item.bookId) === dramaId);
@@ -526,6 +530,7 @@ export default function App() {
     if (!user || !fbReady || !window.firebase) return;
     const fb = window.firebase;
     const dramaId = String(drama.bookId || drama.id);
+    // Jalur penyimpanan yang benar menggunakan customAppId
     const historyRef = fb.firestore().doc(`artifacts/${customAppId}/users/${user.uid}/history/${dramaId}`);
     
     try {
@@ -660,7 +665,7 @@ export default function App() {
       try {
         const adRef = fb.firestore().doc(`artifacts/${customAppId}/users/${user.uid}/settings/ad_pref`);
         const snap = await adRef.get();
-        if (snap.exists()) {
+        if (snap.exists) {
           const d = snap.data();
           const diff = Date.now() - (d.ts || 0);
           if (d.p ? diff < 86400000 : diff < 3600000) return;
