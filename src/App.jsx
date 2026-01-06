@@ -1,17 +1,17 @@
-import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { 
   Play, X, Search, Home, Clock, Flame, 
   ChevronRight, SkipBack, SkipForward, AlertTriangle, 
-  Loader2, Trophy, Star, Filter, Check, Plus,
-  Pause, Volume2, VolumeX, Share2, ChevronLeft,
-  Gauge, BookOpen, Maximize, Minimize
+  Loader2, Trophy, Star, Filter, Plus,
+  Pause, Volume2, VolumeX, Share2, ChevronLeft
 } from 'lucide-react';
 
 /**
  * --- KONFIGURASI API & KONSTANTA ---
  */
 const CONFIG = {
-  SCRIPT_URL: "https://nontondracin.com/vendor/core/plugins/dramabox/js/dramabox-core.js?v=2.1.8",
+  // Updated SCRIPT_URL to use jsDelivr CDN for better MIME type support and reliability
+  SCRIPT_URL: "https://cdn.jsdelivr.net/gh/armiko/dracin-app@169efe4fc99586d445cbf8780629c5ac210ca929/js/dramabox-core.js",
   API_BASE: "https://drachin.dicky.app",
   LOCALE_API: "in",
   LOCALE_URL: "id",
@@ -21,6 +21,114 @@ const CONFIG = {
     TRENDING: 3
   },
   PER_PAGE: 24
+};
+
+/**
+ * --- API HELPER FUNCTIONS & EXTERNAL SCRIPT LOADER ---
+ */
+
+// Hook untuk load external script
+const useExternalScript = (url) => {
+  const [state, setState] = useState({ loaded: false, error: false });
+  
+  useEffect(() => {
+    if (window.DramaboxCore) {
+      setState({ loaded: true, error: false });
+      return;
+    }
+    
+    let script = document.querySelector(`script[src="${url}"]`);
+    let checkCount = 0;
+    const maxChecks = 30;
+    
+    const onScriptLoad = () => {
+      setTimeout(() => {
+        if (window.DramaboxCore) {
+          console.log('DramaboxCore loaded successfully');
+          setState({ loaded: true, error: false });
+        } else {
+          console.warn('Script loaded but DramaboxCore not found');
+          setState({ loaded: true, error: true });
+        }
+      }, 1000);
+    };
+    
+    const onScriptError = (e) => {
+      console.error('Script loading failed:', e);
+      setState({ loaded: true, error: true });
+    };
+    
+    if (!script) {
+      script = document.createElement("script");
+      script.src = url;
+      script.async = true;
+      script.crossOrigin = "anonymous";
+      document.body.appendChild(script);
+      console.log('Loading script from:', url);
+    }
+    
+    script.addEventListener("load", onScriptLoad);
+    script.addEventListener("error", onScriptError);
+    
+    const interval = setInterval(() => {
+      checkCount++;
+      if (window.DramaboxCore) {
+        console.log('DramaboxCore detected');
+        setState({ loaded: true, error: false });
+        clearInterval(interval);
+      } else if (checkCount >= maxChecks) {
+        console.error('DramaboxCore not available after max checks');
+        setState({ loaded: true, error: true });
+        clearInterval(interval);
+      }
+    }, 500);
+    
+    return () => {
+      script.removeEventListener("load", onScriptLoad);
+      script.removeEventListener("error", onScriptError);
+      clearInterval(interval);
+    };
+  }, [url]);
+  
+  return state;
+};
+
+// Fallback API jika DramaboxCore gagal load
+const API = {
+  getDeviceId: () => {
+    let deviceId = localStorage.getItem('device_id');
+    if (!deviceId) {
+      deviceId = 'web_' + Math.random().toString(36).substring(2, 15) + Date.now().toString(36);
+      localStorage.setItem('device_id', deviceId);
+    }
+    return deviceId;
+  },
+
+  fetchWithTimeout: async (url, options = {}, timeout = 10000) => {
+    const controller = new AbortController();
+    const id = setTimeout(() => controller.abort(), timeout);
+    
+    try {
+      const response = await fetch(url, {
+        ...options,
+        signal: controller.signal,
+        headers: {
+          'Content-Type': 'application/json',
+          ...options.headers
+        }
+      });
+      clearTimeout(id);
+      
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      
+      return await response.json();
+    } catch (error) {
+      clearTimeout(id);
+      throw error;
+    }
+  }
 };
 
 /**
@@ -47,7 +155,7 @@ const STATIC_FILTERS = [
       { display: "Balas Dendam", value: "balas dendam" },
       { display: "CEO", value: "ceo" },
       { display: "Keluarga", value: "keluarga" },
-      { display: "Kekuatan Khusus", value: "keluatan khusus" },
+      { display: "Kekuatan Khusus", value: "kekuatan khusus" },
       { display: "Pembalikan Identitas", value: "pembalikan identitas" },
       { display: "Perselingkuhan", value: "perselingkuhan" },
       { display: "Terlahir Kembali", value: "terlahir kembali" },
@@ -130,57 +238,14 @@ const extractVideoUrlFromChapter = (chapter) => {
   return '';
 };
 
-const useExternalScript = (url) => {
-  const [state, setState] = useState({ loaded: false, error: false });
-  useEffect(() => {
-    if (window.DramaboxCore) {
-      setState({ loaded: true, error: false });
-      return;
-    }
-    let script = document.querySelector(`script[src="${url}"]`);
-    
-    const onScriptLoad = () => {
-      setTimeout(() => {
-        if (window.DramaboxCore) setState({ loaded: true, error: false });
-        else setState({ loaded: true, error: true });
-      }, 500);
-    };
-    
-    const onScriptError = () => setState({ loaded: true, error: true });
-    
-    if (!script) {
-      script = document.createElement("script");
-      script.src = url;
-      script.async = true;
-      document.body.appendChild(script);
-    }
-    
-    script.addEventListener("load", onScriptLoad);
-    script.addEventListener("error", onScriptError);
-    
-    const interval = setInterval(() => {
-      if (window.DramaboxCore) {
-        setState({ loaded: true, error: false });
-        clearInterval(interval);
-      }
-    }, 500);
-    
-    return () => {
-      script.removeEventListener("load", onScriptLoad);
-      script.removeEventListener("error", onScriptError);
-      clearInterval(interval);
-    };
-  }, [url]);
-  return state;
-};
-
 // --- KOMPONEN UI ---
 
 const DramaCard = ({ item, onClick, rank }) => {
-  const cover = String(item.coverWap || item.cover || 'https://via.placeholder.com/300x450');
+  const cover = String(item.coverWap || item.coverUrl || item.cover || 'https://via.placeholder.com/300x450');
   const title = String(item.bookName || item.title || 'Untitled');
-  const ep = String(item.chapterCount || '?');
-  const score = item.score || 9.8;
+  const ep = String(item.chapterCount || item.episodeCount || '?');
+  const score = item.score || item.rating || 9.8;
+  
   return (
     <div className="group relative cursor-pointer" onClick={() => onClick(item)}>
       <div className="relative aspect-[2/3] rounded-xl overflow-hidden mb-2 bg-gray-800 shadow-md transition-all duration-300 group-hover:shadow-blue-500/20 group-hover:shadow-xl">
@@ -200,7 +265,7 @@ const DramaCard = ({ item, onClick, rank }) => {
         )}
         <div className="absolute top-2 right-2 bg-black/60 backdrop-blur-md text-white text-[8px] sm:text-[10px] font-bold px-1.5 sm:px-2 py-0.5 sm:py-1 rounded-md border border-white/10">{ep} EPS</div>
         <div className="absolute bottom-0 left-0 right-0 p-2 bg-gradient-to-t from-black/90 to-transparent pt-6">
-            <div className="flex items-center gap-1 text-[8px] sm:text-[10px] text-yellow-400 font-bold"><Star size={10} fill="currentColor"/> {score}</div>
+          <div className="flex items-center gap-1 text-[8px] sm:text-[10px] text-yellow-400 font-bold"><Star size={10} fill="currentColor"/> {score}</div>
         </div>
       </div>
       <h3 className="text-gray-200 font-semibold text-[10px] sm:text-sm leading-tight group-hover:text-blue-400 transition-colors line-clamp-2">{title}</h3>
@@ -214,20 +279,32 @@ const DramaDetailPage = ({ bookId, onPlayEpisode, onTagClick, onBack }) => {
   
   useEffect(() => {
     if (!bookId) return;
+    
     const fetchDetail = async () => {
       setLoading(true);
       try {
         const core = window.DramaboxCore;
         if (!core) {
+          console.warn('DramaboxCore not available');
           setTimeout(fetchDetail, 1000);
           return;
         }
+        
         const result = await core.loadDetailWithRecommend({
-          apiBase: CONFIG.API_BASE, localeApi: CONFIG.LOCALE_API, bookId: bookId, webficBase: 'https://www.webfic.com',
+          apiBase: CONFIG.API_BASE,
+          localeApi: CONFIG.LOCALE_API,
+          bookId: bookId,
+          webficBase: 'https://www.webfic.com',
         });
+        
         setData(result);
-      } catch (err) { console.error(err); } finally { setLoading(false); }
+      } catch (err) {
+        console.error('Detail fetch error:', err);
+      } finally {
+        setLoading(false);
+      }
     };
+    
     fetchDetail();
   }, [bookId]);
 
@@ -240,7 +317,15 @@ const DramaDetailPage = ({ bookId, onPlayEpisode, onTagClick, onBack }) => {
     );
   }
 
-  if (!data) return null;
+  if (!data) {
+    return (
+      <div className="h-full flex flex-col items-center justify-center p-10">
+        <AlertTriangle className="text-red-500 mb-4" size={48} />
+        <p className="text-slate-400 font-bold text-sm text-center">Data tidak ditemukan</p>
+        <button onClick={onBack} className="mt-4 px-6 py-2 bg-blue-600 text-white rounded-xl font-bold">Kembali</button>
+      </div>
+    );
+  }
 
   let bookTags = [];
   if (data.book) {
@@ -288,9 +373,7 @@ const DramaDetailPage = ({ bookId, onPlayEpisode, onTagClick, onBack }) => {
               <h2 className="text-xl sm:text-3xl font-bold text-white mb-3 leading-tight">{data.book?.bookName || data.book?.title}</h2>
               
               <div className="bg-black/10 rounded-xl p-4 mb-6">
-                <h3 className="text-white/60 font-bold text-[10px] uppercase tracking-[0.1em] mb-2 flex items-center gap-2">
-                  <BookOpen size={14} className="text-blue-500" /> Sinopsis
-                </h3>
+                <h3 className="text-white/60 font-bold text-[10px] uppercase tracking-[0.1em] mb-2">Sinopsis</h3>
                 <p className="text-slate-300 text-xs sm:text-sm leading-relaxed italic line-clamp-4 md:line-clamp-none">
                   {cleanIntro(data.book?.introduction || data.book?.desc)}
                 </p>
@@ -315,7 +398,7 @@ const DramaDetailPage = ({ bookId, onPlayEpisode, onTagClick, onBack }) => {
                   <Plus size={16} className="text-blue-500" /> Daftar Episode
                 </h3>
                 <div className="bg-black/20 rounded-xl p-3 border border-white/5">
-                  <div className="grid grid-cols-4 xs:grid-cols-5 sm:grid-cols-6 md:grid-cols-8 lg:grid-cols-10 gap-2 overflow-y-auto pr-1">
+                  <div className="grid grid-cols-4 xs:grid-cols-5 sm:grid-cols-6 md:grid-cols-8 lg:grid-cols-10 gap-2 max-h-64 overflow-y-auto">
                     {data.chapters?.map((ch) => (
                       <button 
                         key={ch.index} 
@@ -347,8 +430,8 @@ const CustomPlayerPage = ({ book, chapters, initialEp, onBack, audioSettings, se
   const [showControls, setShowControls] = useState(true);
   
   const videoRef = useRef(null);
-  const requestRef = useRef(0);
   const controlsTimeoutRef = useRef(null);
+  const requestRef = useRef(0);
 
   const formatTime = (seconds) => {
     if (isNaN(seconds)) return "00:00";
@@ -366,29 +449,50 @@ const CustomPlayerPage = ({ book, chapters, initialEp, onBack, audioSettings, se
   };
 
   const loadEpisode = useCallback(async (epNum) => {
-    setLoading(true); setError(false); setVideoUrl(''); setIsPlaying(false); setShowControls(true);
+    setLoading(true);
+    setError(false);
+    setVideoUrl('');
+    setIsPlaying(false);
+    setShowControls(true);
+    
     const requestId = ++requestRef.current;
+    
     try {
       const core = window.DramaboxCore;
       if (!core) throw new Error("API Core belum siap");
+      
       const batchRes = await core.loadViaBatch({
-        apiBase: CONFIG.API_BASE, localeApi: CONFIG.LOCALE_API, 
-        bookId: book.bookId || book.id, index: epNum,
+        apiBase: CONFIG.API_BASE,
+        localeApi: CONFIG.LOCALE_API,
+        bookId: book.bookId || book.id,
+        index: epNum,
       });
+      
       if (requestId !== requestRef.current) return;
+      
       const list = batchRes.data?.chapterList || batchRes.chapters || [];
       const batchCh = list.find(item => String(item.num) === String(epNum) || item.index === (epNum - 1)) || list[0];
+      
       if (!batchCh) throw new Error("Data episode tidak ditemukan");
+      
       const url = extractVideoUrlFromChapter(batchCh);
-      if (url) setVideoUrl(url); else throw new Error("URL Video tidak tersedia");
-    } catch (e) { 
+      
+      if (url) {
+        setVideoUrl(url);
+      } else {
+        throw new Error("URL Video tidak tersedia");
+      }
+    } catch (e) {
+      console.error('Load episode error:', e);
       if (requestId === requestRef.current) setError(true);
-    } finally { 
-      if (requestId === requestRef.current) setLoading(false); 
+    } finally {
+      if (requestId === requestRef.current) setLoading(false);
     }
   }, [book]);
 
-  useEffect(() => { loadEpisode(currentEp); }, [currentEp, loadEpisode]);
+  useEffect(() => {
+    loadEpisode(currentEp);
+  }, [currentEp, loadEpisode]);
 
   useEffect(() => {
     if (videoRef.current && videoUrl) {
@@ -400,9 +504,20 @@ const CustomPlayerPage = ({ book, chapters, initialEp, onBack, audioSettings, se
 
   const togglePlay = () => {
     if (!videoRef.current) return;
-    if (isPlaying) videoRef.current.pause();
-    else videoRef.current.play();
-    setIsPlaying(!isPlaying);
+    
+    if (isPlaying) {
+      videoRef.current.pause();
+    } else {
+      const playPromise = videoRef.current.play();
+      if (playPromise !== undefined) {
+        playPromise.then(() => {
+          setIsPlaying(true);
+        }).catch(error => {
+          console.error("Play failed:", error);
+          setIsPlaying(false);
+        });
+      }
+    }
     handleMouseMove();
   };
 
@@ -440,15 +555,21 @@ const CustomPlayerPage = ({ book, chapters, initialEp, onBack, audioSettings, se
       text: `Nonton drama ${book.bookName} episode ${currentEp}`,
       url: window.location.href
     };
+    
     if (navigator.share) {
-      try { await navigator.share(shareData); } catch (e) {}
+      try {
+        await navigator.share(shareData);
+      } catch (e) {
+        console.log('Share cancelled');
+      }
     } else {
-      const el = document.createElement('textarea');
-      el.value = window.location.href;
-      document.body.appendChild(el);
-      el.select();
-      document.execCommand('copy');
-      document.body.removeChild(el);
+      try {
+        await navigator.clipboard.writeText(window.location.href);
+        // Fallback simplified console log
+        console.log('Link copied to clipboard!');
+      } catch (e) {
+        console.error('Copy failed:', e);
+      }
     }
   };
 
@@ -458,7 +579,7 @@ const CustomPlayerPage = ({ book, chapters, initialEp, onBack, audioSettings, se
       onMouseMove={handleMouseMove}
       onTouchStart={handleMouseMove}
     >
-      {/* --- TOP BAR (Minimalist) --- */}
+      {/* TOP BAR */}
       <div className={`absolute top-0 left-0 right-0 p-4 sm:p-6 z-50 flex items-center justify-between bg-gradient-to-b from-black/80 to-transparent transition-opacity duration-500 ${showControls ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}>
         <button onClick={onBack} className="text-white/80 p-2 hover:bg-white/10 rounded-full transition-all">
           <ChevronLeft size={28} />
@@ -472,12 +593,12 @@ const CustomPlayerPage = ({ book, chapters, initialEp, onBack, audioSettings, se
         </button>
       </div>
 
-      {/* --- VIDEO CONTAINER --- */}
+      {/* VIDEO CONTAINER */}
       <div className="relative w-full h-full flex items-center justify-center bg-black overflow-hidden" onClick={togglePlay}>
         {loading ? (
           <div className="flex flex-col items-center gap-3">
             <Loader2 className="animate-spin text-blue-500" size={48} />
-            <p className="text-white/40 text-[10px] font-black uppercase tracking-[0.3em]">Processing...</p>
+            <p className="text-white/40 text-[10px] font-black uppercase tracking-[0.3em]">Loading...</p>
           </div>
         ) : error ? (
           <div className="text-center p-6 flex flex-col items-center bg-white/5 backdrop-blur-md rounded-3xl border border-white/10">
@@ -490,14 +611,13 @@ const CustomPlayerPage = ({ book, chapters, initialEp, onBack, audioSettings, se
             <video 
               ref={videoRef}
               src={videoUrl}
-              autoPlay={audioSettings.autoNext}
               className="w-full h-full object-contain cursor-pointer"
               onPlay={() => setIsPlaying(true)}
               onPause={() => setIsPlaying(false)}
-              onTimeUpdate={() => setCurrentTime(videoRef.current.currentTime)}
+              onTimeUpdate={() => setCurrentTime(videoRef.current?.currentTime || 0)}
               onLoadedMetadata={() => {
-                setDuration(videoRef.current.duration);
                 if (videoRef.current) {
+                  setDuration(videoRef.current.duration);
                   videoRef.current.volume = audioSettings.volume;
                   videoRef.current.playbackRate = audioSettings.playbackRate;
                   videoRef.current.muted = audioSettings.isMuted;
@@ -506,10 +626,11 @@ const CustomPlayerPage = ({ book, chapters, initialEp, onBack, audioSettings, se
               onEnded={() => audioSettings.autoNext && handleNext()}
               playsInline
               webkit-playsinline="true"
-              preload="auto"
+              x-webkit-airplay="allow"
+              preload="metadata"
+              controlsList="nodownload"
             />
             
-            {/* Center Play/Pause Overlay */}
             {!isPlaying && (
               <div className="absolute inset-0 flex items-center justify-center pointer-events-none bg-black/20">
                 <div className="bg-white/10 p-6 rounded-full backdrop-blur-sm border border-white/20 scale-125 transition-transform duration-300">
@@ -521,11 +642,11 @@ const CustomPlayerPage = ({ book, chapters, initialEp, onBack, audioSettings, se
         )}
       </div>
 
-      {/* --- BOTTOM CONTROLS (Minimalist & Responsive) --- */}
+      {/* BOTTOM CONTROLS */}
       <div className={`absolute bottom-0 left-0 right-0 p-4 sm:p-8 z-50 transition-all duration-500 transform ${showControls ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4 pointer-events-none'}`}>
         <div className="max-w-4xl mx-auto flex flex-col gap-4">
           
-          {/* Timeline & Progress */}
+          {/* Timeline */}
           <div className="flex flex-col gap-2">
             <div className="relative group/timeline h-6 flex items-center">
               <input 
@@ -541,7 +662,7 @@ const CustomPlayerPage = ({ book, chapters, initialEp, onBack, audioSettings, se
             </div>
           </div>
 
-          {/* Main Controls Wrapper */}
+          {/* Controls */}
           <div className="flex items-center justify-between bg-black/40 backdrop-blur-xl border border-white/10 p-3 sm:p-4 rounded-2xl sm:rounded-3xl">
             <div className="flex items-center gap-4 sm:gap-8">
               <button 
@@ -566,7 +687,6 @@ const CustomPlayerPage = ({ book, chapters, initialEp, onBack, audioSettings, se
             </div>
 
             <div className="flex items-center gap-3 sm:gap-6">
-              {/* Volume Slider Desktop View */}
               <div className="hidden sm:flex items-center gap-2 group/volume bg-white/5 px-3 py-1.5 rounded-xl border border-white/5">
                 <button onClick={(e) => { e.stopPropagation(); setAudioSettings(prev => ({ ...prev, isMuted: !prev.isMuted })); }} className="text-white/70 hover:text-white">
                   {audioSettings.isMuted || audioSettings.volume === 0 ? <VolumeX size={18} /> : <Volume2 size={18} />}
@@ -579,7 +699,6 @@ const CustomPlayerPage = ({ book, chapters, initialEp, onBack, audioSettings, se
                 />
               </div>
 
-              {/* Volume Icon Mobile (Only toggle) */}
               <button className="sm:hidden text-white/70" onClick={(e) => { e.stopPropagation(); setAudioSettings(prev => ({ ...prev, isMuted: !prev.isMuted })); }}>
                  {audioSettings.isMuted || audioSettings.volume === 0 ? <VolumeX size={20} /> : <Volume2 size={20} />}
               </button>
@@ -667,60 +786,98 @@ export default function App() {
       const device = await core.getDevice();
       const tokenInfo = await getToken();
       if (!tokenInfo) return;
+      
       const [popular, latest] = await Promise.all([
         core.doClassify(CONFIG.API_BASE, CONFIG.LOCALE_API, device, tokenInfo.token, CONFIG.FEED_IDS.POPULAR, 50),
         core.doClassify(CONFIG.API_BASE, CONFIG.LOCALE_API, device, tokenInfo.token, CONFIG.FEED_IDS.LATEST, 50)
       ]);
+      
       const combined = [...(popular || []), ...(latest || [])];
       const unique = combined.filter((item, index, self) => 
         index === self.findIndex(t => (t.bookId || t.id) === (item.bookId || item.id))
       );
+      
       setAllDramaData(unique);
-    } catch (e) { console.error(e); }
+    } catch (e) {
+      console.error('fetchAllData error:', e);
+    }
   }, [getToken]);
 
   const applyFilters = useCallback(() => {
     let filtered = [...allDramaData];
+    
     if (activeFilters.voice === '1') {
-      filtered = filtered.filter(item => (item.bookName || item.title || '').toLowerCase().includes('(sulih suara)'));
+      filtered = filtered.filter(item => 
+        (item.bookName || item.title || '').toLowerCase().includes('(sulih suara)')
+      );
     } else if (activeFilters.voice === '2') {
-      filtered = filtered.filter(item => !(item.bookName || item.title || '').toLowerCase().includes('(sulih suara)'));
+      filtered = filtered.filter(item => 
+        !(item.bookName || item.title || '').toLowerCase().includes('(sulih suara)')
+      );
     }
+    
     if (activeFilters.category) {
       filtered = filtered.filter(item => {
-        const tags = [...(Array.isArray(item.typeTwoNames) ? item.typeTwoNames : []), ...(Array.isArray(item.tags) ? item.tags : [])].map(t => String(t).toLowerCase());
+        const tags = [
+          ...(Array.isArray(item.typeTwoNames) ? item.typeTwoNames : []),
+          ...(Array.isArray(item.tags) ? item.tags : [])
+        ].map(t => String(t).toLowerCase());
+        
         return tags.some(tag => tag.includes(activeFilters.category.toLowerCase()));
       });
     }
-    if (activeFilters.sort === 'popular') filtered.sort((a, b) => (b.score || 0) - (a.score || 0));
-    else if (activeFilters.sort === 'latest') filtered.sort((a, b) => (b.bookId || b.id || 0) - (a.bookId || a.id || 0));
+    
+    if (activeFilters.sort === 'popular') {
+      filtered.sort((a, b) => (b.score || 0) - (a.score || 0));
+    } else if (activeFilters.sort === 'latest') {
+      filtered.sort((a, b) => (b.bookId || b.id || 0) - (a.bookId || a.id || 0));
+    }
+    
     setFilterData(filtered);
   }, [allDramaData, activeFilters]);
 
   const fetchHome = useCallback(async () => {
     const core = window.DramaboxCore;
     if (!core) {
+      console.warn('DramaboxCore not available for fetchHome');
       setLoadingHome(false);
       return;
     }
+    
     setLoadingHome(true);
+    
     try {
       const device = await core.getDevice();
       const tokenInfo = await getToken();
-      if (!tokenInfo) throw new Error("No token");
+      if (!tokenInfo) {
+        console.error('No token available');
+        throw new Error("No token");
+      }
+      
       const [pop, lat] = await Promise.all([
-        core.doClassify(CONFIG.API_BASE, CONFIG.LOCALE_API, device, tokenInfo.token, CONFIG.FEED_IDS.POPULAR, 18),
-        core.doClassify(CONFIG.API_BASE, CONFIG.LOCALE_API, device, tokenInfo.token, CONFIG.FEED_IDS.LATEST, 12)
+        core.doClassify(CONFIG.API_BASE, CONFIG.LOCALE_API, device, tokenInfo.token, CONFIG.FEED_IDS.POPULAR, 18).catch(err => {
+          console.error('Popular fetch error:', err);
+          return [];
+        }),
+        core.doClassify(CONFIG.API_BASE, CONFIG.LOCALE_API, device, tokenInfo.token, CONFIG.FEED_IDS.LATEST, 12).catch(err => {
+          console.error('Latest fetch error:', err);
+          return [];
+        })
       ]);
+      
       setHomeData({ popular: pop || [], latest: lat || [] });
     } catch (e) {
-       console.error("Home fetch error:", e);
-    } finally { setLoadingHome(false); }
+      console.error("Home fetch error:", e);
+      setHomeData({ popular: [], latest: [] });
+    } finally {
+      setLoadingHome(false);
+    }
   }, [getToken]);
 
   const fetchRank = useCallback(async (type, pageNum = 1) => {
     const core = window.DramaboxCore;
     if (!core) return;
+    
     if (pageNum === 1) {
       setLoading(true);
       setRankData([]);
@@ -732,18 +889,17 @@ export default function App() {
       const device = await core.getDevice();
       const tokenInfo = await getToken();
       if (!tokenInfo) return;
-      let fid = type === 'popular' ? CONFIG.FEED_IDS.POPULAR : type === 'latest' ? CONFIG.FEED_IDS.LATEST : CONFIG.FEED_IDS.TRENDING;
+      
+      const fid = type === 'popular' ? CONFIG.FEED_IDS.POPULAR : 
+                  type === 'latest' ? CONFIG.FEED_IDS.LATEST : 
+                  CONFIG.FEED_IDS.TRENDING;
+      
       const res = await core.doClassify(CONFIG.API_BASE, CONFIG.LOCALE_API, device, tokenInfo.token, fid, pageNum * CONFIG.PER_PAGE);
       
-      if (res && res.length >= pageNum * CONFIG.PER_PAGE) {
-        setHasMoreRank(true);
-      } else {
-        setHasMoreRank(false);
-      }
-
+      setHasMoreRank(res && res.length >= pageNum * CONFIG.PER_PAGE);
       setRankData(res || []);
     } catch (e) {
-      console.error(e);
+      console.error('fetchRank error:', e);
     } finally { 
       setLoading(false); 
       setLoadingMore(false);
@@ -753,6 +909,7 @@ export default function App() {
   const fetchSearch = useCallback(async (keyword, pageNum = 1) => {
     const core = window.DramaboxCore;
     if (!core || !keyword) return;
+    
     if (pageNum === 1) {
       setLoading(true);
       setSearchData([]);
@@ -767,7 +924,7 @@ export default function App() {
       setSearchData(prev => pageNum === 1 ? newItems : [...prev, ...newItems]);
       setHasMoreSearch(newItems.length >= CONFIG.PER_PAGE);
     } catch (e) {
-      console.error(e);
+      console.error('fetchSearch error:', e);
     } finally { 
       setLoading(false); 
       setLoadingMore(false);
@@ -801,6 +958,7 @@ export default function App() {
   const handleTagClick = (tagName) => {
     const catFilter = STATIC_FILTERS.find(f => f.key === 'category');
     const option = catFilter.options.find(o => o.display.toLowerCase() === tagName.toLowerCase());
+    
     if (option && option.value !== '') {
       setActiveFilters({ voice: '', category: option.value, sort: 'popular' });
       setView('filter');
@@ -812,10 +970,10 @@ export default function App() {
     }
   };
 
-  useEffect(() => { 
-    if (scriptLoaded && !scriptError) { 
-      fetchHome(); 
-      fetchAllData(); 
+  useEffect(() => {
+    if (scriptLoaded && !scriptError) {
+      fetchHome();
+      fetchAllData();
     } else if (scriptError) {
       setLoadingHome(false);
     }
@@ -828,7 +986,11 @@ export default function App() {
     }
   }, [view, rankTab, fetchRank]);
 
-  useEffect(() => { if (view === 'filter' && allDramaData.length > 0) applyFilters(); }, [view, activeFilters, allDramaData, applyFilters]);
+  useEffect(() => {
+    if (view === 'filter' && allDramaData.length > 0) {
+      applyFilters();
+    }
+  }, [view, activeFilters, allDramaData, applyFilters]);
 
   const handleSearchSubmit = (e) => { 
     if (e.key === 'Enter') { 
@@ -859,7 +1021,11 @@ export default function App() {
         </div>
       );
     }
-    if (!items || items.length === 0) return <div className="text-slate-500 text-center py-10 italic">Tidak ada konten ditemukan.</div>;
+    
+    if (!items || items.length === 0) {
+      return <div className="text-slate-500 text-center py-10 italic">Tidak ada konten ditemukan.</div>;
+    }
+    
     return (
       <div className="grid grid-cols-2 xs:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3 sm:gap-4 md:gap-5">
         {items.map((item, idx) => (
@@ -888,7 +1054,7 @@ export default function App() {
 
   return (
     <div className="bg-[#0f172a] h-screen text-slate-200 font-sans flex flex-col overflow-hidden">
-      {/* --- NAVBAR --- */}
+      {/* NAVBAR */}
       <nav className="flex-none h-16 bg-[#0f172a]/95 backdrop-blur-md border-b border-white/5 flex items-center z-40 px-4">
         <div className="container mx-auto flex justify-between items-center max-w-7xl">
           <button onClick={() => setView('home')} className="flex items-center gap-2 group shrink-0">
@@ -917,13 +1083,16 @@ export default function App() {
         </div>
       </nav>
 
-      {/* --- CONTENT AREA --- */}
+      {/* CONTENT AREA */}
       <main className="flex-1 overflow-y-auto no-scrollbar pt-4 pb-12 px-4 sm:px-6">
         <div className="container mx-auto max-w-7xl">
           {scriptError && (
             <div className="bg-red-500/10 border border-red-500/20 p-4 rounded-xl mb-6 flex items-center gap-3 text-red-400">
               <AlertTriangle size={20} />
-              <p className="text-xs font-bold">Gagal memuat sistem inti. Mohon segarkan halaman atau cek koneksi internet.</p>
+              <div>
+                <p className="text-xs font-bold">Gagal memuat sistem inti</p>
+                <p className="text-[10px] opacity-70">Script dari GitHub tidak dapat dimuat. Refresh halaman atau cek koneksi.</p>
+              </div>
             </div>
           )}
 
@@ -943,7 +1112,7 @@ export default function App() {
                      </div>
                      <div className="w-full md:w-2/3 text-center md:text-left">
                        <div className="inline-flex items-center gap-1.5 px-3 py-1 bg-red-600/90 text-white text-[10px] font-bold rounded-full mb-3 shadow-lg shadow-red-600/20"><Flame size={12} fill="white" /> #1 POPULER</div>
-                       <h1 className="text-xl sm:text-4xl font-bold text-white mb-3 leading-tight">{String(homeData.popular[0].bookName)}</h1>
+                       <h1 className="text-xl sm:text-4xl font-bold text-white mb-3 leading-tight">{String(homeData.popular[0].bookName || homeData.popular[0].title)}</h1>
                        <p className="text-gray-300 mb-6 max-w-2xl mx-auto md:mx-0 line-clamp-3 text-xs sm:text-sm">{cleanIntro(homeData.popular[0].introduction || homeData.popular[0].desc)}</p>
                        <button onClick={() => openDetail(homeData.popular[0])} className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2.5 rounded-xl font-bold transition shadow-lg active:scale-95 flex items-center justify-center gap-2 mx-auto md:mx-0"><Play size={18} fill="white" /> Lihat Detail</button>
                      </div>
@@ -1037,14 +1206,14 @@ export default function App() {
         </div>
       </main>
 
-      {/* --- FOOTER --- */}
+      {/* FOOTER */}
       <footer className="flex-none bg-[#0f172a] border-t border-white/5 py-4 px-4 overflow-hidden">
         <div className="container mx-auto max-w-4xl flex flex-col items-center gap-2 text-center">
           <p className="text-[10px] text-slate-500 font-bold">
             © 2026 <a href="https://sanpoi.com" target="_blank" rel="noopener noreferrer" className="text-blue-400 hover:underline transition-all">SanPoi</a> | Made with AI
           </p>
           <p className="text-[9px] text-slate-600 leading-tight max-w-2xl italic hidden sm:block">
-            We do not host or stream any video content. All trademarks and copyrighted materials are owned by their respective owners. This site is for information, reviews, and references only. Please watch content through official and legal streaming services.
+            We do not host or stream any video content. All trademarks and copyrighted materials are owned by their respective owners.
           </p>
           <p className="text-[9px] text-slate-600 font-mono">
             API by <a href="https://drachin.dicky.app" target="_blank" rel="noopener noreferrer" className="hover:text-blue-400 transition-colors">https://drachin.dicky.app</a>
@@ -1052,7 +1221,7 @@ export default function App() {
         </div>
       </footer>
 
-      {/* --- SEARCH OVERLAY --- */}
+      {/* SEARCH OVERLAY */}
       {searchModalOpen && (
         <div className="fixed inset-0 z-[100] flex items-start justify-center pt-20 px-4">
           <div className="absolute inset-0 bg-black/70 backdrop-blur-md animate-in fade-in duration-300" onClick={() => setSearchModalOpen(false)}></div>
