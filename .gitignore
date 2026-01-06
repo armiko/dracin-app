@@ -1,44 +1,24 @@
-Dependency (Folder pustaka)
-
 node_modules/
 .pnp
 .pnp.js
-
-Testing (Hasil pengujian)
-
 coverage/
-
-Production (Hasil build/dist)
-
 dist/
 build/
-
-Misc (File sistem operasi)
-
 .DS_Store
 Thumbs.db
 *.bak
 *.swp
 *.lock
-
-Logs (Catatan error)
-
 logs
 .log
 npm-debug.log
 yarn-debug.log*
 yarn-error.log*
-
-Environment Variables (PENTING: Melindungi Kunci API Firebase)
-
 .env
 .env.local
 .env.development.local
 .env.test.local
 .env.production.local
-
-Editor (Konfigurasi Code Editor)
-
 .vscode/
 !.vscode/extensions.json
 .idea/
