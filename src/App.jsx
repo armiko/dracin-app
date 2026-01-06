@@ -10,26 +10,6 @@ import {
   ChevronDown
 } from 'lucide-react';
 
-import { initializeApp } from 'firebase/app';
-import { 
-  getAuth, 
-  signInAnonymously, 
-  signInWithPopup, 
-  GoogleAuthProvider, 
-  onAuthStateChanged, 
-  signOut,
-  signInWithCustomToken
-} from 'firebase/auth';
-import { 
-  getFirestore, 
-  doc, 
-  setDoc, 
-  collection, 
-  onSnapshot, 
-  deleteDoc, 
-  serverTimestamp
-} from 'firebase/firestore';
-
 /**
  * --- KONFIGURASI PROYEK ---
  */
@@ -39,10 +19,15 @@ const CONFIG = {
   API_BASE: "https://drachin.dicky.app",
   LOCALE_API: "in",
   FEED_IDS: { POPULAR: 1, LATEST: 2, TRENDING: 3 },
-  PER_PAGE: 24
+  PER_PAGE: 24,
+  // Menggunakan Firebase Compat SDK melalui CDN untuk menghindari kesalahan resolusi Rollup/Vite
+  FIREBASE_SCRIPTS: [
+    "https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js",
+    "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js",
+    "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"
+  ]
 };
 
-// Fallback Firebase Config jika variabel global tidak tersedia
 const defaultFirebaseConfig = {
   apiKey: "AIzaSyDm5JBMP_NZTpiM-EmgvXNwRCLNtdROy8s",
   authDomain: "nontondracin-f5065.firebaseapp.com",
@@ -51,22 +36,6 @@ const defaultFirebaseConfig = {
   messagingSenderId: "166957230434",
   appId: "1:166957230434:web:dc20d828a59048765da43b",
   measurementId: "G-6B89Y55E2F"
-};
-
-// Menggunakan variabel global yang disediakan lingkungan (Gunakan JSON.parse untuk __firebase_config)
-const firebaseConfig = typeof __firebase_config !== 'undefined' 
-  ? JSON.parse(__firebase_config) 
-  : defaultFirebaseConfig;
-
-const app = initializeApp(firebaseConfig);
-const auth = getAuth(app);
-const db = getFirestore(app);
-
-// App ID unik untuk Firestore (Gunakan __app_id jika tersedia)
-const appId = typeof __app_id !== 'undefined' ? __app_id : '3KNDH1p5iIG6U7FmuGTS';
-
-const STORAGE_KEYS = {
-  SETTINGS: `dracin_settings_${appId}`
 };
 
 const STATIC_FILTERS = [
@@ -98,24 +67,44 @@ const STATIC_FILTERS = [
 /**
  * --- UTILS ---
  */
-const useExternalScript = (url) => {
+const useExternalScript = (urls) => {
   const [state, setState] = useState({ loaded: false, error: false });
+
   useEffect(() => {
-    let script = document.querySelector(`script[src="${url}"]`);
-    if (!script) {
-      script = document.createElement("script");
-      script.src = url; script.async = true;
-      document.body.appendChild(script);
-    }
-    const onScriptLoad = () => setState({ loaded: true, error: false });
-    const onScriptError = () => setState({ loaded: true, error: true });
-    script.addEventListener("load", onScriptLoad);
-    script.addEventListener("error", onScriptError);
-    return () => {
-      script.removeEventListener("load", onScriptLoad);
-      script.removeEventListener("error", onScriptError);
+    const scripts = Array.isArray(urls) ? urls : [urls];
+    let loadedCount = 0;
+
+    const onScriptLoad = () => {
+      loadedCount++;
+      if (loadedCount === scripts.length) {
+        setState({ loaded: true, error: false });
+      }
     };
-  }, [url]);
+
+    const onScriptError = () => setState({ loaded: true, error: true });
+
+    scripts.forEach(url => {
+      let script = document.querySelector(`script[src="${url}"]`);
+      if (!script) {
+        script = document.createElement("script");
+        script.src = url;
+        script.async = false; // Memastikan urutan pemuatan untuk Firebase
+        document.body.appendChild(script);
+      }
+      
+      // Jika sudah ada dan sudah dimuat sebelumnya
+      if (script.getAttribute('data-loaded') === 'true') {
+        onScriptLoad();
+      } else {
+        script.addEventListener("load", () => {
+          script.setAttribute('data-loaded', 'true');
+          onScriptLoad();
+        });
+        script.addEventListener("error", onScriptError);
+      }
+    });
+  }, [urls]);
+
   return state;
 };
 
@@ -230,6 +219,7 @@ export default function App() {
   const [view, setView] = useState('home');
   const [previousView, setPreviousView] = useState('home');
   const [user, setUser] = useState(null);
+  const [fbReady, setFbReady] = useState(false);
   
   // Data States
   const [homeData, setHomeData] = useState({ popular: [], latest: [] });
@@ -247,74 +237,97 @@ export default function App() {
   const [playerState, setPlayerState] = useState(null);
   const [authError, setAuthError] = useState(null);
 
+  // Memuat Script Eksternal
   const { loaded: scriptLoaded } = useExternalScript(CONFIG.SCRIPT_URL);
+  const { loaded: firebaseLoaded } = useExternalScript(CONFIG.FIREBASE_SCRIPTS);
 
   const [audioSettings, setAudioSettings] = useState(() => {
-    const saved = localStorage.getItem(STORAGE_KEYS.SETTINGS);
+    const saved = localStorage.getItem('dracin_settings_global');
     return saved ? JSON.parse(saved) : { volume: 1, isMuted: false, playbackRate: 1, autoNext: true };
   });
 
+  // App ID unik untuk Firestore
+  const appId = typeof __app_id !== 'undefined' ? __app_id : '3KNDH1p5iIG6U7FmuGTS';
+
   /**
-   * --- FIREBASE AUTH (MANDATORY RULE 3) ---
+   * --- FIREBASE INITIALIZATION ---
    */
   useEffect(() => {
+    if (!firebaseLoaded || !window.firebase) return;
+
+    const firebase = window.firebase;
+    const config = typeof __firebase_config !== 'undefined' 
+      ? JSON.parse(__firebase_config) 
+      : defaultFirebaseConfig;
+
+    if (!firebase.apps.length) {
+      firebase.initializeApp(config);
+    }
+
+    const auth = firebase.auth();
+    
     const initAuth = async () => {
       try {
         if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
-          await signInWithCustomToken(auth, __initial_auth_token);
+          await auth.signInWithCustomToken(__initial_auth_token);
         } else {
-          await signInAnonymously(auth);
+          if (!auth.currentUser) await auth.signInAnonymously();
         }
+        setFbReady(true);
       } catch (err) {
-        console.error("Autentikasi gagal:", err);
+        console.error("Autentikasi Firebase gagal:", err);
       }
     };
+
     initAuth();
-    const unsubscribe = onAuthStateChanged(auth, setUser);
+    const unsubscribe = auth.onAuthStateChanged(setUser);
     return () => unsubscribe();
-  }, []);
+  }, [firebaseLoaded]);
 
   /**
-   * --- FIRESTORE SYNC (MANDATORY RULE 1 & 2) ---
+   * --- FIRESTORE SYNC ---
    */
   useEffect(() => {
-    if (!user) return;
+    if (!fbReady || !user || !window.firebase) return;
 
-    // RULE 1: Selalu gunakan path yang ketat
-    const watchlistRef = collection(db, 'artifacts', appId, 'users', user.uid, 'watchlist');
-    const historyRef = collection(db, 'artifacts', appId, 'users', user.uid, 'history');
+    const db = window.firebase.firestore();
+    
+    // Path: /artifacts/{appId}/users/{userId}/{collectionName}
+    const watchlistRef = db.collection('artifacts').doc(appId).collection('users').doc(user.uid).collection('watchlist');
+    const historyRef = db.collection('artifacts').doc(appId).collection('users').doc(user.uid).collection('history');
 
-    const unsubWatchlist = onSnapshot(watchlistRef, (snap) => {
+    const unsubWatchlist = watchlistRef.onSnapshot((snap) => {
       const data = snap.docs.map(doc => doc.data()).sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
       setWatchlist(data);
     }, (err) => console.error("Sinkronisasi Favorit gagal:", err));
 
-    const unsubHistory = onSnapshot(historyRef, (snap) => {
+    const unsubHistory = historyRef.onSnapshot((snap) => {
       const data = snap.docs.map(doc => doc.data()).sort((a, b) => (b.updatedAt?.seconds || 0) - (a.updatedAt?.seconds || 0));
-      setWatchHistory(data.slice(0, 20)); // Limit data di memori
+      setWatchHistory(data.slice(0, 20));
     }, (err) => console.error("Sinkronisasi Riwayat gagal:", err));
 
     return () => {
       unsubWatchlist();
       unsubHistory();
     };
-  }, [user]);
+  }, [fbReady, user, appId]);
 
   /**
    * --- CORE ACTIONS ---
    */
   const handleLogin = async () => {
+    if (!window.firebase) return;
     setAuthError(null);
     try {
-      const provider = new GoogleAuthProvider();
-      await signInWithPopup(auth, provider);
+      const provider = new window.firebase.auth.GoogleAuthProvider();
+      await window.firebase.auth().signInWithPopup(provider);
       setProfileOpen(false);
     } catch (e) {
       setAuthError("Gagal masuk. Silakan coba kembali.");
     }
   };
 
-  const handleLogout = () => signOut(auth).then(() => { setView('home'); setProfileOpen(false); });
+  const handleLogout = () => window.firebase.auth().signOut().then(() => { setView('home'); setProfileOpen(false); });
 
   const fetchHome = useCallback(async () => {
     if (!window.DramaboxCore) return;
@@ -332,36 +345,43 @@ export default function App() {
   }, []);
 
   const handleToggleWatchlist = async (book) => {
-    if (!user || user.isAnonymous) {
+    if (!fbReady || !user || user.isAnonymous) {
       setAuthError("Silakan masuk dengan Google untuk menyimpan drama.");
       return;
     }
     const bid = String(book.bookId || book.id);
-    const docRef = doc(db, 'artifacts', appId, 'users', user.uid, 'watchlist', bid);
+    const db = window.firebase.firestore();
+    const docRef = db.collection('artifacts').doc(appId).collection('users').doc(user.uid).collection('watchlist').doc(bid);
     
     if (watchlist.some(i => String(i.bookId || i.id) === bid)) {
-      await deleteDoc(docRef);
+      await docRef.delete();
     } else {
-      await setDoc(docRef, { ...book, bookId: bid, createdAt: serverTimestamp() });
+      await docRef.set({ 
+        ...book, 
+        bookId: bid, 
+        createdAt: window.firebase.firestore.FieldValue.serverTimestamp() 
+      });
     }
   };
 
   const updateHistory = async (book, episode) => {
-    if (!user || user.isAnonymous) return;
+    if (!fbReady || !user || user.isAnonymous) return;
     const bid = String(book.bookId || book.id);
-    const docRef = doc(db, 'artifacts', appId, 'users', user.uid, 'history', bid);
-    await setDoc(docRef, {
+    const db = window.firebase.firestore();
+    const docRef = db.collection('artifacts').doc(appId).collection('users').doc(user.uid).collection('history').doc(bid);
+    await docRef.set({
       bookId: bid,
       bookName: book.bookName || book.title,
       cover: book.cover || book.coverWap,
       lastEpisode: episode,
-      updatedAt: serverTimestamp()
+      updatedAt: window.firebase.firestore.FieldValue.serverTimestamp()
     });
   };
 
   const clearHistoryItem = async (bid) => {
-    if (!user) return;
-    await deleteDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'history', String(bid)));
+    if (!fbReady || !user) return;
+    const db = window.firebase.firestore();
+    await db.collection('artifacts').doc(appId).collection('users').doc(user.uid).collection('history').doc(String(bid)).delete();
   };
 
   useEffect(() => { if (scriptLoaded) fetchHome(); }, [scriptLoaded, fetchHome]);
@@ -441,7 +461,7 @@ export default function App() {
       onBack={() => { setPlayerState(null); setView('detail'); }}
       onEpisodeChange={(ep) => updateHistory(playerState.book, ep)}
       audioSettings={audioSettings}
-      setAudioSettings={(s) => { setAudioSettings(s); localStorage.setItem(STORAGE_KEYS.SETTINGS, JSON.stringify(s)); }}
+      setAudioSettings={(s) => { setAudioSettings(s); localStorage.setItem('dracin_settings_global', JSON.stringify(s)); }}
     />
   );
 
@@ -697,6 +717,8 @@ const DramaDetailPage = ({ bookId, onBack, user, watchlist, history, onToggleWat
     </div>
   );
 
+  if (!data?.book) return <EmptyState icon={AlertTriangle} title="Data Tidak Ditemukan" message="Drama ini mungkin sudah dihapus." actionText="KEMBALI" onAction={onBack} />;
+
   return (
     <div className="animate-in fade-in duration-700">
       <button onClick={onBack} className="flex items-center gap-2 text-slate-500 font-bold hover:text-white transition-colors text-[10px] uppercase tracking-widest mb-8"><ChevronLeft size={18}/> Kembali</button>
@@ -725,7 +747,9 @@ const DramaDetailPage = ({ bookId, onBack, user, watchlist, history, onToggleWat
 
           <div className="mb-10">
             <h4 className="text-[9px] font-black text-slate-500 uppercase tracking-[0.3em] mb-3">SINOPSIS</h4>
-            <div className="p-5 bg-white/5 rounded-2xl border border-white/5 text-slate-400 text-xs leading-relaxed italic">{cleanIntro(data.book.introduction)}</div>
+            <div className="p-5 bg-white/5 rounded-2xl border border-white/5 text-slate-400 text-xs leading-relaxed italic line-clamp-4 hover:line-clamp-none transition-all duration-300">
+               {cleanIntro(data.book.introduction)}
+            </div>
           </div>
 
           <div>
@@ -786,8 +810,12 @@ const CustomPlayerPage = ({ book, initialEp, onBack, onEpisodeChange, audioSetti
 
     const startPlay = () => { if(video) { video.playbackRate = audioSettings.playbackRate; video.play().catch(() => {}); } };
     if (videoUrl.includes('.m3u8')) {
-      const hls = new window.Hls(); hls.loadSource(videoUrl); hls.attachMedia(video);
-      hls.on(window.Hls.Events.MANIFEST_PARSED, startPlay); hlsRef.current = hls;
+      if (window.Hls) {
+        const hls = new window.Hls(); hls.loadSource(videoUrl); hls.attachMedia(video);
+        hls.on(window.Hls.Events.MANIFEST_PARSED, startPlay); hlsRef.current = hls;
+      } else {
+        video.src = videoUrl; video.oncanplay = startPlay;
+      }
     } else { video.src = videoUrl; video.oncanplay = startPlay; }
   }, [videoUrl, audioSettings.playbackRate]);
 
