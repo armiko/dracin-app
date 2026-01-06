@@ -258,7 +258,7 @@ const DramaDetailPage = ({ bookId, onBack, onPlayEpisode, watchlist, onToggleWat
   );
 };
 
-const CustomPlayerPage = ({ book, chapters, initialEp, onBack, audioSettings, setAudioSettings }) => {
+const CustomPlayerPage = ({ book, chapters, initialEp, onBack, audioSettings, setAudioSettings, onEpisodeChange }) => {
   const [currentEp, setCurrentEp] = useState(initialEp);
   const [videoUrl, setVideoUrl] = useState('');
   const [loading, setLoading] = useState(true);
@@ -298,7 +298,10 @@ const CustomPlayerPage = ({ book, chapters, initialEp, onBack, audioSettings, se
     return () => hlsRef.current && hlsRef.current.destroy();
   }, [videoUrl]);
 
-  useEffect(() => { loadEpisode(currentEp); }, [currentEp, loadEpisode]);
+  useEffect(() => { 
+    loadEpisode(currentEp); 
+    if (onEpisodeChange) onEpisodeChange(currentEp);
+  }, [currentEp, loadEpisode, onEpisodeChange]);
 
   const getVolumeIcon = () => {
     if (audioSettings.isMuted || audioSettings.volume === 0) return <VolumeX size={18} />;
@@ -321,7 +324,7 @@ const CustomPlayerPage = ({ book, chapters, initialEp, onBack, audioSettings, se
 
       <div className="relative w-full h-full flex items-center justify-center bg-black" onClick={() => (isPlaying ? videoRef.current.pause() : videoRef.current.play())}>
         {loading ? <Loader2 className="animate-spin text-blue-500" size={48} /> : error ? <div className="text-white text-[10px] font-black bg-red-600/40 px-8 py-4 rounded-2xl border border-red-500/20 uppercase tracking-widest">Video Gagal Dimuat</div> : 
-          <video ref={videoRef} className="w-full h-full object-contain cursor-pointer" onPlay={() => setIsPlaying(true)} onPause={() => setIsPlaying(false)} onTimeUpdate={() => setCurrentTime(videoRef.current?.currentTime || 0)} onLoadedMetadata={() => setDuration(videoRef.current?.duration || 0)} onEnded={() => setCurrentEp(e => e + 1)} playsInline />
+          <video ref={videoRef} className="w-full h-full object-contain cursor-pointer" onPlay={() => setIsPlaying(true)} onPause={() => setIsPlaying(false)} onTimeUpdate={() => setCurrentTime(videoRef.current?.currentTime || 0)} onLoadedMetadata={() => setDuration(videoRef.current?.duration || 0)} onEnded={() => audioSettings.autoNext && setCurrentEp(e => e + 1)} playsInline />
         }
         {!isPlaying && !loading && <div className="absolute inset-0 flex items-center justify-center pointer-events-none bg-black/30"><div className="bg-white/10 p-8 rounded-full backdrop-blur-md border border-white/20"><Play size={40} fill="white" className="text-white ml-1.5" /></div></div>}
       </div>
@@ -470,7 +473,7 @@ export default function App() {
     } catch(e) { console.error("Watchlist toggle failed:", e); }
   };
 
-  const saveToHistory = async (drama) => {
+  const saveToHistory = async (drama, episode) => {
     if (!user || !fbReady || !window.firebase) return;
     const fb = window.firebase;
     const dramaId = String(drama.bookId || drama.id);
@@ -482,6 +485,7 @@ export default function App() {
             bookName: drama.bookName || drama.title,
             coverWap: drama.coverWap || drama.cover || drama.coverUrl,
             chapterCount: drama.chapterCount || drama.episodeCount || 0,
+            lastEpisode: episode,
             ts: Date.now()
         });
     } catch(e) { console.error("History save failed:", e); }
@@ -492,7 +496,8 @@ export default function App() {
     if (user && fbReady && window.firebase && window.firebase.apps.length) {
       try {
         const fb = window.firebase;
-        const appIdStr = FIREBASE_CONFIG_OVERRIDE.projectId;
+        const configRaw = typeof __firebase_config !== 'undefined' ? __firebase_config : '{}';
+        const appIdStr = typeof __app_id !== 'undefined' ? __app_id : 'nontondracin-compact';
         await fb.firestore().doc(`artifacts/${appIdStr}/users/${user.uid}/settings/ad_pref`).set({ 
           ts: Date.now(), 
           p: isPersistent 
@@ -603,7 +608,7 @@ export default function App() {
                     const adRef = fb.firestore().doc(`artifacts/${appIdStr}/users/${u.uid}/settings/ad_pref`);
                     const snap = await adRef.get();
                     let show = true;
-                    if (snap.exists()) {
+                    if (snap.exists) {
                         const d = snap.data();
                         const diff = Date.now() - (d.ts || 0);
                         if (d.p ? diff < 86400000 : diff < 3600000) show = false;
@@ -639,7 +644,16 @@ export default function App() {
     setFilterData(filtered);
   }, [allDramaData, activeFilters]);
 
-  if (view === 'player') return <CustomPlayerPage {...playerState} initialEp={playerState.ep} onBack={() => setView('detail')} audioSettings={audioSettings} setAudioSettings={setAudioSettings} />;
+  if (view === 'player') return (
+    <CustomPlayerPage 
+        {...playerState} 
+        initialEp={playerState.ep} 
+        onBack={() => setView('detail')} 
+        audioSettings={audioSettings} 
+        setAudioSettings={setAudioSettings}
+        onEpisodeChange={(ep) => saveToHistory(playerState.book, ep)} 
+    />
+  );
 
   return (
     <div className="bg-[#0f172a] h-screen text-slate-200 font-sans flex flex-col overflow-hidden selection:bg-blue-600 selection:text-white">
@@ -778,7 +792,12 @@ export default function App() {
                 <Section icon={History} title="Riwayat Menonton">
                     <div className="grid grid-cols-2 xs:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-5">
                         {historyData.length > 0 ? historyData.map((item, idx) => (
-                            <DramaCard key={idx} item={{...item, id: item.bookId}} onClick={(it) => { setSelectedBookId(it.bookId); setPreviousView('history'); setView('detail'); }} />
+                            <div key={idx} className="flex flex-col">
+                                <DramaCard item={{...item, id: item.bookId}} onClick={(it) => { setSelectedBookId(it.bookId); setPreviousView('history'); setView('detail'); }} />
+                                <div className="mt-1 flex items-center gap-1 text-blue-400 font-black text-[8px] uppercase tracking-tighter">
+                                    <Clock size={8} /> Episode Terakhir: {item.lastEpisode || '?'}
+                                </div>
+                            </div>
                         )) : (
                             <div className="col-span-full py-20 flex flex-col items-center gap-4 text-slate-500">
                                 <History size={48} className="opacity-20" />
@@ -827,7 +846,6 @@ export default function App() {
                 onToggleWatchlist={toggleWatchlist}
                 onBack={() => setView(previousView)} 
                 onPlayEpisode={(ep, b, c) => { 
-                    saveToHistory(b);
                     setPlayerState({ book: b, chapters: c, ep }); 
                     setPreviousView('detail'); 
                     setView('player'); 
