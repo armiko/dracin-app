@@ -10,6 +10,17 @@ import {
 } from 'lucide-react';
 
 /**
+ * --- ARAHAN KONFIGURASI GOOGLE OAUTH ---
+ * Silakan tambahkan URI berikut di Google Cloud Console -> Credentials -> OAuth 2.0 Client IDs:
+ * * Authorized JavaScript origins:
+ * 1. https://nontondracin-f5065.firebaseapp.com
+ * 2. https://your-vercel-domain.vercel.app
+ * * Authorized redirect URIs:
+ * 1. https://nontondracin-f5065.firebaseapp.com/__/auth/handler
+ * 2. https://nontondracin-f5065.web.app/__/auth/handler
+ */
+
+/**
  * --- KONFIGURASI API & FIREBASE ---
  */
 const CONFIG = {
@@ -35,7 +46,6 @@ const FIREBASE_CONFIG_OVERRIDE = {
   measurementId: "G-6B89Y55E2F"
 };
 
-// Menggunakan ID yang diberikan pengguna untuk path Firestore yang konsisten
 const customAppId = '3KNDH1p5iIG6U7FmuGTS';
 
 const STATIC_FILTERS = [
@@ -109,7 +119,10 @@ const extractVideoUrl = (c) => {
   if (cdn) {
     const v = cdn.videoPathList?.[0];
     const path = v?.videoPath || v?.path || '';
-    if (path && !path.startsWith('http')) return (cdn.cdnDomain.startsWith('http') ? cdn.cdnDomain : 'https://'+cdn.cdnDomain).replace(/\/+$/, '') + '/' + path.replace(/^\/+/, '');
+    if (path && !path.startsWith('http')) {
+      const domain = cdn.cdnDomain.startsWith('http') ? cdn.cdnDomain : 'https://' + cdn.cdnDomain;
+      return domain.replace(/\/+$/, '') + '/' + path.replace(/^\/+/, '');
+    }
     return path;
   }
   return '';
@@ -130,7 +143,7 @@ const Section = ({ title, icon: IconComponent, onSeeAll, children }) => (
   <section className="mb-12">
     <div className="flex items-center justify-between mb-6">
       <div className="flex items-center gap-2">
-        <div className="p-1.5 bg-slate-900 rounded-lg border border-white/5 shadow-inner text-blue-400">
+        <div className="p-1.5 bg-slate-900 rounded-lg border border-white/5 shadow-inner">
            {IconComponent && <IconComponent size={16} className={title.includes('Populer') ? 'text-orange-500' : 'text-blue-400'} />}
         </div>
         <h2 className="text-lg font-black text-white uppercase tracking-tight">{title}</h2>
@@ -179,7 +192,7 @@ const SanPoiPopup = ({ onClose }) => {
           </div>
           <a href="https://sanpoi.com" target="_blank" rel="noopener noreferrer" className="block w-full bg-blue-600 hover:bg-blue-500 text-white py-2.5 rounded-lg font-black text-[10px] text-center shadow-lg transition-all active:scale-95 flex items-center justify-center gap-1.5 uppercase">TOP UP SEKARANG <ExternalLink size={12}/></a>
           <label className="mt-3 flex items-center justify-center gap-1.5 cursor-pointer group">
-            <input type="checkbox" checked={dontShowToday} onChange={(e) => setDontShowToday(e.target.checked)} className="peer appearance-none w-3.5 h-3.5 border border-white/20 rounded bg-transparent text-blue-600 focus:ring-0 cursor-pointer" />
+            <input type="checkbox" checked={dontShowToday} onChange={(e) => setDontShowToday(e.target.checked)} className="peer appearance-none w-3.5 h-3.5 border border-white/20 rounded bg-transparent checked:bg-blue-600 transition-all cursor-pointer" />
             <span className="text-[8px] font-bold text-slate-500 group-hover:text-slate-300 uppercase tracking-wider cursor-pointer">Jangan tampilkan hari ini</span>
           </label>
         </div>
@@ -457,7 +470,6 @@ export default function App() {
     if (!user || !fbReady || !window.firebase) return;
     const fb = window.firebase;
     const dramaId = String(drama.bookId || drama.id);
-    // MANDATORY RULE 1: artifacts/{appId}/users/{userId}/{collectionName}
     const watchlistRef = fb.firestore().doc(`artifacts/${customAppId}/users/${user.uid}/watchlist/${dramaId}`);
     
     const exists = watchlistData.some(item => String(item.bookId) === dramaId);
@@ -481,7 +493,6 @@ export default function App() {
     if (!user || !fbReady || !window.firebase) return;
     const fb = window.firebase;
     const dramaId = String(drama.bookId || drama.id);
-    // MANDATORY RULE 1: artifacts/{appId}/users/{userId}/{collectionName}
     const historyRef = fb.firestore().doc(`artifacts/${customAppId}/users/${user.uid}/history/${dramaId}`);
     
     try {
@@ -501,8 +512,7 @@ export default function App() {
     if (user && fbReady && window.firebase && window.firebase.apps.length) {
       try {
         const fb = window.firebase;
-        const appIdStr = customAppId;
-        await fb.firestore().doc(`artifacts/${appIdStr}/users/${user.uid}/settings/ad_pref`).set({ 
+        await fb.firestore().doc(`artifacts/${customAppId}/users/${user.uid}/settings/ad_pref`).set({ 
           ts: Date.now(), 
           p: isPersistent 
         });
@@ -588,7 +598,6 @@ export default function App() {
         const unsubscribeAuth = fb.auth().onAuthStateChanged(async (u) => {
             setUser(u);
             if (u && !u.isAnonymous) {
-                // Listen Watchlist
                 const unsubscribeWatch = fb.firestore()
                     .collection(`artifacts/${customAppId}/users/${u.uid}/watchlist`)
                     .onSnapshot(snap => {
@@ -596,7 +605,6 @@ export default function App() {
                         setWatchlistData(items);
                     }, err => console.error("Watchlist listener error:", err));
 
-                // Listen History
                 const unsubscribeHist = fb.firestore()
                     .collection(`artifacts/${customAppId}/users/${u.uid}/history`)
                     .onSnapshot(snap => {
@@ -605,7 +613,6 @@ export default function App() {
                         setHistoryData(items);
                     }, err => console.error("History listener error:", err));
 
-                // Ad Preference
                 try {
                     const adRef = fb.firestore().doc(`artifacts/${customAppId}/users/${u.uid}/settings/ad_pref`);
                     const snap = await adRef.get();
@@ -677,7 +684,6 @@ export default function App() {
               </button>
             ))}
             
-            {/* Logged in views */}
             {user && !user.isAnonymous && (
                 <>
                     <button onClick={() => setView('watchlist')} className={`px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-wider flex items-center gap-1.5 transition-all ${view === 'watchlist' ? 'bg-blue-600 text-white shadow-lg' : 'text-slate-400 hover:text-white'}`}>
