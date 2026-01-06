@@ -9,20 +9,42 @@ import {
 } from 'lucide-react';
 
 /**
+ * --- ARAHAN KONFIGURASI GOOGLE OAUTH ---
+ * Silakan tambahkan URI berikut di Google Cloud Console -> Credentials -> OAuth 2.0 Client IDs:
+ * * Authorized JavaScript origins:
+ * 1. https://nontondracin-f5065.firebaseapp.com
+ * 2. https://your-vercel-domain.vercel.app
+ * * Authorized redirect URIs:
+ * 1. https://nontondracin-f5065.firebaseapp.com/__/auth/handler
+ * 2. https://nontondracin-f5065.web.app/__/auth/handler
+ */
+
+/**
  * --- KONFIGURASI API & FIREBASE ---
  */
 const CONFIG = {
   SCRIPT_URL: "https://cdn.jsdelivr.net/gh/armiko/dracin-app@169efe4fc99586d445cbf8780629c5ac210ca929/js/dramabox-core.js",
   HLS_URL: "https://cdn.jsdelivr.net/npm/hls.js@latest",
-  // Firebase Compat Scripts untuk stabilitas maksimal di berbagai environment
-  FIREBASE_APP: "https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js",
-  FIREBASE_AUTH: "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js",
-  FIREBASE_FIRESTORE: "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js",
+  // Firebase Compat Scripts versi 12.7.0 sesuai permintaan
+  FIREBASE_APP: "https://www.gstatic.com/firebasejs/11.1.0/firebase-app-compat.js",
+  FIREBASE_AUTH: "https://www.gstatic.com/firebasejs/11.1.0/firebase-auth-compat.js",
+  FIREBASE_FIRESTORE: "https://www.gstatic.com/firebasejs/11.1.0/firebase-firestore-compat.js",
   API_BASE: "https://drachin.dicky.app",
   LOCALE_API: "in",
   FEED_IDS: { POPULAR: 1, LATEST: 2, TRENDING: 3 },
   PER_PAGE: 24,
   GOOGLE_CLIENT_ID: "1045477518682-vvh8vnmbaib90h6ruoi6i02jmk9nffg5.apps.googleusercontent.com"
+};
+
+// Data Firebase baru dari permintaan user
+const FIREBASE_CONFIG_OVERRIDE = {
+  apiKey: "AIzaSyDm5JBMP_NZTpiM-EmgvXNwRCLNtdROy8s",
+  authDomain: "nontondracin-f5065.firebaseapp.com",
+  projectId: "nontondracin-f5065",
+  storageBucket: "nontondracin-f5065.firebasestorage.app",
+  messagingSenderId: "166957230434",
+  appId: "1:166957230434:web:dc20d828a59048765da43b",
+  measurementId: "G-6B89Y55E2F"
 };
 
 const STATIC_FILTERS = [
@@ -341,6 +363,9 @@ const CustomPlayerPage = ({ book, chapters, initialEp, onBack, audioSettings, se
                     />
                   </div>
                </div>
+               <button onClick={(e) => { e.stopPropagation(); setAudioSettings(s => ({...s, isMuted: !s.isMuted}))}} className="sm:hidden text-white/70">
+                 {getVolumeIcon()}
+               </button>
                <button onClick={(e) => { e.stopPropagation(); setAudioSettings(s => ({...s, playbackRate: s.playbackRate === 1 ? 1.5 : s.playbackRate === 1.5 ? 2 : 1}))}} className="px-3 py-1.5 bg-blue-600 text-white rounded-lg text-[9px] font-black tracking-widest uppercase shadow-lg shadow-blue-600/20 active:scale-95 transition-all">
                  {audioSettings.playbackRate}X SPEED
                </button>
@@ -402,18 +427,16 @@ export default function App() {
     try {
       const fb = window.firebase;
       const provider = new fb.auth.GoogleAuthProvider();
-      // Mengatur Client ID jika diperlukan secara eksplisit
       await fb.auth().signInWithPopup(provider);
     } catch (e) {
       console.error("Login error:", e);
       const errStr = String(e);
-      // Deteksi error environment secara lebih luas
       const isEnvError = e.code === 'auth/operation-not-supported-in-this-environment' || 
                          errStr.includes('location.protocol') || 
                          errStr.includes('operation-not-supported');
       
       if (isEnvError) {
-        setAuthError("Login Google tidak didukung di lingkungan pratinjau ini ( iframe/blob). Harap coba setelah aplikasi di-deploy ke domain HTTPS asli.");
+        setAuthError("Login Google tidak didukung di lingkungan pratinjau ini (iframe/blob). Harap coba setelah aplikasi di-deploy ke domain HTTPS asli.");
       } else if (e.code === 'auth/popup-closed-by-user') {
         setAuthError("Login dibatalkan oleh pengguna.");
       } else {
@@ -434,8 +457,8 @@ export default function App() {
     if (user && fbReady && window.firebase && window.firebase.apps.length) {
       try {
         const fb = window.firebase;
-        const configRaw = typeof __firebase_config !== 'undefined' ? __firebase_config : '{}';
-        const appIdStr = typeof __app_id !== 'undefined' ? __app_id : 'nontondracin-compact';
+        const configRaw = JSON.stringify(FIREBASE_CONFIG_OVERRIDE);
+        const appIdStr = FIREBASE_CONFIG_OVERRIDE.projectId;
         await fb.firestore().doc(`artifacts/${appIdStr}/users/${user.uid}/settings/ad_pref`).set({ 
           ts: Date.now(), 
           p: isPersistent 
@@ -503,26 +526,19 @@ export default function App() {
    * --- EFFECTS ---
    */
 
-  // Firebase Auth & Ad initialization
   useEffect(() => {
     if (!fbReady || !window.firebase) return;
     const fb = window.firebase;
-    const configRaw = typeof __firebase_config !== 'undefined' ? __firebase_config : '{}';
-    let fConfig = {};
-    try { fConfig = JSON.parse(configRaw); } catch(e) {}
+    const appIdStr = FIREBASE_CONFIG_OVERRIDE.projectId;
     
-    const appIdStr = typeof __app_id !== 'undefined' ? __app_id : 'nontondracin-compact';
-    const initialToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
-    
-    if (!fb.apps.length && fConfig.apiKey) {
-      try { fb.initializeApp(fConfig); } catch(e) {}
+    if (!fb.apps.length) {
+      try { fb.initializeApp(FIREBASE_CONFIG_OVERRIDE); } catch(e) {}
     }
     
     const initAuth = async () => {
       try {
         if (fb.apps.length && !fb.auth().currentUser) {
-            if (initialToken) await fb.auth().signInWithCustomToken(initialToken);
-            else await fb.auth().signInAnonymously();
+            await fb.auth().signInAnonymously();
         }
       } catch (e) {}
     };
@@ -543,7 +559,6 @@ export default function App() {
                     }
                     if (show) setTimeout(() => setShowAd(true), 3000);
                 } catch(e) { 
-                   // Fallback jika Firestore dilarang
                    setTimeout(() => setShowAd(true), 3000); 
                 }
             }
@@ -576,7 +591,7 @@ export default function App() {
       <nav className="flex-none h-16 bg-[#0f172a]/80 backdrop-blur-xl border-b border-white/5 flex items-center z-40 px-4 sm:px-8">
         <div className="container mx-auto flex justify-between items-center">
           <button onClick={() => setView('home')} className="flex items-center gap-2 group">
-            <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center text-white font-black shadow-lg">D</div>
+            <div className="w-8 h-8 bg-gradient-to-br from-blue-600 to-indigo-500 rounded-lg flex items-center justify-center text-white font-black shadow-lg">D</div>
             <span className="text-base font-black text-white hidden xs:block">NontonDracin</span>
           </button>
           <div className="flex items-center gap-1.5 bg-white/5 p-1 rounded-full border border-white/10">
@@ -603,8 +618,8 @@ export default function App() {
       {/* ERROR BAR */}
       {authError && (
         <div className="bg-orange-600/20 border-b border-orange-500/20 px-6 py-2 flex items-center justify-between animate-in slide-in-from-top-full duration-300">
-           <div className="flex items-center gap-2 text-orange-400 text-[9px] font-bold uppercase tracking-widest">
-              <AlertCircle size={14} /> <span>{authError}</span>
+           <div className="flex items-center gap-2 text-orange-400 text-[9px] font-bold uppercase tracking-widest text-left">
+              <AlertCircle size={14} className="shrink-0" /> <span>{authError}</span>
            </div>
            <button onClick={() => setAuthError(null)} className="text-orange-400/50 hover:text-orange-400 transition-colors"><X size={14}/></button>
         </div>
@@ -710,23 +725,24 @@ export default function App() {
             © 2026 <a href="https://sanpoi.com" target="_blank" rel="noopener noreferrer" className="text-blue-400 hover:underline transition-all">SanPoi</a> | Made with AI
           </p>
           <p className="text-[9px] text-slate-600 leading-tight max-w-2xl italic hidden sm:block">
-            We do not host or stream any video content. All trademarks and copyrighted materials are owned by their respective owners.
+            Kami tidak menampung atau menyiarkan konten video apa pun secara langsung. Semua merek dagang dan hak cipta milik pemiliknya masing-masing.
           </p>
           <p className="text-[9px] text-slate-600 font-mono">
-            API by <a href="https://drachin.dicky.app" target="_blank" rel="noopener noreferrer" className="hover:text-blue-400 transition-colors">https://drachin.dicky.app</a>
+            API oleh <a href="https://drachin.dicky.app" target="_blank" rel="noopener noreferrer" className="hover:text-blue-400 transition-colors">https://drachin.dicky.app</a>
           </p>
         </div>
       </footer>
 
       {showAd && <SanPoiPopup onClose={handleCloseAd} />}
       
+      {/* MODAL PENCARIAN */}
       {searchModalOpen && (
         <div className="fixed inset-0 z-[100] flex items-start justify-center pt-32 px-4">
           <div className="absolute inset-0 bg-[#0f172a]/95 backdrop-blur-2xl" onClick={() => setSearchModalOpen(false)}></div>
           <div className="relative w-full max-w-2xl animate-in slide-in-from-top-8 duration-500">
              <div className="relative group">
                 <Search className="absolute left-6 top-1/2 -translate-y-1/2 text-slate-500 group-focus-within:text-blue-500 transition-colors" size={24} />
-                <input autoFocus type="text" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} onKeyDown={handleSearch} placeholder="Cari drama favorit..." className="w-full bg-slate-900 border border-white/10 rounded-[1.5rem] pl-16 pr-8 py-5 text-lg font-bold text-white outline-none focus:border-blue-600 transition-all shadow-2xl" />
+                <input autoFocus type="text" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} onKeyDown={handleSearch} placeholder="Cari drama favorit Anda..." className="w-full bg-slate-900 border border-white/10 rounded-[1.5rem] pl-16 pr-8 py-5 text-lg font-bold text-white outline-none focus:border-blue-600 transition-all shadow-2xl" />
              </div>
           </div>
         </div>
