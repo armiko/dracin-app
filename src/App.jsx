@@ -45,34 +45,24 @@ const getSafeEnv = (key, fallback = '') => {
   }
 };
 
-const defaultFirebaseConfig = {
-  apiKey: "AIzaSyDm5JBMP_NZTpiM-EmgvXNwRCLNtdROy8s",
-  authDomain: "nontondracin-f5065.firebaseapp.com",
-  projectId: "nontondracin-f5065",
-  storageBucket: "nontondracin-f5065.firebasestorage.app",
-  messagingSenderId: "166957230434",
-  appId: "1:166957230434:web:dc20d828a59048765da43b",
-  measurementId: "G-6B89Y55E2F"
-};
-
-// Inisialisasi Firebase Config dengan prioritas environment global
+// Global environment variables provided by the platform
 const firebaseConfig = typeof __firebase_config !== 'undefined' 
   ? JSON.parse(__firebase_config) 
   : {
-      apiKey: getSafeEnv('VITE_FIREBASE_API_KEY', defaultFirebaseConfig.apiKey),
-      authDomain: getSafeEnv('VITE_FIREBASE_AUTH_DOMAIN', defaultFirebaseConfig.authDomain),
-      projectId: getSafeEnv('VITE_FIREBASE_PROJECT_ID', defaultFirebaseConfig.projectId),
-      storageBucket: getSafeEnv('VITE_FIREBASE_STORAGE_BUCKET', defaultFirebaseConfig.storageBucket),
-      messagingSenderId: getSafeEnv('VITE_FIREBASE_MESSAGING_SENDER_ID', defaultFirebaseConfig.messagingSenderId),
-      appId: getSafeEnv('VITE_FIREBASE_APP_ID', defaultFirebaseConfig.appId),
-      measurementId: getSafeEnv('VITE_FIREBASE_MEASUREMENT_ID', defaultFirebaseConfig.measurementId)
+      apiKey: "AIzaSyDm5JBMP_NZTpiM-EmgvXNwRCLNtdROy8s",
+      authDomain: "nontondracin-f5065.firebaseapp.com",
+      projectId: "nontondracin-f5065",
+      storageBucket: "nontondracin-f5065.firebasestorage.app",
+      messagingSenderId: "166957230434",
+      appId: "1:166957230434:web:dc20d828a59048765da43b",
+      measurementId: "G-6B89Y55E2F"
     };
 
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
 
-// Rule 1: Gunakan appId yang benar dari lingkungan atau fallback
+// RULE 1: Use strictly required appId path
 const appId = typeof __app_id !== 'undefined' ? __app_id : 'zxK1vPSy15CtEAAnHLeV';
 
 const STORAGE_KEYS = {
@@ -334,11 +324,13 @@ const ProfileDropdown = ({ isOpen, onClose, user, setView, handleLogout }) => {
           <div className="p-5 border-b border-white/5 bg-gradient-to-br from-blue-600/10 to-transparent text-left">
             <p className="text-white font-black text-xs truncate mb-0.5">{user.displayName || "User"}</p>
             <p className="text-slate-500 text-[10px] font-bold truncate uppercase tracking-widest">{user.email || ""}</p>
+            <p className="text-slate-600 text-[8px] font-mono mt-2 break-all">{user.uid}</p>
           </div>
         ) : (
           <div className="p-5 border-b border-white/5 text-center">
             <p className="text-slate-400 text-[10px] font-black uppercase tracking-widest mb-3">Fitur Terbatas</p>
             <button onClick={handleLoginPopup} className="w-full py-2 bg-blue-600 text-white rounded-xl text-[10px] font-black uppercase tracking-widest shadow-lg">Masuk Google</button>
+            {user && <p className="text-slate-700 text-[7px] font-mono mt-2 break-all">{user.uid}</p>}
           </div>
         )}
         <div className="p-2 text-left">
@@ -412,7 +404,6 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    // Inisialisasi history state
     if (!window.history.state) {
       window.history.replaceState({ view: 'home', bookId: null, playerState: null, activeTag: '' }, '');
     }
@@ -433,18 +424,18 @@ export default function App() {
   }, []);
 
   // FIRESTORE SYNC LOGIC (Watchlist & History)
-  // Rule 3: Auth BEFORE queries
+  // RULE 3: Auth BEFORE queries
   useEffect(() => {
     const initAuth = async () => {
       try {
-        // Cek token custom dari environment jika ada
+        console.log("Memulai autentikasi Firebase...");
         if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
           await signInWithCustomToken(auth, __initial_auth_token);
         } else {
           await signInAnonymously(auth);
         }
       } catch (err) {
-        console.error("Auth failed:", err);
+        console.error("Autentikasi gagal:", err);
       }
     };
 
@@ -452,6 +443,7 @@ export default function App() {
 
     const unsubscribe = onAuthStateChanged(auth, (u) => {
       if (u) {
+        console.log("Pengguna teridentifikasi:", u.uid);
         setUser(u);
         setTimeout(() => setShowPromo(true), 3500);
       }
@@ -463,19 +455,26 @@ export default function App() {
   useEffect(() => {
     if (!user) return;
 
-    // Rule 1 & 2: Real-time listener for Watchlist (Strict Path & Simple Query)
+    // RULE 1: Strict Paths
     const watchlistRef = collection(db, 'artifacts', appId, 'users', user.uid, 'watchlist');
+    // Real-time listener for Watchlist
     const unsubWatchlist = onSnapshot(watchlistRef, (snapshot) => {
-      const data = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id }));
+      const data = snapshot.docs.map(doc => ({ ...doc.data(), docId: doc.id }));
+      // RULE 2: Client-side sorting
       setWatchlist(data.sort((a, b) => (b.addedAt || 0) - (a.addedAt || 0)));
-    }, (err) => console.error("Watchlist error:", err));
+    }, (err) => {
+      console.error("Kesalahan izin Watchlist:", err);
+    });
 
-    // Rule 1 & 2: Real-time listener for History (Strict Path & Simple Query)
     const historyRef = collection(db, 'artifacts', appId, 'users', user.uid, 'history');
+    // Real-time listener for History
     const unsubHistory = onSnapshot(historyRef, (snapshot) => {
-      const data = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id }));
+      const data = snapshot.docs.map(doc => ({ ...doc.data(), docId: doc.id }));
+      // RULE 2: Client-side sorting
       setWatchHistory(data.sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0)));
-    }, (err) => console.error("History error:", err));
+    }, (err) => {
+      console.error("Kesalahan izin History:", err);
+    });
 
     return () => {
       unsubWatchlist();
@@ -551,9 +550,12 @@ export default function App() {
   }, [view, activeTag, currentLocale, allDramaData]);
 
   const handleToggleWatchlist = useCallback(async (book) => {
-    if (!user) return;
+    if (!user) {
+      console.warn("Autentikasi diperlukan untuk menyimpan favorit.");
+      return;
+    }
     const bid = String(book.bookId || book.id);
-    // Rule 1: Strict Path
+    // RULE 1: Strict Path
     const docRef = doc(db, 'artifacts', appId, 'users', user.uid, 'watchlist', bid);
     
     const exists = watchlist.find(i => String(i.bookId || i.id) === bid);
@@ -570,14 +572,14 @@ export default function App() {
         });
       }
     } catch (e) {
-      console.error("Watchlist toggle failed", e);
+      console.error("Gagal memperbarui favorit", e);
     }
   }, [user, watchlist]);
 
   const updateHistory = useCallback(async (book, episode) => {
     if (!user) return;
     const bid = String(book.bookId || book.id);
-    // Rule 1: Strict Path
+    // RULE 1: Strict Path
     const docRef = doc(db, 'artifacts', appId, 'users', user.uid, 'history', bid);
     
     try {
@@ -589,7 +591,7 @@ export default function App() {
         updatedAt: Date.now()
       });
     } catch (e) {
-      console.error("History update failed", e);
+      console.error("Gagal memperbarui riwayat", e);
     }
   }, [user]);
 
@@ -599,7 +601,7 @@ export default function App() {
     try {
       await deleteDoc(docRef);
     } catch (e) {
-      console.error("History clear failed", e);
+      console.error("Gagal menghapus riwayat", e);
     }
   }, [user]);
 
@@ -681,7 +683,7 @@ export default function App() {
   );
 
   return (
-    <div className="bg-[#0f172a] h-screen text-slate-200 font-sans flex flex-col overflow-hidden selection:bg-blue-600 selection:text-white text-left">
+    <div className="bg-[#0f172a] h-screen text-slate-200 font-sans flex flex-col overflow-hidden selection:bg-blue-600 selection:text-white text-left text-left">
       {showAppleBanner && (
         <div className="flex-none bg-amber-500/15 border-b border-amber-500/20 px-4 py-2 flex items-center justify-between gap-3 animate-in slide-in-from-top duration-500">
           <div className="flex items-center gap-3 justify-center flex-1 text-left">
@@ -693,13 +695,13 @@ export default function App() {
       )}
       
       {/* NAVBAR PERSISTEN */}
-      <nav className="flex-none h-16 bg-[#0f172a]/80 backdrop-blur-xl border-b border-white/5 flex items-center z-40 px-4 sm:px-8">
+      <nav className="flex-none h-16 bg-[#0f172a]/80 backdrop-blur-xl border-b border-white/5 flex items-center z-40 px-4 sm:px-8 text-left">
         <div className="container mx-auto flex justify-between items-center">
-          <button onClick={() => changeView('home')} className="flex items-center gap-2 group transition-all active:scale-95 text-left">
+          <button onClick={() => changeView('home')} className="flex items-center gap-2 group transition-all active:scale-95 text-left text-left">
             <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center text-white font-black shadow-lg shadow-blue-600/20">D</div>
             <span className="text-base font-black text-white hidden xs:block tracking-tighter">NontonDracin</span>
           </button>
-          <div className="flex items-center gap-2 text-left">
+          <div className="flex items-center gap-2 text-left text-left">
             <div className="hidden md:flex items-center gap-1 bg-white/5 p-1 rounded-full border border-white/10 mr-1">
               {[ {id:'home', icon:Home}, {id:'rank', icon:Trophy}, {id:'filter', icon:Filter} ].map(m => (
                 <button key={m.id} onClick={() => changeView(m.id)} className={`p-2 rounded-full transition-all ${(view === m.id && !playerState) ? 'bg-blue-600 text-white shadow-lg' : 'text-slate-400 hover:text-white'}`}><m.icon size={16} /></button>
@@ -708,8 +710,8 @@ export default function App() {
             <LanguageSelector />
             <button onClick={() => setSearchModalOpen(true)} className="p-2 text-slate-400 hover:text-white transition-colors active:scale-90"><Search size={20} /></button>
             <div className="h-6 w-[1px] bg-white/10 mx-1"></div>
-            <div className="relative">
-              <button onClick={() => setProfileOpen(!profileOpen)} className="flex items-center gap-2 p-1 pl-1.5 pr-2.5 rounded-full bg-white/5 border border-white/10 hover:bg-white/10 transition-all active:scale-95">
+            <div className="relative text-left">
+              <button onClick={() => setProfileOpen(!profileOpen)} className="flex items-center gap-2 p-1 pl-1.5 pr-2.5 rounded-full bg-white/5 border border-white/10 hover:bg-white/10 transition-all active:scale-95 text-left">
                 {user && !user.isAnonymous && user.photoURL ? <img src={user.photoURL} alt="User" className="w-7 h-7 rounded-full border border-white/20" /> : <div className="w-7 h-7 rounded-full bg-slate-800 flex items-center justify-center text-slate-400"><UserIcon size={14}/></div>}
                 <ChevronDown size={14} className={`text-slate-500 transition-transform ${profileOpen ? 'rotate-180' : ''}`} />
               </button>
@@ -719,7 +721,7 @@ export default function App() {
         </div>
       </nav>
 
-      <main className="flex-1 overflow-y-auto pt-6 pb-20 px-4 sm:px-8 no-scrollbar text-left">
+      <main className="flex-1 overflow-y-auto pt-6 pb-20 px-4 sm:px-8 no-scrollbar text-left text-left">
         <div className="container mx-auto max-w-7xl">
           {playerState ? (
             <CustomPlayerPage 
@@ -734,25 +736,25 @@ export default function App() {
           ) : (
             <>
               {view === 'home' && (
-                <div className="animate-in fade-in duration-700">
+                <div className="animate-in fade-in duration-700 text-left">
                    {homeData.popular[0] && (
-                     <div className="mb-10 relative rounded-[2rem] overflow-hidden min-h-[300px] md:min-h-[350px] flex items-center bg-slate-900 border border-white/5 shadow-2xl">
-                       <div className="absolute inset-0">
+                     <div className="mb-10 relative rounded-[2rem] overflow-hidden min-h-[300px] md:min-h-[350px] flex items-center bg-slate-900 border border-white/5 shadow-2xl text-left">
+                       <div className="absolute inset-0 text-left">
                          <img src={homeData.popular[0].coverWap || homeData.popular[0].cover} className="w-full h-full object-cover opacity-30 blur-sm scale-105" alt="" />
                          <div className="absolute inset-0 bg-gradient-to-t from-[#0f172a] via-[#0f172a]/60 to-transparent"></div>
                        </div>
-                       <div className="relative z-10 flex flex-col md:flex-row items-center gap-8 p-10 sm:p-14 w-full text-left">
-                         <div className="hidden lg:block w-[200px] shrink-0 transform -rotate-2 hover:rotate-0 transition-all duration-500">
+                       <div className="relative z-10 flex flex-col md:flex-row items-center gap-8 p-10 sm:p-14 w-full text-left text-left">
+                         <div className="hidden lg:block w-[200px] shrink-0 transform -rotate-2 hover:rotate-0 transition-all duration-500 text-left">
                            <div className="aspect-[2/3] rounded-2xl overflow-hidden shadow-2xl border-2 border-white/10 cursor-pointer" onClick={() => changeView('detail', homeData.popular[0].bookId || homeData.popular[0].id)}>
                              <img src={homeData.popular[0].coverWap || homeData.popular[0].cover} className="w-full h-full object-cover" alt="" />
                            </div>
                          </div>
-                         <div className="flex-1 text-center md:text-left">
+                         <div className="flex-1 text-center md:text-left text-left">
                            <div className="inline-flex items-center gap-2 px-3 py-1 bg-blue-600 text-white text-[8px] font-black rounded-full mb-5 uppercase tracking-widest"><Flame size={12} fill="white" /> Rekomendasi Hari Ini</div>
                            <h1 className="text-3xl sm:text-6xl font-black text-white mb-6 leading-tight tracking-tighter">{homeData.popular[0].bookName || homeData.popular[0].title}</h1>
-                           <div className="flex flex-wrap items-center justify-center md:justify-start gap-4">
-                            <button onClick={() => changeView('detail', homeData.popular[0].bookId || homeData.popular[0].id)} className="bg-white text-black hover:bg-blue-600 hover:text-white px-8 py-3.5 rounded-xl font-black text-[10px] uppercase tracking-widest transition-all shadow-xl flex items-center gap-2 shadow-white/10">MULAI TONTON <Play size={16} fill="currentColor"/></button>
-                            <button onClick={() => handleToggleWatchlist(homeData.popular[0])} className="bg-white/10 hover:bg-white/20 text-white px-6 py-3.5 rounded-xl font-black text-[10px] uppercase tracking-widest transition-all backdrop-blur-md border border-white/10 flex items-center gap-2">
+                           <div className="flex flex-wrap items-center justify-center md:justify-start gap-4 text-left text-left">
+                            <button onClick={() => changeView('detail', homeData.popular[0].bookId || homeData.popular[0].id)} className="bg-white text-black hover:bg-blue-600 hover:text-white px-8 py-3.5 rounded-xl font-black text-[10px] uppercase tracking-widest transition-all shadow-xl flex items-center gap-2 shadow-white/10 text-left">MULAI TONTON <Play size={16} fill="currentColor"/></button>
+                            <button onClick={() => handleToggleWatchlist(homeData.popular[0])} className="bg-white/10 hover:bg-white/20 text-white px-6 py-3.5 rounded-xl font-black text-[10px] uppercase tracking-widest transition-all backdrop-blur-md border border-white/10 flex items-center gap-2 text-left">
                                {watchlist.some(i => String(i.bookId || i.id) === String(homeData.popular[0].bookId || homeData.popular[0].id)) ? <BookmarkCheck size={18} className="text-blue-400" /> : <Bookmark size={18} />} SIMPAN
                             </button>
                            </div>
@@ -761,75 +763,75 @@ export default function App() {
                      </div>
                    )}
                    <Section icon={Flame} title="Drama Populer" onSeeAll={() => { setRankTab('popular'); changeView('rank'); }}>
-                     <div className="grid grid-cols-3 xs:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3 md:gap-6 text-left">
+                     <div className="grid grid-cols-3 xs:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3 md:gap-6 text-left text-left text-left text-left">
                        {homeData.popular.slice(1, 7).map((item, idx) => <DramaCard key={idx} item={item} onClick={(it) => changeView('detail', it.bookId || it.id)} />)}
                      </div>
                    </Section>
                    {watchHistory.length > 0 && (
                      <Section icon={History} title="Lanjutkan Nonton">
-                       <div className="grid grid-cols-3 xs:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3 md:gap-6 text-left">
+                       <div className="grid grid-cols-3 xs:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3 md:gap-6 text-left text-left">
                          {watchHistory.slice(0, 6).map((item, idx) => (<DramaCard key={idx} item={item} isHistory lastEpisode={item.lastEpisode} onRemove={clearHistoryItem} onClick={(it) => changeView('detail', it.bookId)} />))}
                        </div>
                      </Section>
                    )}
                    <Section icon={Zap} title="Sedang Trending" onSeeAll={() => { setRankTab('trending'); changeView('rank'); }}>
-                     <div className="grid grid-cols-3 xs:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3 md:gap-6 text-left">
+                     <div className="grid grid-cols-3 xs:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3 md:gap-6 text-left text-left text-left text-left">
                        {homeData.trending.slice(0, 6).map((item, idx) => <DramaCard key={idx} item={item} onClick={(it) => changeView('detail', it.bookId || it.id)} />)}
                      </div>
                    </Section>
                    <Section icon={Clock} title="Update Terbaru" onSeeAll={() => { setRankTab('latest'); changeView('rank'); }}>
-                     <div className="grid grid-cols-3 xs:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3 md:gap-6 text-left">
+                     <div className="grid grid-cols-3 xs:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3 md:gap-6 text-left text-left text-left text-left">
                        {homeData.latest.slice(0, 6).map((item, idx) => <DramaCard key={idx} item={item} onClick={(it) => changeView('detail', it.bookId || it.id)} />)}
                      </div>
                    </Section>
                 </div>
               )}
               {view === 'rank' && (
-                <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 text-left">
-                   <div className="flex justify-center gap-2 md:gap-3 mb-10 overflow-x-auto no-scrollbar py-1">
+                <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 text-left text-left text-left text-left">
+                   <div className="flex justify-center gap-2 md:gap-3 mb-10 overflow-x-auto no-scrollbar py-1 text-left text-left">
                      {[ { id: 'popular', label: 'Populer' }, { id: 'trending', label: 'Trending' }, { id: 'latest', label: 'Terbaru' } ].map(t => (
-                        <button key={t.id} onClick={() => { setRankTab(t.id); setRankPage(1); }} className={`px-5 md:px-8 py-2 md:py-2.5 rounded-xl font-black text-[9px] md:text-[10px] uppercase tracking-widest border transition-all ${rankTab === t.id ? 'bg-blue-600 border-blue-600 text-white shadow-lg shadow-blue-600/20' : 'bg-white/5 border-white/10 text-slate-400 hover:border-white/20'}`}>{t.label}</button>
+                        <button key={t.id} onClick={() => { setRankTab(t.id); setRankPage(1); }} className={`px-5 md:px-8 py-2 md:py-2.5 rounded-xl font-black text-[9px] md:text-[10px] uppercase tracking-widest border transition-all ${rankTab === t.id ? 'bg-blue-600 border-blue-600 text-white shadow-lg shadow-blue-600/20' : 'bg-white/5 border-white/10 text-slate-400 hover:border-white/20'} text-left`}>{t.label}</button>
                      ))}
                    </div>
-                   <div className="grid grid-cols-3 xs:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3 md:gap-6 text-left">
+                   <div className="grid grid-cols-3 xs:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3 md:gap-6 text-left text-left text-left text-left text-left text-left text-left text-left">
                       {rankData.map((item, idx) => <DramaCard key={idx} item={item} rank={idx+1} onClick={(it) => changeView('detail', it.bookId || it.id)} />)}
                    </div>
-                   <div className="mt-12 flex justify-center">
-                      <button onClick={() => setRankPage(p => p + 1)} disabled={loading} className="px-10 py-3.5 bg-blue-600 hover:bg-blue-500 text-white rounded-2xl font-black text-[10px] uppercase tracking-[0.2em] shadow-xl flex items-center gap-3 disabled:opacity-50 transition-all">
+                   <div className="mt-12 flex justify-center text-left text-left">
+                      <button onClick={() => setRankPage(p => p + 1)} disabled={loading} className="px-10 py-3.5 bg-blue-600 hover:bg-blue-500 text-white rounded-2xl font-black text-[10px] uppercase tracking-[0.2em] shadow-xl flex items-center gap-3 disabled:opacity-50 transition-all text-left">
                         {loading ? <Loader2 size={16} className="animate-spin" /> : <Plus size={16} />} MUAT LEBIH BANYAK
                       </button>
                    </div>
                 </div>
               )}
               {view === 'filter' && (
-                <div className="animate-in fade-in duration-500 text-left">
-                   <div className="bg-slate-900/50 p-8 rounded-3xl border border-white/5 mb-10 grid grid-cols-1 md:grid-cols-3 gap-8 backdrop-blur-sm text-left">
+                <div className="animate-in fade-in duration-500 text-left text-left text-left text-left">
+                   <div className="bg-slate-900/50 p-8 rounded-3xl border border-white/5 mb-10 grid grid-cols-1 md:grid-cols-3 gap-8 backdrop-blur-sm text-left text-left text-left">
                       {STATIC_FILTERS.map(f => (
-                        <div key={f.key}>
-                          <h4 className="text-[8px] font-black text-slate-500 uppercase tracking-widest mb-4 flex items-center gap-2"><div className="w-1 h-1 bg-blue-500 rounded-full"></div> {f.title}</h4>
-                          <div className="flex flex-wrap gap-2">
+                        <div key={f.key} className="text-left text-left">
+                          <h4 className="text-[8px] font-black text-slate-500 uppercase tracking-widest mb-4 flex items-center gap-2 text-left"><div className="w-1 h-1 bg-blue-500 rounded-full text-left"></div> {f.title}</h4>
+                          <div className="flex flex-wrap gap-2 text-left text-left">
                             {f.options.map(o => (
-                              <button key={o.value} onClick={() => setActiveFilters(p => ({...p, [f.key]: p[f.key] === o.value ? '' : o.value}))} className={`px-4 py-2 rounded-xl text-[9px] font-bold uppercase tracking-wider border transition-all ${activeFilters[f.key] === o.value ? 'bg-blue-600 border-blue-600 text-white shadow-lg' : 'bg-white/5 border-white/10 text-slate-400 hover:text-white hover:bg-white/10'}`}>{o.display}</button>
+                              <button key={o.value} onClick={() => setActiveFilters(p => ({...p, [f.key]: p[f.key] === o.value ? '' : o.value}))} className={`px-4 py-2 rounded-xl text-[9px] font-bold uppercase tracking-wider border transition-all ${activeFilters[f.key] === o.value ? 'bg-blue-600 border-blue-600 text-white shadow-lg' : 'bg-white/5 border-white/10 text-slate-400 hover:text-white hover:bg-white/10'} text-left text-left`}>{o.display}</button>
                             ))}
                           </div>
                         </div>
                       ))}
                    </div>
-                   <div className="grid grid-cols-3 xs:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3 md:gap-6 text-left">
+                   <div className="grid grid-cols-3 xs:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3 md:gap-6 text-left text-left text-left text-left text-left text-left text-left text-left">
                       {filteredItems.map((item, idx) => <DramaCard key={idx} item={item} onClick={(it) => changeView('detail', it.bookId || it.id)} />)}
                    </div>
                 </div>
               )}
               {view === 'tag-dramas' && (
-                <div className="animate-in fade-in duration-700 text-left">
+                <div className="animate-in fade-in duration-700 text-left text-left text-left text-left text-left">
                    <Section title={`Tag: ${activeTag}`} icon={Tag}>
                      {loading ? (
-                        <div className="flex flex-col items-center justify-center py-20 gap-4 w-full">
-                           <Loader2 size={32} className="animate-spin text-blue-500" />
-                           <p className="text-[10px] font-black text-slate-600 uppercase tracking-widest">Mencari Drama...</p>
+                        <div className="flex flex-col items-center justify-center py-20 gap-4 w-full text-left text-left">
+                           <Loader2 size={32} className="animate-spin text-blue-500 text-left" />
+                           <p className="text-[10px] font-black text-slate-600 uppercase tracking-widest text-left">Mencari Drama...</p>
                         </div>
                      ) : tagData.length > 0 ? (
-                        <div className="grid grid-cols-3 xs:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3 md:gap-6 text-left">
+                        <div className="grid grid-cols-3 xs:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3 md:gap-6 text-left text-left text-left text-left text-left text-left">
                            {tagData.map((item, idx) => (
                              <DramaCard key={idx} item={item} onClick={(it) => changeView('detail', it.bookId || it.id)} />
                            ))}
@@ -858,10 +860,10 @@ export default function App() {
                 />
               )}
               {view === 'watchlist' && (
-                <div className="animate-in fade-in duration-700 text-left">
+                <div className="animate-in fade-in duration-700 text-left text-left text-left text-left">
                   <Section icon={Bookmark} title="Koleksi Favorit Saya">
                     {watchlist.length > 0 ? (
-                      <div className="grid grid-cols-3 xs:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3 md:gap-6 text-left">
+                      <div className="grid grid-cols-3 xs:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3 md:gap-6 text-left text-left text-left text-left">
                         {watchlist.map((item, idx) => <DramaCard key={idx} item={item} onRemove={() => handleToggleWatchlist(item)} onClick={(it) => changeView('detail', it.bookId || it.id)} />)}
                       </div>
                     ) : <EmptyState icon={Bookmark} title="Favorit Kosong" message="Ayo simpan drama favoritmu agar mudah ditemukan kembali." actionText="CARI DRAMA" onAction={() => changeView('home')} />}
@@ -869,10 +871,10 @@ export default function App() {
                 </div>
               )}
               {view === 'history' && (
-                <div className="animate-in fade-in duration-700 text-left">
+                <div className="animate-in fade-in duration-700 text-left text-left text-left text-left">
                   <Section icon={History} title="Sudah Ditonton">
                     {watchHistory.length > 0 ? (
-                      <div className="grid grid-cols-3 xs:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3 md:gap-6 text-left">
+                      <div className="grid grid-cols-3 xs:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3 md:gap-6 text-left text-left text-left text-left">
                         {watchHistory.map((item, idx) => <DramaCard key={idx} item={item} isHistory lastEpisode={item.lastEpisode} onRemove={clearHistoryItem} onClick={(it) => changeView('detail', it.bookId)} />)}
                       </div>
                     ) : <EmptyState icon={History} title="Riwayat Kosong" message="Anda belum pernah menonton drama apa pun." actionText="NONTON SEKARANG" onAction={() => changeView('home')} />}
@@ -880,9 +882,9 @@ export default function App() {
                 </div>
               )}
               {view === 'search-results' && (
-                <div className="animate-in fade-in duration-700 text-left">
+                <div className="animate-in fade-in duration-700 text-left text-left text-left text-left text-left text-left text-left text-left text-left">
                    <Section title={`Hasil Pencarian: ${searchQuery}`} icon={Search} onSeeAll={() => changeView('home')}>
-                     <div className="grid grid-cols-3 xs:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3 md:gap-6 text-left">
+                     <div className="grid grid-cols-3 xs:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3 md:gap-6 text-left text-left text-left text-left">
                        {searchData.map((item, idx) => <DramaCard key={idx} item={item} onClick={(it) => { setPreviousView('search-results'); changeView('detail', it.bookId || it.id); }} />)}
                      </div>
                    </Section>
@@ -894,19 +896,19 @@ export default function App() {
       </main>
 
       {/* FOOTER PERSISTEN */}
-      <div className="md:hidden fixed bottom-0 left-0 right-0 bg-[#0f172a]/95 backdrop-blur-xl border-t border-white/5 px-6 py-4 flex justify-between items-center z-50 text-left">
+      <div className="md:hidden fixed bottom-0 left-0 right-0 bg-[#0f172a]/95 backdrop-blur-xl border-t border-white/5 px-6 py-4 flex justify-between items-center z-50 text-left text-left text-left text-left text-left text-left text-left text-left text-left text-left">
         {[ {id:'home', icon:Home, label:'Home'}, {id:'rank', icon:Trophy, label:'Top'}, {id:'filter', icon:Filter, label:'Saring'}, {id:'watchlist', icon:Bookmark, label:'Favorit'} ].map(m => (
-          <button key={m.id} onClick={() => changeView(m.id)} className={`flex flex-col items-center gap-1 transition-all active:scale-90 ${(view === m.id && !playerState) ? 'text-blue-500' : 'text-slate-500'}`}><m.icon size={20} /><span className="text-[8px] font-black uppercase tracking-widest">{m.label}</span></button>
+          <button key={m.id} onClick={() => changeView(m.id)} className={`flex flex-col items-center gap-1 transition-all active:scale-90 ${(view === m.id && !playerState) ? 'text-blue-500' : 'text-slate-500'} text-left`}><m.icon size={20} /><span className="text-[8px] font-black uppercase tracking-widest text-left">{m.label}</span></button>
         ))}
       </div>
 
       {searchModalOpen && (
-        <div className="fixed inset-0 z-[100] flex items-start justify-center pt-32 px-4 animate-in fade-in duration-300">
-          <div className="absolute inset-0 bg-[#0f172a]/95 backdrop-blur-md" onClick={() => setSearchModalOpen(false)}></div>
-          <div className="relative w-full max-w-2xl animate-in slide-in-from-top-8 duration-500 text-left">
-             <div className="relative group text-left">
-                <Search className="absolute left-6 top-1/2 -translate-y-1/2 text-slate-500" size={24} />
-                <input autoFocus type="text" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter' && searchQuery.trim()) { window.DramaboxCore.searchBooks(CONFIG.API_BASE, currentLocale, searchQuery, 1, 30).then(res => { setSearchData(res.items || []); changeView('search-results'); setSearchModalOpen(false); }); } }} placeholder="Cari drama favorit..." className="w-full bg-slate-900 border border-white/10 rounded-3xl pl-16 pr-8 py-5 text-lg font-bold text-white outline-none focus:border-blue-600 transition-all shadow-2xl" />
+        <div className="fixed inset-0 z-[100] flex items-start justify-center pt-32 px-4 animate-in fade-in duration-300 text-left">
+          <div className="absolute inset-0 bg-[#0f172a]/95 backdrop-blur-md text-left" onClick={() => setSearchModalOpen(false)}></div>
+          <div className="relative w-full max-w-2xl animate-in slide-in-from-top-8 duration-500 text-left text-left text-left text-left text-left">
+             <div className="relative group text-left text-left text-left text-left text-left text-left">
+                <Search className="absolute left-6 top-1/2 -translate-y-1/2 text-slate-500 text-left" size={24} />
+                <input autoFocus type="text" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter' && searchQuery.trim()) { window.DramaboxCore.searchBooks(CONFIG.API_BASE, currentLocale, searchQuery, 1, 30).then(res => { setSearchData(res.items || []); changeView('search-results'); setSearchModalOpen(false); }); } }} placeholder="Cari drama favorit..." className="w-full bg-slate-900 border border-white/10 rounded-3xl pl-16 pr-8 py-5 text-lg font-bold text-white outline-none focus:border-blue-600 transition-all shadow-2xl text-left" />
              </div>
           </div>
         </div>
@@ -931,41 +933,41 @@ const DramaDetailPage = ({ bookId, onBack, user, watchlist, history, onToggleWat
   }, [bookId, locale]);
   const isBookmarked = useMemo(() => watchlist.some(i => String(i.bookId || i.id) === String(bookId)), [watchlist, bookId]);
   const lastWatched = useMemo(() => history.find(i => String(i.bookId) === String(bookId))?.lastEpisode, [history, bookId]);
-  if (loading) return <div className="flex flex-col items-center justify-center p-20 gap-4 text-center"><Loader2 className="animate-spin text-blue-500" size={40} /><p className="text-[10px] font-black text-slate-600 uppercase tracking-[0.3em]">Memuat Drama...</p></div>;
+  if (loading) return <div className="flex flex-col items-center justify-center p-20 gap-4 text-center text-left"><Loader2 className="animate-spin text-blue-500 text-left" size={40} /><p className="text-[10px] font-black text-slate-600 uppercase tracking-[0.3em] text-left">Memuat Drama...</p></div>;
   return (
-    <div className="animate-in fade-in duration-700 text-left">
-      <button onClick={onBack} className="flex items-center gap-2 text-slate-500 font-bold hover:text-white transition-colors text-[10px] uppercase tracking-widest mb-8"><ChevronLeft size={18} /> Kembali</button>
-      <div className="flex flex-col lg:flex-row gap-10 bg-slate-900/40 rounded-[2.5rem] p-6 sm:p-10 border border-white/5 backdrop-blur-xl shadow-2xl">
-        <div className="w-full lg:w-[320px] shrink-0 text-left">
-          <div className="relative aspect-[2/3] rounded-3xl overflow-hidden shadow-2xl border border-white/10 text-left">
+    <div className="animate-in fade-in duration-700 text-left text-left text-left text-left text-left text-left text-left">
+      <button onClick={onBack} className="flex items-center gap-2 text-slate-500 font-bold hover:text-white transition-colors text-[10px] uppercase tracking-widest mb-8 text-left"><ChevronLeft size={18} /> Kembali</button>
+      <div className="flex flex-col lg:flex-row gap-10 bg-slate-900/40 rounded-[2.5rem] p-6 sm:p-10 border border-white/5 backdrop-blur-xl shadow-2xl text-left">
+        <div className="w-full lg:w-[320px] shrink-0 text-left text-left text-left text-left text-left text-left text-left">
+          <div className="relative aspect-[2/3] rounded-3xl overflow-hidden shadow-2xl border border-white/10 text-left text-left text-left text-left text-left text-left text-left">
             <img src={data.book.cover} className="w-full h-full object-cover" alt="" />
-            <div className="absolute top-4 left-4 flex gap-2 text-left">
-               <span className="bg-blue-600 text-white text-[8px] font-black px-2 py-1 rounded-lg shadow-lg uppercase tracking-wider">{data.book.chapterCount} EPS</span>
+            <div className="absolute top-4 left-4 flex gap-2 text-left text-left text-left text-left text-left text-left text-left text-left">
+               <span className="bg-blue-600 text-white text-[8px] font-black px-2 py-1 rounded-lg shadow-lg uppercase tracking-wider text-left">{data.book.chapterCount} EPS</span>
             </div>
           </div>
         </div>
-        <div className="flex-1 flex flex-col justify-center text-left">
-          <h2 className="text-3xl sm:text-5xl font-black text-white mb-4 leading-tight tracking-tighter">{data.book.bookName}</h2>
-          <div className="mb-6 flex flex-wrap gap-2 text-left">
-             {data.book.typeTwoNames?.map((tag, idx) => (<button key={idx} onClick={() => onTagClick(tag)} className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600/10 border border-blue-500/20 text-blue-400 text-[9px] font-black rounded-xl uppercase tracking-wider hover:bg-blue-600 hover:text-white transition-all active:scale-95"><Tag size={10} /> {tag}</button>))}
+        <div className="flex-1 flex flex-col justify-center text-left text-left text-left text-left text-left text-left text-left text-left">
+          <h2 className="text-3xl sm:text-5xl font-black text-white mb-4 leading-tight tracking-tighter text-left">{data.book.bookName}</h2>
+          <div className="mb-6 flex flex-wrap gap-2 text-left text-left text-left text-left text-left text-left text-left text-left">
+             {data.book.typeTwoNames?.map((tag, idx) => (<button key={idx} onClick={() => onTagClick(tag)} className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600/10 border border-blue-500/20 text-blue-400 text-[9px] font-black rounded-xl uppercase tracking-wider hover:bg-blue-600 hover:text-white transition-all active:scale-95 text-left text-left"><Tag size={10} className="text-left" /> {tag}</button>))}
           </div>
-          <div className="flex flex-wrap gap-3 mb-8">
-            <button onClick={() => onPlayEpisode(lastWatched || 1, data.book, data.chapters)} className="bg-blue-600 hover:bg-blue-500 text-white px-8 py-3.5 rounded-2xl font-black text-[10px] uppercase tracking-widest shadow-xl shadow-blue-600/30 transition-all flex items-center gap-2 group active:scale-95"><Play size={18} fill="currentColor"/> {lastWatched ? `LANJUT EPS ${lastWatched}` : 'TONTON SEKARANG'}</button>
-            <button onClick={() => onToggleWatchlist(data.book)} className={`px-6 py-3.5 rounded-2xl font-black text-[10px] uppercase tracking-widest transition-all border flex items-center gap-2 active:scale-95 ${isBookmarked ? 'bg-blue-600/10 border-blue-500/30 text-blue-400' : 'bg-white/5 border-white/10 text-white hover:bg-white/10'}`}>
-              {isBookmarked ? <BookmarkCheck size={18} /> : <Bookmark size={18} />} {isBookmarked ? 'FAVORIT' : 'SIMPAN'}
+          <div className="flex flex-wrap gap-3 mb-8 text-left text-left text-left text-left text-left">
+            <button onClick={() => onPlayEpisode(lastWatched || 1, data.book, data.chapters)} className="bg-blue-600 hover:bg-blue-500 text-white px-8 py-3.5 rounded-2xl font-black text-[10px] uppercase tracking-widest shadow-xl shadow-blue-600/30 transition-all flex items-center gap-2 group active:scale-95 text-left text-left"><Play size={18} fill="currentColor" className="text-left" /> {lastWatched ? `LANJUT EPS ${lastWatched}` : 'TONTON SEKARANG'}</button>
+            <button onClick={() => onToggleWatchlist(data.book)} className={`px-6 py-3.5 rounded-2xl font-black text-[10px] uppercase tracking-widest transition-all border flex items-center gap-2 active:scale-95 ${isBookmarked ? 'bg-blue-600/10 border-blue-500/30 text-blue-400' : 'bg-white/5 border-white/10 text-white hover:bg-white/10'} text-left`}>
+              {isBookmarked ? <BookmarkCheck size={18} className="text-left" /> : <Bookmark size={18} className="text-left" />} {isBookmarked ? 'FAVORIT' : 'SIMPAN'}
             </button>
           </div>
-          <div className="mb-10 text-left">
-            <h4 className="text-[9px] font-black text-slate-500 uppercase tracking-[0.3em] mb-3">SINOPSIS</h4>
-            <div className="p-5 bg-white/5 rounded-2xl border border-white/5 text-slate-400 text-xs leading-relaxed italic line-clamp-4 hover:line-clamp-none transition-all duration-300">{cleanIntro(data.book.introduction)}</div>
+          <div className="mb-10 text-left text-left text-left text-left text-left text-left text-left text-left">
+            <h4 className="text-[9px] font-black text-slate-500 uppercase tracking-[0.3em] mb-3 text-left">SINOPSIS</h4>
+            <div className="p-5 bg-white/5 rounded-2xl border border-white/5 text-slate-400 text-xs leading-relaxed italic line-clamp-4 hover:line-clamp-none transition-all duration-300 text-left">{cleanIntro(data.book.introduction)}</div>
           </div>
-          <div className="text-left">
-             <h4 className="text-[9px] font-black text-slate-500 uppercase tracking-[0.3em] mb-4 text-slate-400 text-left">DAFTAR EPISODE</h4>
-             <div className="grid grid-cols-5 xs:grid-cols-6 sm:grid-cols-8 lg:grid-cols-12 gap-2 max-h-[160px] overflow-y-auto pr-3 no-scrollbar pb-2 text-left">
+          <div className="text-left text-left text-left text-left text-left text-left text-left text-left">
+             <h4 className="text-[9px] font-black text-slate-500 uppercase tracking-[0.3em] mb-4 text-slate-400 text-left text-left text-left text-left text-left text-left text-left text-left">DAFTAR EPISODE</h4>
+             <div className="grid grid-cols-5 xs:grid-cols-6 sm:grid-cols-8 lg:grid-cols-12 gap-2 max-h-[160px] overflow-y-auto pr-3 no-scrollbar pb-2 text-left text-left text-left text-left text-left">
               {data.chapters?.map((ch, i) => {
                 const num = ch.num || (ch.index + 1);
                 return (
-                  <button key={i} onClick={() => onPlayEpisode(num, data.book, data.chapters)} className={`aspect-square rounded-xl text-[10px] font-black flex items-center justify-center transition-all border ${num === lastWatched ? 'bg-blue-600 border-blue-600 text-white shadow-lg' : 'bg-slate-800 border-white/5 text-slate-500 hover:text-white'}`}>{num}</button>
+                  <button key={i} onClick={() => onPlayEpisode(num, data.book, data.chapters)} className={`aspect-square rounded-xl text-[10px] font-black flex items-center justify-center transition-all border ${num === lastWatched ? 'bg-blue-600 border-blue-600 text-white shadow-lg' : 'bg-slate-800 border-white/5 text-slate-500 hover:text-white'} text-left text-left`}>{num}</button>
                 );
               })}
             </div>
@@ -1062,7 +1064,6 @@ const CustomPlayerPage = ({ book, initialEp, onBack, onEpisodeChange, audioSetti
   };
 
   const handleOverlayClick = (e) => {
-    // Abaikan klik jika target adalah tombol atau slider range
     if (e.target.closest('button') || e.target.closest('input[type="range"]')) return;
     togglePlay();
   };
@@ -1073,15 +1074,15 @@ const CustomPlayerPage = ({ book, initialEp, onBack, onEpisodeChange, audioSetti
   const scrollToTop = () => { window.scrollTo({ top: 0, behavior: 'smooth' }); };
 
   return (
-    <div className="animate-in fade-in duration-500">
-        <div className="flex flex-col lg:flex-row gap-6 md:gap-10 items-start text-left">
+    <div className="animate-in fade-in duration-500 text-left">
+        <div className="flex flex-col lg:flex-row gap-6 md:gap-10 items-start text-left text-left text-left text-left">
           
           {/* PLAYER PORTRAIT (9:16) */}
-          <div className="w-full lg:flex-1 max-w-[450px] mx-auto text-left">
+          <div className="w-full lg:flex-1 max-w-[450px] mx-auto text-left text-left text-left text-left text-left">
             <div 
               id="player-container-root"
               ref={containerRef}
-              className="relative w-full aspect-[9/16] bg-black rounded-3xl overflow-hidden shadow-2xl border border-white/5 group text-left"
+              className="relative w-full aspect-[9/16] bg-black rounded-3xl overflow-hidden shadow-2xl border border-white/5 group text-left text-left text-left text-left text-left text-left"
               onMouseMove={() => { setShowControls(true); clearTimeout(timerRef.current); timerRef.current = setTimeout(() => setShowControls(false), 3000); }}
             >
               <style>{`
@@ -1101,7 +1102,7 @@ const CustomPlayerPage = ({ book, initialEp, onBack, onEpisodeChange, audioSetti
               `}</style>
               <video 
                 ref={videoRef} 
-                className="w-full h-full object-cover cursor-pointer" 
+                className="w-full h-full object-cover cursor-pointer text-left" 
                 playsInline 
                 onPlay={() => setIsPlaying(true)} 
                 onPause={() => setIsPlaying(false)} 
@@ -1113,61 +1114,61 @@ const CustomPlayerPage = ({ book, initialEp, onBack, onEpisodeChange, audioSetti
                 onClick={togglePlay} 
               />
               
-              {loading && <div className="absolute inset-0 flex items-center justify-center bg-black/60 backdrop-blur-sm z-10 text-left"><Loader2 className="animate-spin text-blue-500" size={48} /></div>}
+              {loading && <div className="absolute inset-0 flex items-center justify-center bg-black/60 backdrop-blur-sm z-10 text-left text-left text-left text-left text-left text-left"><Loader2 className="animate-spin text-blue-500 text-left" size={48} /></div>}
               
               <div 
                 onClick={handleOverlayClick}
-                className={`absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-black/60 flex flex-col justify-between p-4 md:p-8 transition-opacity duration-500 ${showControls ? 'opacity-100' : 'opacity-0'} text-left`}
+                className={`absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-black/60 flex flex-col justify-between p-4 md:p-8 transition-opacity duration-500 ${showControls ? 'opacity-100' : 'opacity-0'} text-left text-left text-left text-left text-left text-left text-left`}
               >
-                <div className="flex justify-between items-center text-left">
-                  <button onClick={onBack} className="p-2 md:p-2.5 bg-white/10 backdrop-blur-md rounded-full hover:bg-white/20 transition-all border border-white/10 active:scale-90"><ChevronLeft size={20}/></button>
-                  <div className="text-center">
-                    <h2 className="text-[10px] md:text-xs font-black uppercase tracking-[0.2em] text-white">EPS {currentEp}</h2>
+                <div className="flex justify-between items-center text-left text-left text-left text-left text-left text-left text-left text-left">
+                  <button onClick={onBack} className="p-2 md:p-2.5 bg-white/10 backdrop-blur-md rounded-full hover:bg-white/20 transition-all border border-white/10 active:scale-90 text-left"><ChevronLeft size={20} className="text-left" /></button>
+                  <div className="text-center text-left text-left text-left text-left">
+                    <h2 className="text-[10px] md:text-xs font-black uppercase tracking-[0.2em] text-white text-left">EPS {currentEp}</h2>
                   </div>
-                  <button onClick={toggleFullScreen} className="p-2 md:p-2.5 bg-white/10 backdrop-blur-md rounded-full hover:bg-white/20 transition-all border border-white/10 active:scale-90"><Maximize size={20}/></button>
+                  <button onClick={toggleFullScreen} className="p-2 md:p-2.5 bg-white/10 backdrop-blur-md rounded-full hover:bg-white/20 transition-all border border-white/10 active:scale-90 text-left"><Maximize size={20} className="text-left" /></button>
                 </div>
 
-                <div className="flex flex-col gap-4 text-left">
+                <div className="flex flex-col gap-4 text-left text-left text-left text-left">
                   {/* OVERLAY PLAY/PAUSE CENTER */}
-                  <div className="flex items-center justify-center gap-10 text-left">
-                    <button onClick={handlePrev} disabled={currentEp <= 1} className="text-white/60 hover:text-blue-400 disabled:opacity-20 transition-colors"><SkipBack size={32} fill="currentColor"/></button>
-                    <button onClick={togglePlay} className="text-white transform active:scale-90 transition-transform">
-                      {isPlaying ? <Pause size={56} fill="white" /> : <Play size={56} fill="white" />}
+                  <div className="flex items-center justify-center gap-10 text-left text-left text-left text-left text-left text-left">
+                    <button onClick={handlePrev} disabled={currentEp <= 1} className="text-white/60 hover:text-blue-400 disabled:opacity-20 transition-colors text-left"><SkipBack size={32} fill="currentColor" className="text-left" /></button>
+                    <button onClick={togglePlay} className="text-white transform active:scale-90 transition-transform text-left">
+                      {isPlaying ? <Pause size={56} fill="white" className="text-left" /> : <Play size={56} fill="white" className="text-left" />}
                     </button>
-                    <button onClick={handleNext} disabled={currentEp >= (details?.book?.chapterCount || 0)} className="text-white/60 hover:text-blue-400 disabled:opacity-20 transition-colors"><SkipForward size={32} fill="currentColor"/></button>
+                    <button onClick={handleNext} disabled={currentEp >= (details?.book?.chapterCount || 0)} className="text-white/60 hover:text-blue-400 disabled:opacity-20 transition-colors text-left"><SkipForward size={32} fill="currentColor" className="text-left" /></button>
                   </div>
 
-                  <div className="flex flex-col gap-2 text-left">
-                    <div className="flex items-center gap-3 text-left">
-                       <input type="range" min="0" max={duration || 0} step="0.1" value={currentTime} onChange={(e) => { if (videoRef.current) videoRef.current.currentTime = parseFloat(e.target.value); }} className="flex-1 h-1 md:h-1.5 accent-blue-600 bg-white/20 rounded-full appearance-none cursor-pointer" />
+                  <div className="flex flex-col gap-2 text-left text-left text-left text-left text-left">
+                    <div className="flex items-center gap-3 text-left text-left text-left text-left text-left text-left">
+                       <input type="range" min="0" max={duration || 0} step="0.1" value={currentTime} onChange={(e) => { if (videoRef.current) videoRef.current.currentTime = parseFloat(e.target.value); }} className="flex-1 h-1 md:h-1.5 accent-blue-600 bg-white/20 rounded-full appearance-none cursor-pointer text-left" />
                        
-                       {/* VOLUME SLIDER (DIBERSIHKAN & AKTIF DI SEMUA DEVICE) */}
-                       <div className="flex items-center gap-2 group/vol relative text-left">
-                         <div className="p-1.5 bg-white/10 rounded-lg hover:bg-white/20 transition-colors text-left">
-                           {volume === 0 ? <VolumeX size={16} /> : <Volume2 size={16} />}
+                       {/* VOLUME SLIDER */}
+                       <div className="flex items-center gap-2 group/vol relative text-left text-left text-left">
+                         <div className="p-1.5 bg-white/10 rounded-lg hover:bg-white/20 transition-colors text-left text-left text-left">
+                           {volume === 0 ? <VolumeX size={16} className="text-left" /> : <Volume2 size={16} className="text-left" />}
                          </div>
                          <input 
                            type="range" 
                            min="0" max="1" step="0.05" 
                            value={volume} 
                            onChange={(e) => setVolume(parseFloat(e.target.value))} 
-                           className="w-12 md:w-16 h-1 accent-white appearance-none bg-white/20 rounded-full cursor-pointer transition-opacity" 
+                           className="w-12 md:w-16 h-1 accent-white appearance-none bg-white/20 rounded-full cursor-pointer transition-opacity text-left" 
                          />
                        </div>
                     </div>
-                    <div className="flex justify-between text-[8px] font-mono font-black text-white/50 tracking-tighter text-left"><span>{formatTime(currentTime)}</span><span>{formatTime(duration)}</span></div>
+                    <div className="flex justify-between text-[8px] font-mono font-black text-white/50 tracking-tighter text-left text-left text-left text-left text-left"><span>{formatTime(currentTime)}</span><span>{formatTime(duration)}</span></div>
                   </div>
                 </div>
               </div>
             </div>
 
             {/* KONTROL MINIMALIS: AUTO NEXT & SPEED (RESPONSIF MOBILE) */}
-            <div className="mt-4 grid grid-cols-2 gap-2 text-left">
+            <div className="mt-4 grid grid-cols-2 gap-2 text-left text-left text-left text-left">
               <button 
                 onClick={() => setLocalAutoNext(!localAutoNext)} 
-                className={`flex items-center justify-center gap-2 py-3 rounded-2xl border transition-all text-[10px] font-black uppercase tracking-widest ${localAutoNext ? 'bg-blue-600 border-blue-600 text-white shadow-lg' : 'bg-white/5 border-white/10 text-slate-400'}`}
+                className={`flex items-center justify-center gap-2 py-3 rounded-2xl border transition-all text-[10px] font-black uppercase tracking-widest ${localAutoNext ? 'bg-blue-600 border-blue-600 text-white shadow-lg' : 'bg-white/5 border-white/10 text-slate-400'} text-left`}
               >
-                <RotateCcw size={14} /> Auto {localAutoNext ? 'ON' : 'OFF'}
+                <RotateCcw size={14} className="text-left" /> Auto {localAutoNext ? 'ON' : 'OFF'}
               </button>
               <button 
                 onClick={() => {
@@ -1175,31 +1176,31 @@ const CustomPlayerPage = ({ book, initialEp, onBack, onEpisodeChange, audioSetti
                   const next = rates[(rates.indexOf(audioSettings.playbackRate) + 1) % rates.length];
                   setAudioSettings({...audioSettings, playbackRate: next});
                 }}
-                className="flex items-center justify-center gap-2 py-3 bg-white/5 border border-white/10 rounded-2xl text-[10px] font-black text-slate-200 uppercase tracking-widest transition-all active:scale-95"
+                className="flex items-center justify-center gap-2 py-3 bg-white/5 border border-white/10 rounded-2xl text-[10px] font-black text-slate-200 uppercase tracking-widest transition-all active:scale-95 text-left"
               >
-                <Settings size={14} /> Speed {audioSettings.playbackRate}x
+                <Settings size={14} className="text-left" /> Speed {audioSettings.playbackRate}x
               </button>
             </div>
           </div>
 
           {/* LIST EPISODE & SINOPSIS */}
-          <div className="w-full lg:w-[360px] flex flex-col gap-6 text-left">
-             <div className="bg-slate-900/60 backdrop-blur-3xl border border-white/10 rounded-[2rem] p-6 md:p-8 flex flex-col shadow-2xl text-left">
-                <div className="flex items-center gap-3 mb-6 border-b border-white/5 pb-5 text-left">
-                   <div className="w-10 h-10 bg-blue-600 rounded-xl shadow-xl shadow-blue-600/20 flex items-center justify-center text-white text-left"><List size={20} /></div>
-                   <div className="text-left">
-                     <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-white">List Episode</h3>
-                     <p className="text-[8px] font-bold text-slate-500 uppercase mt-0.5">{details?.book?.chapterCount || 0} Total Eps</p>
+          <div className="w-full lg:w-[360px] flex flex-col gap-6 text-left text-left text-left">
+             <div className="bg-slate-900/60 backdrop-blur-3xl border border-white/10 rounded-[2rem] p-6 md:p-8 flex flex-col shadow-2xl text-left text-left text-left">
+                <div className="flex items-center gap-3 mb-6 border-b border-white/5 pb-5 text-left text-left text-left">
+                   <div className="w-10 h-10 bg-blue-600 rounded-xl shadow-xl shadow-blue-600/20 flex items-center justify-center text-white text-left text-left text-left"><List size={20} className="text-left" /></div>
+                   <div className="text-left text-left text-left">
+                     <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-white text-left">List Episode</h3>
+                     <p className="text-[8px] font-bold text-slate-500 uppercase mt-0.5 text-left">{details?.book?.chapterCount || 0} Total Eps</p>
                    </div>
                 </div>
-                <div className="grid grid-cols-5 md:grid-cols-4 lg:grid-cols-4 gap-2 max-h-[300px] lg:max-h-[450px] overflow-y-auto no-scrollbar py-1 text-left">
+                <div className="grid grid-cols-5 md:grid-cols-4 lg:grid-cols-4 gap-2 max-h-[300px] lg:max-h-[450px] overflow-y-auto no-scrollbar py-1 text-left text-left text-left text-left text-left">
                    {details?.chapters?.map((ch, i) => {
                      const num = ch.num || (i + 1);
                      return (
                        <button 
                         key={i} 
                         onClick={() => { setCurrentEp(num); scrollToTop(); }} 
-                        className={`aspect-square rounded-xl text-[10px] font-black transition-all border ${num === currentEp ? 'bg-blue-600 border-blue-600 text-white shadow-lg scale-105' : 'bg-slate-800/40 border-white/5 text-slate-500 hover:text-white hover:bg-blue-600/10'}`}
+                        className={`aspect-square rounded-xl text-[10px] font-black transition-all border ${num === currentEp ? 'bg-blue-600 border-blue-600 text-white shadow-lg scale-105' : 'bg-slate-800/40 border-white/5 text-slate-500 hover:text-white hover:bg-blue-600/10'} text-left`}
                        >
                          {num}
                        </button>
@@ -1208,8 +1209,8 @@ const CustomPlayerPage = ({ book, initialEp, onBack, onEpisodeChange, audioSetti
                 </div>
              </div>
 
-             <div className="p-6 bg-slate-900/30 border border-white/5 rounded-[2rem] text-xs text-slate-400 leading-relaxed italic text-left text-left">
-                <p className="text-[8px] font-black text-slate-500 uppercase mb-3 tracking-widest">Sinopsis</p>
+             <div className="p-6 bg-slate-900/30 border border-white/5 rounded-[2rem] text-xs text-slate-400 leading-relaxed italic text-left text-left text-left text-left text-left">
+                <p className="text-[8px] font-black text-slate-500 uppercase mb-3 tracking-widest text-left">Sinopsis</p>
                 {details?.book?.introduction ? cleanIntro(details.book.introduction) : "Memuat sinopsis drama..."}
              </div>
           </div>
