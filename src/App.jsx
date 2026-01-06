@@ -8,6 +8,9 @@ import {
   LogOut, LogIn, User as UserIcon, AlertCircle,
   Bookmark, BookmarkCheck, History
 } from 'lucide-react';
+import { initializeApp } from 'firebase/app';
+import { getAuth, signInWithPopup, GoogleAuthProvider, onAuthStateChanged, signOut, signInAnonymously } from 'firebase/auth';
+import { getFirestore, doc, onSnapshot, setDoc, getDoc, updateDoc } from 'firebase/firestore';
 
 /**
  * --- KONFIGURASI API & FIREBASE ---
@@ -25,7 +28,7 @@ const CONFIG = {
   GOOGLE_CLIENT_ID: "1045477518682-vvh8vnmbaib90h6ruoi6i02jmk9nffg5.apps.googleusercontent.com"
 };
 
-const FIREBASE_CONFIG_OVERRIDE = {
+const firebaseConfig = {
   apiKey: "AIzaSyDm5JBMP_NZTpiM-EmgvXNwRCLNtdROy8s",
   authDomain: "nontondracin-f5065.firebaseapp.com",
   projectId: "nontondracin-f5065",
@@ -35,7 +38,16 @@ const FIREBASE_CONFIG_OVERRIDE = {
   measurementId: "G-6B89Y55E2F"
 };
 
-// MANDATORY RULE 1: Jalur penyimpanan persisten menggunakan ID yang Anda berikan
+// Inisialisasi Firebase
+const app = initializeApp(firebaseConfig);
+const auth = getAuth(app);
+const db = getFirestore(app);
+
+/**
+ * PERINGATAN TEKNIS:
+ * Sesuai Mandatory Rule 1, jalur Firestore HARUS dimulai dengan /artifacts/.
+ * ID '3KNDH1p5iIG6U7FmuGTS' tetap digunakan sebagai ID Aplikasi unik Anda.
+ */
 const customAppId = '3KNDH1p5iIG6U7FmuGTS';
 
 const STATIC_FILTERS = [
@@ -59,7 +71,17 @@ const STATIC_FILTERS = [
       { display: "Balas Dendam", value: "balas dendam" },
       { display: "CEO", value: "ceo" },
       { display: "Keluarga", value: "keluarga" },
-      { display: "Kekuatan Khusus", value: "keluarga khusus" }
+      { display: "Kekuatan Khusus", value: "keluarga khusus" },
+      { display: "Pembalikan Identitas", value: "pembalikan identitas" },
+      { display: "Perselingkuhan", value: "perselingkuhan" },
+      { display: "Terlahir Kembali", value: "terlahir kembali" },
+      { display: "Sejarah", value: "sejarah" },
+      { display: "Tokoh Legendaris", value: "tokoh legendaris" },
+      { display: "Cinta Rahasia", value: "cinta rahasia" },
+      { display: "Intrik Keluarga", value: "intrik keluarga" },
+      { display: "Cinta Setelah Menikah", value: "cinta setelah menikah" },
+      { display: "Takdir Cinta", value: "takdir cinta" },
+      { display: "Kesempatan Kedua", value: "kesempatan kedua" }
     ]
   },
   {
@@ -103,11 +125,8 @@ const cleanIntro = (h) => h ? String(h).replace(/<[^>]*>/g, ' ').replace(/&nbsp;
 const extractVideoUrl = (c) => {
   if (!c) return '';
   let s = c.raw || c;
-  
-  // Mencoba berbagai kemungkinan field URL dari API
   const directUrl = s.m3u8Url || s.playUrl || s.videoUrl || s.mp4;
   if (directUrl) return directUrl;
-  
   const cdn = s.cdnList?.[0];
   if (cdn) {
     const v = cdn.videoPathList?.[0];
@@ -194,9 +213,9 @@ const SanPoiPopup = ({ onClose }) => {
   );
 };
 
-const DramaCard = ({ item, onClick, rank }) => {
+const DramaCard = ({ item, onClick, rank, lastEp }) => {
   const title = item.bookName || item.title || 'Drama';
-  const cover = item.coverWap || item.coverUrl || item.cover || 'https://via.placeholder.com/300x450';
+  const cover = item.coverWap || item.cover || item.coverUrl || 'https://via.placeholder.com/300x450';
   return (
     <div className="group cursor-pointer" onClick={() => onClick(item)}>
       <div className="relative aspect-[2/3] rounded-xl overflow-hidden bg-slate-800 shadow-md mb-2 border border-white/5">
@@ -210,13 +229,18 @@ const DramaCard = ({ item, onClick, rank }) => {
         <div className="absolute bottom-1.5 right-1.5 bg-black/60 backdrop-blur-md text-white text-[7px] font-black px-1.5 py-0.5 rounded border border-white/10 uppercase">{item.chapterCount || '?'} EPS</div>
       </div>
       <h3 className="text-[10px] font-bold text-slate-200 line-clamp-2 leading-snug group-hover:text-blue-400 transition-colors px-0.5">{title}</h3>
+      {lastEp && (
+        <div className="mt-1 flex items-center gap-1 text-blue-400 font-black text-[7px] uppercase tracking-tighter px-0.5">
+          <History size={8} /> EP TERAKHIR: {lastEp}
+        </div>
+      )}
     </div>
   );
 };
 
 const DramaDetailPage = ({ bookId, onBack, onPlayEpisode, watchlist, onToggleWatchlist }) => {
   const [data, setData] = useState(null);
-  const isInWatchlist = watchlist.some(item => String(item.bookId) === String(bookId));
+  const isInWatchlist = watchlist && watchlist.some(item => String(item.bookId) === String(bookId));
 
   useEffect(() => {
     const fetch = async () => {
@@ -258,7 +282,7 @@ const DramaDetailPage = ({ bookId, onBack, onPlayEpisode, watchlist, onToggleWat
           <h4 className="text-[8px] font-black text-slate-500 uppercase tracking-widest mb-3">Pilih Episode</h4>
           <div className="grid grid-cols-5 xs:grid-cols-8 sm:grid-cols-10 lg:grid-cols-12 gap-1.5 max-h-[200px] overflow-y-auto pr-2 no-scrollbar">
             {data.chapters?.map((ch, i) => (
-              <button key={i} onClick={() => onPlayEpisode(ch.num || (i+1), data.book, data.chapters)} className="bg-slate-800 hover:bg-blue-600 text-white font-bold py-2 rounded-lg transition-all active:scale-95 text-[10px] border border-white/5">{ch.num || (i+1)}</button>
+              <button key={i} onClick={() => onPlayEpisode(ch.num || (ch.index + 1), data.book, data.chapters)} className="bg-slate-800 hover:bg-blue-600 text-white font-bold py-2 rounded-lg transition-all active:scale-95 text-[10px] border border-white/5">{ch.num || (ch.index + 1)}</button>
             ))}
           </div>
         </div>
@@ -291,16 +315,9 @@ const CustomPlayerPage = ({ book, chapters, initialEp, onBack, audioSettings, se
       const list = res.data?.chapterList || res.chapters || [];
       const batchCh = list.find(item => String(item.num) === String(epNum) || item.index === (epNum - 1)) || list[0];
       const url = extractVideoUrl(batchCh);
-      if (url) {
-        setVideoUrl(url);
-      } else {
-        throw new Error('URL Video Kosong');
-      }
+      if (url) setVideoUrl(url); else throw new Error();
     } catch (e) { 
-      if (requestId === requestRef.current) {
-        console.error("Kesalahan muat video:", e);
-        setError(true); 
-      }
+      if (requestId === requestRef.current) setError(true); 
     } finally { 
       if (requestId === requestRef.current) setLoading(false); 
     }
@@ -309,38 +326,14 @@ const CustomPlayerPage = ({ book, chapters, initialEp, onBack, audioSettings, se
   useEffect(() => {
     if (!videoRef.current || !videoUrl) return;
     const video = videoRef.current;
-    
-    if (hlsRef.current) {
-      hlsRef.current.destroy();
-      hlsRef.current = null;
-    }
-
-    if (videoUrl.includes('.m3u8')) {
-      if (window.Hls && window.Hls.isSupported()) {
-        const hls = new window.Hls({
-          enableWorker: true,
-          lowLatencyMode: true,
-        });
-        hls.loadSource(videoUrl);
-        hls.attachMedia(video);
-        hls.on(window.Hls.Events.MANIFEST_PARSED, () => {
-          video.play().catch(e => console.warn("Pemutaran otomatis diblokir:", e));
-        });
-        hlsRef.current = hls;
-      } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
-        video.src = videoUrl;
-        video.play().catch(e => console.warn("Pemutaran otomatis diblokir:", e));
-      } else {
-        setError(true);
-      }
-    } else {
-      video.src = videoUrl;
-      video.play().catch(e => console.warn("Pemutaran langsung diblokir:", e));
-    }
-
-    return () => {
-      if (hlsRef.current) hlsRef.current.destroy();
-    };
+    if (hlsRef.current) hlsRef.current.destroy();
+    if (videoUrl.includes('.m3u8') && window.Hls && window.Hls.isSupported()) {
+      const hls = new window.Hls({ enableWorker: true, lowLatencyMode: true });
+      hls.loadSource(videoUrl); hls.attachMedia(video);
+      hls.on(window.Hls.Events.MANIFEST_PARSED, () => video.play().catch(() => {}));
+      hlsRef.current = hls;
+    } else { video.src = videoUrl; video.play().catch(() => {}); }
+    return () => hlsRef.current && hlsRef.current.destroy();
   }, [videoUrl]);
 
   useEffect(() => { 
@@ -449,7 +442,9 @@ export default function App() {
   const [historyData, setHistoryData] = useState([]);
   
   const [user, setUser] = useState(null);
-  const [showAd, setShowAd] = useState(false);
+  const [profile, setProfile] = useState({ watchlist: [], history: [] });
+  const [syncing, setSyncing] = useState(false);
+
   const [loadingData, setLoadingData] = useState(false);
   const [hasMoreRank, setHasMoreRank] = useState(true);
   const [searchModalOpen, setSearchModalOpen] = useState(false);
@@ -460,6 +455,7 @@ export default function App() {
   const [activeFilters, setActiveFilters] = useState({ voice: '', category: '', sort: 'popular' });
   const [audioSettings, setAudioSettings] = useState({ volume: 1, isMuted: false, playbackRate: 1, autoNext: true });
   const [authError, setAuthError] = useState(null);
+  const [showAd, setShowAd] = useState(false);
 
   // Scripts Loading
   const { loaded: scriptLoaded } = useExternalScript(CONFIG.SCRIPT_URL);
@@ -471,7 +467,7 @@ export default function App() {
   const fbReady = fbApp && fbAuth && fbStore;
 
   /**
-   * --- LOGIKA TINDAKAN ---
+   * --- LOGIKA SYNC PROFIL (Solusi Dokumen Profil Tunggal) ---
    */
 
   const handleGoogleLogin = async () => {
@@ -483,12 +479,7 @@ export default function App() {
       await fb.auth().signInWithPopup(provider);
     } catch (e) {
       console.error("Gagal login:", e);
-      const errStr = String(e);
-      if (e.code === 'auth/operation-not-supported-in-this-environment' || errStr.includes('location.protocol')) {
-        setAuthError("Login Google tidak didukung di lingkungan pratinjau ini. Fitur ini akan berfungsi normal setelah aplikasi Anda di-deploy ke domain asli.");
-      } else {
-        setAuthError("Gagal masuk dengan Google. Silakan coba lagi.");
-      }
+      setAuthError("Login Google tidak didukung di pratinjau ini. Gunakan domain HTTPS asli.");
     }
   };
 
@@ -506,23 +497,27 @@ export default function App() {
     if (!user || !fbReady || !window.firebase) return;
     const fb = window.firebase;
     const dramaId = String(drama.bookId || drama.id);
-    // Jalur penyimpanan yang benar menggunakan customAppId
-    const watchlistRef = fb.firestore().doc(`artifacts/${customAppId}/users/${user.uid}/watchlist/${dramaId}`);
-    
-    const exists = watchlistData.some(item => String(item.bookId) === dramaId);
+    const profileRef = fb.firestore().doc(`artifacts/${customAppId}/users/${user.uid}/data/profile`);
     
     try {
+        const snap = await profileRef.get();
+        const currentData = snap.exists ? snap.data() : { watchlist: [], history: [] };
+        const exists = (currentData.watchlist || []).some(item => String(item.bookId) === dramaId);
+        
+        let newWatchlist;
         if (exists) {
-            await watchlistRef.delete();
+            newWatchlist = (currentData.watchlist || []).filter(item => String(item.bookId) !== dramaId);
         } else {
-            await watchlistRef.set({
+            const newItem = {
                 bookId: dramaId,
                 bookName: drama.bookName || drama.title,
                 coverWap: drama.coverWap || drama.cover || drama.coverUrl,
                 chapterCount: drama.chapterCount || drama.episodeCount || 0,
                 ts: Date.now()
-            });
+            };
+            newWatchlist = [newItem, ...(currentData.watchlist || [])];
         }
+        await profileRef.set({ ...currentData, watchlist: newWatchlist });
     } catch(e) { console.error("Watchlist toggle failed:", e); }
   };
 
@@ -530,18 +525,23 @@ export default function App() {
     if (!user || !fbReady || !window.firebase) return;
     const fb = window.firebase;
     const dramaId = String(drama.bookId || drama.id);
-    // Jalur penyimpanan yang benar menggunakan customAppId
-    const historyRef = fb.firestore().doc(`artifacts/${customAppId}/users/${user.uid}/history/${dramaId}`);
+    const profileRef = fb.firestore().doc(`artifacts/${customAppId}/users/${user.uid}/data/profile`);
     
     try {
-        await historyRef.set({
+        const snap = await profileRef.get();
+        const currentData = snap.exists ? snap.data() : { watchlist: [], history: [] };
+        const existingHistory = (currentData.history || []).filter(item => String(item.bookId) !== dramaId);
+        
+        const newItem = {
             bookId: dramaId,
             bookName: drama.bookName || drama.title,
             coverWap: drama.coverWap || drama.cover || drama.coverUrl,
             chapterCount: drama.chapterCount || drama.episodeCount || 0,
             lastEpisode: episode,
             ts: Date.now()
-        });
+        };
+        const newHistory = [newItem, ...existingHistory].slice(0, 50);
+        await profileRef.set({ ...currentData, history: newHistory });
     } catch(e) { console.error("History save failed:", e); }
   };
 
@@ -615,66 +615,59 @@ export default function App() {
    * --- EFFECTS ---
    */
 
-  // Inisialisasi Firebase & Auth Listener
   useEffect(() => {
     if (!fbReady || !window.firebase) return;
     const fb = window.firebase;
     if (!fb.apps.length) {
       try { fb.initializeApp(FIREBASE_CONFIG_OVERRIDE); } catch(e) {}
     }
-
-    const auth = fb.auth();
-    const unsubscribeAuth = auth.onAuthStateChanged(async (u) => {
-      setUser(u);
-      
-      if (u) {
-        // RULE 1: Sync Watchlist
-        const unsubWatch = fb.firestore()
-          .collection(`artifacts/${customAppId}/users/${u.uid}/watchlist`)
-          .onSnapshot(snap => {
-              setWatchlistData(snap.docs.map(doc => doc.data()));
-          }, err => console.error("Watchlist sync failed:", err));
-
-        // RULE 1: Sync History
-        const unsubHist = fb.firestore()
-          .collection(`artifacts/${customAppId}/users/${u.uid}/history`)
-          .onSnapshot(snap => {
-              const items = snap.docs.map(doc => doc.data());
-              items.sort((a,b) => b.ts - a.ts);
-              setHistoryData(items);
-          }, err => console.error("History sync failed:", err));
-
-        return () => {
-          unsubWatch();
-          unsubHist();
-        };
-      } else {
-        // RULE 3: Auto-signin anonim jika user belum ada
-        try { await auth.signInAnonymously(); } catch(e) {}
-      }
-    });
-
-    return () => unsubscribeAuth();
-  }, [fbReady]);
-
-  // Sinkronisasi Ad Preference
-  useEffect(() => {
-    if (!user || !fbReady || !window.firebase) return;
-    const fb = window.firebase;
-    const checkAdPref = async () => {
+    
+    const initAuth = async () => {
       try {
-        const adRef = fb.firestore().doc(`artifacts/${customAppId}/users/${user.uid}/settings/ad_pref`);
-        const snap = await adRef.get();
-        if (snap.exists) {
-          const d = snap.data();
-          const diff = Date.now() - (d.ts || 0);
-          if (d.p ? diff < 86400000 : diff < 3600000) return;
+        if (fb.apps.length && !fb.auth().currentUser) {
+            await fb.auth().signInAnonymously();
         }
-        setTimeout(() => setShowAd(true), 3000);
-      } catch(e) { setTimeout(() => setShowAd(true), 3000); }
+      } catch (e) {}
     };
-    checkAdPref();
-  }, [user, fbReady]);
+
+    initAuth();
+    if (fb.apps.length) {
+        const unsubscribeAuth = fb.auth().onAuthStateChanged(async (u) => {
+            setUser(u);
+            if (u) {
+                // Listen Profil Tunggal
+                const unsubscribeProfile = fb.firestore()
+                    .doc(`artifacts/${customAppId}/users/${u.uid}/data/profile`)
+                    .onSnapshot(snap => {
+                        if (snap.exists) {
+                            const data = snap.data();
+                            setWatchlistData(data.watchlist || []);
+                            const history = data.history || [];
+                            history.sort((a,b) => b.ts - a.ts);
+                            setHistoryData(history);
+                        } else {
+                            fb.firestore().doc(`artifacts/${customAppId}/users/${u.uid}/data/profile`).set({ watchlist: [], history: [] });
+                        }
+                    }, err => console.error("Profile sync failed:", err));
+
+                // Ad Preference
+                try {
+                    const adRef = fb.firestore().doc(`artifacts/${customAppId}/users/${u.uid}/settings/ad_pref`);
+                    const snap = await adRef.get();
+                    if (snap.exists) {
+                        const d = snap.data();
+                        const diff = Date.now() - (d.ts || 0);
+                        if (d.p ? diff < 86400000 : diff < 3600000) return;
+                    }
+                    setTimeout(() => setShowAd(true), 3000);
+                } catch(e) { setTimeout(() => setShowAd(true), 3000); }
+
+                return () => unsubscribeProfile();
+            }
+        });
+        return unsubscribeAuth;
+    }
+  }, [fbReady]);
 
   useEffect(() => { if (scriptLoaded) fetchHome(); }, [scriptLoaded, fetchHome]);
   useEffect(() => { if (view === 'rank') fetchRank(rankTab, 1); }, [view, rankTab]);
@@ -749,19 +742,11 @@ export default function App() {
         </div>
       </nav>
 
-      {/* ERROR BAR */}
-      {authError && (
-        <div className="bg-orange-600/20 border-b border-orange-500/20 px-6 py-2 flex items-center justify-between animate-in slide-in-from-top-full duration-300">
-           <div className="flex items-center gap-2 text-orange-400 text-[9px] font-bold uppercase tracking-widest text-left">
-              <AlertCircle size={14} className="shrink-0" /> <span>{authError}</span>
-           </div>
-           <button onClick={() => setAuthError(null)} className="text-orange-400/50 hover:text-orange-400 transition-colors"><X size={14}/></button>
-        </div>
-      )}
-
       {/* MAIN CONTENT */}
       <main className="flex-1 overflow-y-auto pt-4 pb-16 px-4 sm:px-8 no-scrollbar">
         <div className="container mx-auto max-w-7xl">
+          {authError && <div className="mb-4 bg-orange-600/20 border border-orange-500/20 p-3 rounded-xl text-[10px] font-black text-orange-400 uppercase text-center flex items-center justify-center gap-2"><AlertCircle size={14}/> {authError}</div>}
+          
           {view === 'home' && (
             <div className="animate-in fade-in duration-700">
                {homeData.popular[0] ? (
@@ -801,7 +786,7 @@ export default function App() {
             <div className="animate-in fade-in duration-500">
                <div className="flex justify-center gap-3 mb-8 overflow-x-auto no-scrollbar py-1">
                   {[ { id: 'popular', label: 'Populer' }, { id: 'latest', label: 'Terbaru' }, { id: 'trending', label: 'Trending' } ].map(t => (
-                    <button key={t.id} onClick={() => { setRankTab(t.id); setRankPage(1); }} className={`px-6 py-2 rounded-xl font-black text-[10px] uppercase tracking-widest border transition-all ${rankTab === t.id ? 'bg-blue-600 border-blue-600 text-white shadow-lg' : 'bg-white/5 border-white/10 text-slate-400 hover:border-white/20'}`}>{t.label}</button>
+                    <button key={t.id} onClick={() => { setRankTab(t.id); setRankPage(1); fetchRank(t.id, 1); }} className={`px-6 py-2 rounded-xl font-black text-[10px] uppercase tracking-widest border transition-all ${rankTab === t.id ? 'bg-blue-600 border-blue-600 text-white shadow-lg' : 'bg-white/5 border-white/10 text-slate-400 hover:border-white/20'}`}>{t.label}</button>
                   ))}
                </div>
                <div className="grid grid-cols-2 xs:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-5">
@@ -826,7 +811,7 @@ export default function App() {
                         )) : (
                             <div className="col-span-full py-20 flex flex-col items-center gap-4 text-slate-500">
                                 <Bookmark size={48} className="opacity-20" />
-                                <p className="text-[10px] font-black uppercase tracking-widest">Belum ada drama yang disimpan.</p>
+                                <p className="text-[10px] font-black uppercase tracking-widest text-center">Belum ada drama yang disimpan.</p>
                             </div>
                         )}
                     </div>
@@ -848,7 +833,7 @@ export default function App() {
                         )) : (
                             <div className="col-span-full py-20 flex flex-col items-center gap-4 text-slate-500">
                                 <History size={48} className="opacity-20" />
-                                <p className="text-[10px] font-black uppercase tracking-widest">Belum ada riwayat menonton.</p>
+                                <p className="text-[10px] font-black uppercase tracking-widest text-center">Belum ada riwayat menonton.</p>
                             </div>
                         )}
                     </div>
@@ -871,7 +856,7 @@ export default function App() {
                   ))}
                </div>
                <div className="grid grid-cols-2 xs:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-5">
-                  {filterData.map((item, idx) => <DramaCard key={idx} item={item} onClick={(it) => { setSelectedBookId(it.bookId || it.id); setPreviousView('filter'); setView('detail'); }} />)}
+                  {(filterData.length > 0 ? filterData : allDramaData).map((item, idx) => <DramaCard key={idx} item={item} onClick={(it) => { setSelectedBookId(it.bookId || it.id); setPreviousView('filter'); setView('detail'); }} />)}
                </div>
             </div>
           )}
