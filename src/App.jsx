@@ -35,7 +35,7 @@ const FIREBASE_CONFIG_OVERRIDE = {
   measurementId: "G-6B89Y55E2F"
 };
 
-// MANDATORY RULE 1: Menggunakan appId statis untuk sinkronisasi data lintas sesi
+// MANDATORY RULE 1: Jalur penyimpanan persisten menggunakan ID yang Anda berikan
 const customAppId = '3KNDH1p5iIG6U7FmuGTS';
 
 const STATIC_FILTERS = [
@@ -102,8 +102,8 @@ const cleanIntro = (h) => h ? String(h).replace(/<[^>]*>/g, ' ').replace(/&nbsp;
 
 const extractVideoUrl = (c) => {
   if (!c) return '';
-  // Mendukung berbagai struktur response Dramabox API
   let s = c.raw || c;
+  // Perbaikan logika ekstraksi URL untuk kestabilan pemutaran
   if (s.m3u8Url || s.playUrl || s.videoUrl) return s.m3u8Url || s.playUrl || s.videoUrl;
   if (s.mp4) return s.mp4;
   
@@ -184,7 +184,7 @@ const SanPoiPopup = ({ onClose }) => {
           </div>
           <a href="https://sanpoi.com" target="_blank" rel="noopener noreferrer" className="block w-full bg-blue-600 hover:bg-blue-500 text-white py-2.5 rounded-lg font-black text-[10px] text-center shadow-lg transition-all active:scale-95 flex items-center justify-center gap-1.5 uppercase">TOP UP SEKARANG <ExternalLink size={12}/></a>
           <label className="mt-3 flex items-center justify-center gap-1.5 cursor-pointer group">
-            <input type="checkbox" checked={dontShowToday} onChange={(e) => setDontShowToday(e.target.checked)} className="peer appearance-none w-3.5 h-3.5 border border-white/20 rounded bg-transparent checked:bg-blue-600 transition-all cursor-pointer" />
+            <input type="checkbox" checked={dontShowToday} onChange={(e) => setDontShowToday(e.target.checked)} className="peer appearance-none w-3.5 h-3.5 border border-white/20 rounded bg-transparent text-blue-600 focus:ring-0 cursor-pointer" />
             <span className="text-[8px] font-bold text-slate-500 group-hover:text-slate-300 uppercase tracking-wider cursor-pointer">Jangan tampilkan hari ini</span>
           </label>
         </div>
@@ -381,7 +381,7 @@ const CustomPlayerPage = ({ book, chapters, initialEp, onBack, audioSettings, se
       <div className={`absolute bottom-0 left-0 right-0 p-6 z-50 transition-all duration-500 ${showControls ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-8 pointer-events-none'}`}>
         <div className="max-w-4xl mx-auto flex flex-col gap-3">
           <div className="flex flex-col gap-1.5">
-            <input type="range" min="0" max={duration || 0} step="0.1" value={currentTime} onChange={(e) => { videoRef.current.currentTime = e.target.value; }} className="w-full h-1 accent-blue-600 bg-white/20 rounded-full appearance-none cursor-pointer hover:h-1.5 transition-all" />
+            <input type="range" min="0" max={duration || 0} step="0.1" value={currentTime} onChange={(e) => { videoRef.current.currentTime = e.target.value; }} className="w-full h-1 accent-blue-600 bg-white/20 rounded-full appearance-none cursor-pointer hover:h-2 transition-all" />
             <div className="flex justify-between items-center px-1 text-[9px] font-mono font-bold text-white/50 tracking-tighter">
               <span>{formatTime(currentTime)}</span>
               <span>{formatTime(duration)}</span>
@@ -610,7 +610,7 @@ export default function App() {
    * --- EFFECTS ---
    */
 
-  // Firebase Setup & Auth
+  // Inisialisasi Firebase & Auth Listener
   useEffect(() => {
     if (!fbReady || !window.firebase) return;
     const fb = window.firebase;
@@ -622,7 +622,6 @@ export default function App() {
     const unsubscribeAuth = auth.onAuthStateChanged(async (u) => {
       setUser(u);
       
-      // Kecepatan Sinkronisasi: Listener dipasang secepat mungkin setelah auth ready
       if (u) {
         // RULE 1: Sync Watchlist
         const unsubWatch = fb.firestore()
@@ -653,7 +652,7 @@ export default function App() {
     return () => unsubscribeAuth();
   }, [fbReady]);
 
-  // Ad Preference sync (terpisah agar tidak memperlambat data utama)
+  // Sinkronisasi Ad Preference
   useEffect(() => {
     if (!user || !fbReady || !window.firebase) return;
     const fb = window.firebase;
