@@ -10,12 +10,6 @@ import {
 } from 'lucide-react';
 
 /**
- * --- ARAHAN KONFIGURASI GOOGLE OAUTH ---
- * Jika tombol Login Google tidak merespons di pratinjau, ini karena batasan origin 'blob:'.
- * Fitur ini akan berfungsi 100% di domain HTTPS asli Anda (Vercel).
- */
-
-/**
  * --- KONFIGURASI API & FIREBASE ---
  */
 const CONFIG = {
@@ -41,7 +35,7 @@ const FIREBASE_CONFIG_OVERRIDE = {
   measurementId: "G-6B89Y55E2F"
 };
 
-// ID Proyek untuk penyimpanan Firestore yang konsisten
+// MANDATORY RULE 1: Menggunakan appId statis sesuai permintaan user
 const customAppId = '3KNDH1p5iIG6U7FmuGTS';
 
 const STATIC_FILTERS = [
@@ -79,7 +73,7 @@ const STATIC_FILTERS = [
 ];
 
 /**
- * --- UTILS ---
+ * --- UTILS & HELPERS ---
  */
 const useExternalScript = (url) => {
   const [state, setState] = useState({ loaded: false, error: false });
@@ -182,7 +176,7 @@ const SanPoiPopup = ({ onClose }) => {
           <div className="space-y-1.5 mb-4 text-left">
             {["Termurah se-Indonesia", "Proses Cepat", "100% Aman"].map((t, i) => (
               <div key={i} className="flex items-center gap-2 text-slate-300 text-[10px] font-semibold bg-white/5 p-2 rounded-lg border border-white/5">
-                <CheckCircle2 size={12} className="text-blue-400" /> {t}
+                <CheckCircle2 size={12} className="text-blue-400" /> <span>{t}</span>
               </div>
             ))}
           </div>
@@ -227,7 +221,7 @@ const DramaDetailPage = ({ bookId, onBack, onPlayEpisode, watchlist, onToggleWat
       try {
         const res = await window.DramaboxCore.loadDetailWithRecommend({ apiBase: CONFIG.API_BASE, localeApi: 'in', bookId, webficBase: 'https://www.webfic.com' });
         setData(res);
-      } catch (e) { console.error("Detail load error:", e); }
+      } catch (e) { console.error("Gagal memuat detail:", e); }
     };
     fetch();
   }, [bookId]);
@@ -431,7 +425,7 @@ export default function App() {
   const fbReady = fbApp && fbAuth && fbStore;
 
   /**
-   * --- LOGIKA TINDAKAN (Didefinisikan lebih awal) ---
+   * --- LOGIKA TINDAKAN ---
    */
 
   const handleGoogleLogin = async () => {
@@ -609,7 +603,6 @@ export default function App() {
     if (!user || !fbReady || !window.firebase || !window.firebase.apps.length) return;
     const fb = window.firebase;
 
-    // RULE 1: Listen Watchlist
     const unsubscribeWatch = fb.firestore()
       .collection(`artifacts/${customAppId}/users/${user.uid}/watchlist`)
       .onSnapshot(snap => {
@@ -617,7 +610,6 @@ export default function App() {
           setWatchlistData(items);
       }, err => console.error("Watchlist sync error:", err));
 
-    // RULE 1: Listen History
     const unsubscribeHist = fb.firestore()
       .collection(`artifacts/${customAppId}/users/${user.uid}/history`)
       .onSnapshot(snap => {
