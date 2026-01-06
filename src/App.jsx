@@ -398,6 +398,38 @@ export default function App() {
     } catch (e) { return { volume: 1, isMuted: false, playbackRate: 1, autoNext: true, autoPlay: true }; }
   });
 
+  const isInternalNav = useRef(false);
+
+  // LOGIKA ROUTING / HISTORY SYNC
+  const changeView = useCallback((v, bid = null, ps = null) => {
+    if (!isInternalNav.current) {
+      window.history.pushState({ view: v, bookId: bid, playerState: ps }, '');
+    }
+    setView(v);
+    setSelectedBookId(bid);
+    setPlayerState(ps);
+  }, []);
+
+  useEffect(() => {
+    // Inisialisasi history state
+    if (!window.history.state) {
+      window.history.replaceState({ view: 'home', bookId: null, playerState: null }, '');
+    }
+
+    const handlePopState = (event) => {
+      if (event.state) {
+        isInternalNav.current = true;
+        setView(event.state.view || 'home');
+        setSelectedBookId(event.state.bookId || null);
+        setPlayerState(event.state.playerState || null);
+        setTimeout(() => { isInternalNav.current = false; }, 50);
+      }
+    };
+
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, []);
+
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (u) => {
       if (u) {
@@ -478,8 +510,7 @@ export default function App() {
   }, []);
 
   const handlePlayerBack = useCallback(() => {
-    setPlayerState(null);
-    setView('detail');
+    window.history.back();
   }, []);
 
   const handleAudioSettingsUpdate = useCallback((s) => {
@@ -497,15 +528,15 @@ export default function App() {
   const closeAppleBanner = () => { setShowAppleBanner(false); };
 
   const handleLogout = useCallback(() => {
-    signOut(auth).then(() => { setView('home'); setProfileOpen(false); });
-  }, []);
+    signOut(auth).then(() => { changeView('home'); setProfileOpen(false); });
+  }, [changeView]);
 
   const handleTagClick = useCallback((tagName) => {
     setActiveTag(tagName);
     setActiveFilters(prev => ({ ...prev, category: tagName.toLowerCase() }));
     setPreviousView(view);
-    setView('filter');
-  }, [view]);
+    changeView('filter');
+  }, [view, changeView]);
 
   useEffect(() => { if (scriptLoaded) fetchHome(); }, [scriptLoaded, fetchHome]);
   useEffect(() => { if (view === 'rank') fetchRank(rankTab, rankPage); }, [view, rankTab, rankPage, fetchRank]);
@@ -572,14 +603,14 @@ export default function App() {
       {/* NAVBAR PERSISTEN */}
       <nav className="flex-none h-16 bg-[#0f172a]/80 backdrop-blur-xl border-b border-white/5 flex items-center z-40 px-4 sm:px-8">
         <div className="container mx-auto flex justify-between items-center">
-          <button onClick={() => { setPlayerState(null); setView('home'); }} className="flex items-center gap-2 group transition-all active:scale-95 text-left">
+          <button onClick={() => changeView('home')} className="flex items-center gap-2 group transition-all active:scale-95 text-left">
             <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center text-white font-black shadow-lg shadow-blue-600/20">D</div>
             <span className="text-base font-black text-white hidden xs:block tracking-tighter">NontonDracin</span>
           </button>
           <div className="flex items-center gap-2 text-left">
             <div className="hidden md:flex items-center gap-1 bg-white/5 p-1 rounded-full border border-white/10 mr-1">
               {[ {id:'home', icon:Home}, {id:'rank', icon:Trophy}, {id:'filter', icon:Filter} ].map(m => (
-                <button key={m.id} onClick={() => { setPlayerState(null); setView(m.id); }} className={`p-2 rounded-full transition-all ${(view === m.id && !playerState) ? 'bg-blue-600 text-white shadow-lg' : 'text-slate-400 hover:text-white'}`}><m.icon size={16} /></button>
+                <button key={m.id} onClick={() => changeView(m.id)} className={`p-2 rounded-full transition-all ${(view === m.id && !playerState) ? 'bg-blue-600 text-white shadow-lg' : 'text-slate-400 hover:text-white'}`}><m.icon size={16} /></button>
               ))}
             </div>
             <LanguageSelector />
@@ -590,7 +621,7 @@ export default function App() {
                 {user && !user.isAnonymous && user.photoURL ? <img src={user.photoURL} alt="User" className="w-7 h-7 rounded-full border border-white/20" /> : <div className="w-7 h-7 rounded-full bg-slate-800 flex items-center justify-center text-slate-400"><UserIcon size={14}/></div>}
                 <ChevronDown size={14} className={`text-slate-500 transition-transform ${profileOpen ? 'rotate-180' : ''}`} />
               </button>
-              <ProfileDropdown isOpen={profileOpen} onClose={() => setProfileOpen(false)} user={user} setView={(v) => { setPlayerState(null); setView(v); }} handleLogout={handleLogout} />
+              <ProfileDropdown isOpen={profileOpen} onClose={() => setProfileOpen(false)} user={user} setView={(v) => changeView(v)} handleLogout={handleLogout} />
             </div>
           </div>
         </div>
@@ -620,7 +651,7 @@ export default function App() {
                        </div>
                        <div className="relative z-10 flex flex-col md:flex-row items-center gap-8 p-10 sm:p-14 w-full text-left">
                          <div className="hidden lg:block w-[200px] shrink-0 transform -rotate-2 hover:rotate-0 transition-all duration-500">
-                           <div className="aspect-[2/3] rounded-2xl overflow-hidden shadow-2xl border-2 border-white/10 cursor-pointer" onClick={() => { setSelectedBookId(homeData.popular[0].bookId || homeData.popular[0].id); setView('detail'); }}>
+                           <div className="aspect-[2/3] rounded-2xl overflow-hidden shadow-2xl border-2 border-white/10 cursor-pointer" onClick={() => changeView('detail', homeData.popular[0].bookId || homeData.popular[0].id)}>
                              <img src={homeData.popular[0].coverWap || homeData.popular[0].cover} className="w-full h-full object-cover" alt="" />
                            </div>
                          </div>
@@ -628,7 +659,7 @@ export default function App() {
                            <div className="inline-flex items-center gap-2 px-3 py-1 bg-blue-600 text-white text-[8px] font-black rounded-full mb-5 uppercase tracking-widest"><Flame size={12} fill="white" /> Rekomendasi Hari Ini</div>
                            <h1 className="text-3xl sm:text-6xl font-black text-white mb-6 leading-tight tracking-tighter">{homeData.popular[0].bookName || homeData.popular[0].title}</h1>
                            <div className="flex flex-wrap items-center justify-center md:justify-start gap-4">
-                            <button onClick={() => { setSelectedBookId(homeData.popular[0].bookId || homeData.popular[0].id); setView('detail'); }} className="bg-white text-black hover:bg-blue-600 hover:text-white px-8 py-3.5 rounded-xl font-black text-[10px] uppercase tracking-widest transition-all shadow-xl flex items-center gap-2 shadow-white/10">MULAI TONTON <Play size={16} fill="currentColor"/></button>
+                            <button onClick={() => changeView('detail', homeData.popular[0].bookId || homeData.popular[0].id)} className="bg-white text-black hover:bg-blue-600 hover:text-white px-8 py-3.5 rounded-xl font-black text-[10px] uppercase tracking-widest transition-all shadow-xl flex items-center gap-2 shadow-white/10">MULAI TONTON <Play size={16} fill="currentColor"/></button>
                             <button onClick={() => handleToggleWatchlist(homeData.popular[0])} className="bg-white/10 hover:bg-white/20 text-white px-6 py-3.5 rounded-xl font-black text-[10px] uppercase tracking-widest transition-all backdrop-blur-md border border-white/10 flex items-center gap-2">
                                {watchlist.some(i => String(i.bookId || i.id) === String(homeData.popular[0].bookId || homeData.popular[0].id)) ? <BookmarkCheck size={18} className="text-blue-400" /> : <Bookmark size={18} />} SIMPAN
                             </button>
@@ -637,26 +668,26 @@ export default function App() {
                        </div>
                      </div>
                    )}
-                   <Section icon={Flame} title="Drama Populer" onSeeAll={() => { setRankTab('popular'); setView('rank'); }}>
+                   <Section icon={Flame} title="Drama Populer" onSeeAll={() => { setRankTab('popular'); changeView('rank'); }}>
                      <div className="grid grid-cols-3 xs:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3 md:gap-6 text-left text-left">
-                       {homeData.popular.slice(1, 7).map((item, idx) => <DramaCard key={idx} item={item} onClick={(it) => { setSelectedBookId(it.bookId || it.id); setPreviousView('home'); setView('detail'); }} />)}
+                       {homeData.popular.slice(1, 7).map((item, idx) => <DramaCard key={idx} item={item} onClick={(it) => changeView('detail', it.bookId || it.id)} />)}
                      </div>
                    </Section>
                    {watchHistory.length > 0 && (
                      <Section icon={History} title="Lanjutkan Nonton">
                        <div className="grid grid-cols-3 xs:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3 md:gap-6 text-left">
-                         {watchHistory.slice(0, 6).map((item, idx) => (<DramaCard key={idx} item={item} isHistory lastEpisode={item.lastEpisode} onRemove={clearHistoryItem} onClick={(it) => { setSelectedBookId(it.bookId); setView('detail'); }} />))}
+                         {watchHistory.slice(0, 6).map((item, idx) => (<DramaCard key={idx} item={item} isHistory lastEpisode={item.lastEpisode} onRemove={clearHistoryItem} onClick={(it) => changeView('detail', it.bookId)} />))}
                        </div>
                      </Section>
                    )}
-                   <Section icon={Zap} title="Sedang Trending" onSeeAll={() => { setRankTab('trending'); setView('rank'); }}>
+                   <Section icon={Zap} title="Sedang Trending" onSeeAll={() => { setRankTab('trending'); changeView('rank'); }}>
                      <div className="grid grid-cols-3 xs:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3 md:gap-6 text-left text-left">
-                       {homeData.trending.slice(0, 6).map((item, idx) => <DramaCard key={idx} item={item} onClick={(it) => { setSelectedBookId(it.bookId || it.id); setPreviousView('home'); setView('detail'); }} />)}
+                       {homeData.trending.slice(0, 6).map((item, idx) => <DramaCard key={idx} item={item} onClick={(it) => changeView('detail', it.bookId || it.id)} />)}
                      </div>
                    </Section>
-                   <Section icon={Clock} title="Update Terbaru" onSeeAll={() => { setRankTab('latest'); setView('rank'); }}>
+                   <Section icon={Clock} title="Update Terbaru" onSeeAll={() => { setRankTab('latest'); changeView('rank'); }}>
                      <div className="grid grid-cols-3 xs:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3 md:gap-6 text-left text-left">
-                       {homeData.latest.slice(0, 6).map((item, idx) => <DramaCard key={idx} item={item} onClick={(it) => { setSelectedBookId(it.bookId || it.id); setPreviousView('home'); setView('detail'); }} />)}
+                       {homeData.latest.slice(0, 6).map((item, idx) => <DramaCard key={idx} item={item} onClick={(it) => changeView('detail', it.bookId || it.id)} />)}
                      </div>
                    </Section>
                 </div>
@@ -668,8 +699,8 @@ export default function App() {
                         <button key={t.id} onClick={() => { setRankTab(t.id); setRankPage(1); }} className={`px-5 md:px-8 py-2 md:py-2.5 rounded-xl font-black text-[9px] md:text-[10px] uppercase tracking-widest border transition-all ${rankTab === t.id ? 'bg-blue-600 border-blue-600 text-white shadow-lg shadow-blue-600/20' : 'bg-white/5 border-white/10 text-slate-400 hover:border-white/20'}`}>{t.label}</button>
                      ))}
                    </div>
-                   <div className="grid grid-cols-3 xs:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3 md:gap-6 text-left text-left text-left">
-                      {rankData.map((item, idx) => <DramaCard key={idx} item={item} rank={idx+1} onClick={(it) => { setSelectedBookId(it.bookId || it.id); setView('detail'); }} />)}
+                   <div className="grid grid-cols-3 xs:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3 md:gap-6 text-left text-left text-left text-left">
+                      {rankData.map((item, idx) => <DramaCard key={idx} item={item} rank={idx+1} onClick={(it) => changeView('detail', it.bookId || it.id)} />)}
                    </div>
                    <div className="mt-12 flex justify-center">
                       <button onClick={() => setRankPage(p => p + 1)} disabled={loading} className="px-10 py-3.5 bg-blue-600 hover:bg-blue-500 text-white rounded-2xl font-black text-[10px] uppercase tracking-[0.2em] shadow-xl flex items-center gap-3 disabled:opacity-50 transition-all">
@@ -693,21 +724,35 @@ export default function App() {
                       ))}
                    </div>
                    <div className="grid grid-cols-3 xs:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3 md:gap-6 text-left text-left text-left">
-                      {filteredItems.map((item, idx) => <DramaCard key={idx} item={item} onClick={(it) => { setSelectedBookId(it.bookId || it.id); setView('detail'); }} />)}
+                      {filteredItems.map((item, idx) => <DramaCard key={idx} item={item} onClick={(it) => changeView('detail', it.bookId || it.id)} />)}
                    </div>
                 </div>
               )}
               {view === 'detail' && (
-                <DramaDetailPage bookId={selectedBookId} onBack={() => setView(previousView)} user={user} watchlist={watchlist} history={watchHistory} onToggleWatchlist={handleToggleWatchlist} onTagClick={handleTagClick} locale={currentLocale} onPlayEpisode={(ep, b, c) => { setPlayerState({ book: b, chapters: c, ep }); updateHistory(b, ep); }} />
+                <DramaDetailPage 
+                  bookId={selectedBookId} 
+                  onBack={() => window.history.back()} 
+                  user={user} 
+                  watchlist={watchlist} 
+                  history={watchHistory} 
+                  onToggleWatchlist={handleToggleWatchlist} 
+                  onTagClick={handleTagClick} 
+                  locale={currentLocale} 
+                  onPlayEpisode={(ep, b, c) => { 
+                    const ps = { book: b, chapters: c, ep };
+                    changeView('detail', b.bookId || b.id, ps);
+                    updateHistory(b, ep); 
+                  }} 
+                />
               )}
               {view === 'watchlist' && (
                 <div className="animate-in fade-in duration-700 text-left">
                   <Section icon={Bookmark} title="Koleksi Favorit Saya">
                     {watchlist.length > 0 ? (
                       <div className="grid grid-cols-3 xs:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3 md:gap-6 text-left">
-                        {watchlist.map((item, idx) => <DramaCard key={idx} item={item} onRemove={() => handleToggleWatchlist(item)} onClick={(it) => { setSelectedBookId(it.bookId || it.id); setView('detail'); }} />)}
+                        {watchlist.map((item, idx) => <DramaCard key={idx} item={item} onRemove={() => handleToggleWatchlist(item)} onClick={(it) => changeView('detail', it.bookId || it.id)} />)}
                       </div>
-                    ) : <EmptyState icon={Bookmark} title="Favorit Kosong" message="Ayo simpan drama favoritmu agar mudah ditemukan kembali." actionText="CARI DRAMA" onAction={() => setView('home')} />}
+                    ) : <EmptyState icon={Bookmark} title="Favorit Kosong" message="Ayo simpan drama favoritmu agar mudah ditemukan kembali." actionText="CARI DRAMA" onAction={() => changeView('home')} />}
                   </Section>
                 </div>
               )}
@@ -716,17 +761,17 @@ export default function App() {
                   <Section icon={History} title="Sudah Ditonton">
                     {watchHistory.length > 0 ? (
                       <div className="grid grid-cols-3 xs:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3 md:gap-6 text-left">
-                        {watchHistory.map((item, idx) => <DramaCard key={idx} item={item} isHistory lastEpisode={item.lastEpisode} onRemove={clearHistoryItem} onClick={(it) => { setSelectedBookId(it.bookId); setView('detail'); }} />)}
+                        {watchHistory.map((item, idx) => <DramaCard key={idx} item={item} isHistory lastEpisode={item.lastEpisode} onRemove={clearHistoryItem} onClick={(it) => changeView('detail', it.bookId)} />)}
                       </div>
-                    ) : <EmptyState icon={History} title="Riwayat Kosong" message="Anda belum pernah menonton drama apa pun." actionText="NONTON SEKARANG" onAction={() => setView('home')} />}
+                    ) : <EmptyState icon={History} title="Riwayat Kosong" message="Anda belum pernah menonton drama apa pun." actionText="NONTON SEKARANG" onAction={() => changeView('home')} />}
                   </Section>
                 </div>
               )}
               {view === 'search-results' && (
-                <div className="animate-in fade-in duration-700 text-left text-left">
-                   <Section title={`Hasil Pencarian: ${searchQuery}`} icon={Search} onSeeAll={() => setView('home')}>
+                <div className="animate-in fade-in duration-700 text-left text-left text-left">
+                   <Section title={`Hasil Pencarian: ${searchQuery}`} icon={Search} onSeeAll={() => changeView('home')}>
                      <div className="grid grid-cols-3 xs:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3 md:gap-6 text-left">
-                       {searchData.map((item, idx) => <DramaCard key={idx} item={item} onClick={(it) => { setSelectedBookId(it.bookId || it.id); setPreviousView('search-results'); setView('detail'); }} />)}
+                       {searchData.map((item, idx) => <DramaCard key={idx} item={item} onClick={(it) => { setPreviousView('search-results'); changeView('detail', it.bookId || it.id); }} />)}
                      </div>
                    </Section>
                 </div>
@@ -739,7 +784,7 @@ export default function App() {
       {/* FOOTER PERSISTEN */}
       <div className="md:hidden fixed bottom-0 left-0 right-0 bg-[#0f172a]/95 backdrop-blur-xl border-t border-white/5 px-6 py-4 flex justify-between items-center z-50 text-left">
         {[ {id:'home', icon:Home, label:'Home'}, {id:'rank', icon:Trophy, label:'Top'}, {id:'filter', icon:Filter, label:'Saring'}, {id:'watchlist', icon:Bookmark, label:'Favorit'} ].map(m => (
-          <button key={m.id} onClick={() => { setPlayerState(null); setView(m.id); }} className={`flex flex-col items-center gap-1 transition-all active:scale-90 ${(view === m.id && !playerState) ? 'text-blue-500' : 'text-slate-500'}`}><m.icon size={20} /><span className="text-[8px] font-black uppercase tracking-widest">{m.label}</span></button>
+          <button key={m.id} onClick={() => changeView(m.id)} className={`flex flex-col items-center gap-1 transition-all active:scale-90 ${(view === m.id && !playerState) ? 'text-blue-500' : 'text-slate-500'}`}><m.icon size={20} /><span className="text-[8px] font-black uppercase tracking-widest">{m.label}</span></button>
         ))}
       </div>
 
@@ -749,7 +794,7 @@ export default function App() {
           <div className="relative w-full max-w-2xl animate-in slide-in-from-top-8 duration-500 text-left">
              <div className="relative group text-left">
                 <Search className="absolute left-6 top-1/2 -translate-y-1/2 text-slate-500" size={24} />
-                <input autoFocus type="text" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter' && searchQuery.trim()) { window.DramaboxCore.searchBooks(CONFIG.API_BASE, currentLocale, searchQuery, 1, 30).then(res => { setSearchData(res.items || []); setView('search-results'); setSearchModalOpen(false); }); } }} placeholder="Cari drama favorit..." className="w-full bg-slate-900 border border-white/10 rounded-3xl pl-16 pr-8 py-5 text-lg font-bold text-white outline-none focus:border-blue-600 transition-all shadow-2xl" />
+                <input autoFocus type="text" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter' && searchQuery.trim()) { window.DramaboxCore.searchBooks(CONFIG.API_BASE, currentLocale, searchQuery, 1, 30).then(res => { setSearchData(res.items || []); changeView('search-results'); setSearchModalOpen(false); }); } }} placeholder="Cari drama favorit..." className="w-full bg-slate-900 border border-white/10 rounded-3xl pl-16 pr-8 py-5 text-lg font-bold text-white outline-none focus:border-blue-600 transition-all shadow-2xl" />
              </div>
           </div>
         </div>
