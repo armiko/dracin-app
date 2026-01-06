@@ -46,6 +46,7 @@ const FIREBASE_CONFIG_OVERRIDE = {
   measurementId: "G-6B89Y55E2F"
 };
 
+// Menggunakan ID yang konsisten untuk path Firestore (Rule 1)
 const customAppId = '3KNDH1p5iIG6U7FmuGTS';
 
 const STATIC_FILTERS = [
@@ -470,6 +471,7 @@ export default function App() {
     if (!user || !fbReady || !window.firebase) return;
     const fb = window.firebase;
     const dramaId = String(drama.bookId || drama.id);
+    // Path Firestore yang benar (Rule 1)
     const watchlistRef = fb.firestore().doc(`artifacts/${customAppId}/users/${user.uid}/watchlist/${dramaId}`);
     
     const exists = watchlistData.some(item => String(item.bookId) === dramaId);
@@ -493,6 +495,7 @@ export default function App() {
     if (!user || !fbReady || !window.firebase) return;
     const fb = window.firebase;
     const dramaId = String(drama.bookId || drama.id);
+    // Path Firestore yang benar (Rule 1)
     const historyRef = fb.firestore().doc(`artifacts/${customAppId}/users/${user.uid}/history/${dramaId}`);
     
     try {
@@ -577,65 +580,79 @@ export default function App() {
    * --- EFFECTS ---
    */
 
+  // Efek Satu Kali: Inisialisasi Firebase
   useEffect(() => {
     if (!fbReady || !window.firebase) return;
     const fb = window.firebase;
-    
     if (!fb.apps.length) {
       try { fb.initializeApp(FIREBASE_CONFIG_OVERRIDE); } catch(e) {}
     }
-    
-    const initAuth = async () => {
-      try {
-        if (fb.apps.length && !fb.auth().currentUser) {
-            await fb.auth().signInAnonymously();
-        }
-      } catch (e) {}
-    };
-
-    initAuth();
-    if (fb.apps.length) {
-        const unsubscribeAuth = fb.auth().onAuthStateChanged(async (u) => {
-            setUser(u);
-            if (u && !u.isAnonymous) {
-                const unsubscribeWatch = fb.firestore()
-                    .collection(`artifacts/${customAppId}/users/${u.uid}/watchlist`)
-                    .onSnapshot(snap => {
-                        const items = snap.docs.map(doc => doc.data());
-                        setWatchlistData(items);
-                    }, err => console.error("Watchlist listener error:", err));
-
-                const unsubscribeHist = fb.firestore()
-                    .collection(`artifacts/${customAppId}/users/${u.uid}/history`)
-                    .onSnapshot(snap => {
-                        const items = snap.docs.map(doc => doc.data());
-                        items.sort((a,b) => b.ts - a.ts);
-                        setHistoryData(items);
-                    }, err => console.error("History listener error:", err));
-
-                try {
-                    const adRef = fb.firestore().doc(`artifacts/${customAppId}/users/${u.uid}/settings/ad_pref`);
-                    const snap = await adRef.get();
-                    let show = true;
-                    if (snap.exists) {
-                        const d = snap.data();
-                        const diff = Date.now() - (d.ts || 0);
-                        if (d.p ? diff < 86400000 : diff < 3600000) show = false;
-                    }
-                    if (show) setTimeout(() => setShowAd(true), 3000);
-                } catch(e) { setTimeout(() => setShowAd(true), 3000); }
-
-                return () => {
-                    if (unsubscribeWatch) unsubscribeWatch();
-                    if (unsubscribeHist) unsubscribeHist();
-                };
-            } else if (u && u.isAnonymous) {
-                setTimeout(() => setShowAd(true), 3000);
-            }
-        });
-        return unsubscribeAuth;
-    }
   }, [fbReady]);
+
+  // Efek: Auth State Listener
+  useEffect(() => {
+    if (!fbReady || !window.firebase || !window.firebase.apps.length) return;
+    const fb = window.firebase;
+    
+    const unsubscribeAuth = fb.auth().onAuthStateChanged((u) => {
+      setUser(u);
+      if (u && u.isAnonymous) {
+        setTimeout(() => setShowAd(true), 3000);
+      }
+    });
+
+    const initAuth = async () => {
+      if (!fb.auth().currentUser) {
+        try { await fb.auth().signInAnonymously(); } catch(e) {}
+      }
+    };
+    initAuth();
+
+    return () => unsubscribeAuth();
+  }, [fbReady]);
+
+  // Efek: Firestore Sync Listener (Watchlist & History)
+  useEffect(() => {
+    if (!user || user.isAnonymous || !fbReady || !window.firebase) return;
+    const fb = window.firebase;
+
+    // RULE 1: Listen Watchlist
+    const unsubscribeWatch = fb.firestore()
+      .collection(`artifacts/${customAppId}/users/${user.uid}/watchlist`)
+      .onSnapshot(snap => {
+          const items = snap.docs.map(doc => doc.data());
+          setWatchlistData(items);
+      }, err => console.error("Watchlist sync error:", err));
+
+    // RULE 1: Listen History
+    const unsubscribeHist = fb.firestore()
+      .collection(`artifacts/${customAppId}/users/${user.uid}/history`)
+      .onSnapshot(snap => {
+          const items = snap.docs.map(doc => doc.data());
+          items.sort((a,b) => b.ts - a.ts);
+          setHistoryData(items);
+      }, err => console.error("History sync error:", err));
+
+    // Ad Preference sync
+    const checkAdPref = async () => {
+      try {
+        const adRef = fb.firestore().doc(`artifacts/${customAppId}/users/${user.uid}/settings/ad_pref`);
+        const snap = await adRef.get();
+        if (snap.exists) {
+          const d = snap.data();
+          const diff = Date.now() - (d.ts || 0);
+          if (d.p ? diff < 86400000 : diff < 3600000) return;
+        }
+        setTimeout(() => setShowAd(true), 3000);
+      } catch(e) { setTimeout(() => setShowAd(true), 3000); }
+    };
+    checkAdPref();
+
+    return () => {
+      if (unsubscribeWatch) unsubscribeWatch();
+      if (unsubscribeHist) unsubscribeHist();
+    };
+  }, [user, fbReady]);
 
   useEffect(() => { if (scriptLoaded) fetchHome(); }, [scriptLoaded, fetchHome]);
   useEffect(() => { if (view === 'rank') fetchRank(rankTab, 1); }, [view, rankTab]);
