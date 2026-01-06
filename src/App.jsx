@@ -7,7 +7,7 @@ import {
   Volume1, Gamepad2, CheckCircle2, ExternalLink,
   LogOut, LogIn, User as UserIcon, AlertCircle,
   Bookmark, BookmarkCheck, History, Trash2, 
-  ChevronDown, Zap, ShoppingCart
+  ChevronDown, Zap, ShoppingCart, Info
 } from 'lucide-react';
 
 import { initializeApp } from 'firebase/app';
@@ -65,8 +65,7 @@ const appId = getSafeEnv('VITE_APP_ID', '3KNDH1p5iIG6U7FmuGTS');
 const STORAGE_KEYS = {
   SETTINGS: `dracin_settings_${appId}`,
   WATCHLIST: `dracin_watchlist_${appId}`,
-  HISTORY: `dracin_history_${appId}`,
-  PROMO_DISMISSED: `dracin_promo_v1_${appId}`
+  HISTORY: `dracin_history_${appId}`
 };
 
 const CONFIG = {
@@ -274,7 +273,6 @@ const SanPoiPromoModal = ({ onClose }) => {
 
 /**
  * --- COMPONENT: PROFILE DROPDOWN MENU ---
- * Dipisahkan agar render lebih aman
  */
 const ProfileDropdown = ({ isOpen, onClose, user, setView, handleLogout }) => {
   if (!isOpen) return null;
@@ -309,7 +307,7 @@ const ProfileDropdown = ({ isOpen, onClose, user, setView, handleLogout }) => {
             </button>
           </div>
         )}
-        <div className="p-2">
+        <div className="p-2 text-left">
           <button 
             onClick={() => { setView('watchlist'); onClose(); }} 
             className="w-full flex items-center gap-3 px-4 py-3 text-slate-300 hover:bg-white/5 rounded-xl text-left group transition-colors"
@@ -354,7 +352,7 @@ export default function App() {
   const [allDramaData, setAllDramaData] = useState([]);
   const [searchData, setSearchData] = useState([]);
   
-  // Persistence States
+  // Persistence States for Data Only
   const [watchlist, setWatchlist] = useState(() => {
     try {
       const saved = localStorage.getItem(STORAGE_KEYS.WATCHLIST);
@@ -381,7 +379,10 @@ export default function App() {
   const [activeFilters, setActiveFilters] = useState({ voice: '', category: '', sort: 'popular' });
   const [playerState, setPlayerState] = useState(null);
   const [authError, setAuthError] = useState(null);
+  
+  // UI States - No Persistence (Selalu true saat load awal)
   const [showPromo, setShowPromo] = useState(false);
+  const [showAppleBanner, setShowAppleBanner] = useState(true);
 
   const { loaded: scriptLoaded } = useExternalScript(CONFIG.SCRIPT_URL);
 
@@ -399,10 +400,8 @@ export default function App() {
     const unsubscribe = onAuthStateChanged(auth, (u) => {
       if (u) {
         setUser(u);
-        const dismissed = localStorage.getItem(STORAGE_KEYS.PROMO_DISMISSED);
-        if (!dismissed) {
-          setTimeout(() => setShowPromo(true), 3500);
-        }
+        // Popup Promo akan selalu muncul setelah 3.5 detik (Logika Persistensi Dihapus)
+        setTimeout(() => setShowPromo(true), 3500);
       } else {
         signInAnonymously(auth).catch(() => {});
       }
@@ -493,8 +492,13 @@ export default function App() {
 
   const closePromo = useCallback(() => {
     setShowPromo(false);
-    localStorage.setItem(STORAGE_KEYS.PROMO_DISMISSED, 'true');
+    // LocalStorage setItem dihapus agar selalu muncul saat load ulang
   }, []);
+
+  const closeAppleBanner = () => {
+    setShowAppleBanner(false);
+    // LocalStorage setItem dihapus agar selalu muncul saat load ulang
+  };
 
   const handleLogout = useCallback(() => {
     signOut(auth).then(() => { setView('home'); setProfileOpen(false); });
@@ -526,6 +530,26 @@ export default function App() {
 
   return (
     <div className="bg-[#0f172a] h-screen text-slate-200 font-sans flex flex-col overflow-hidden selection:bg-blue-600 selection:text-white">
+      
+      {/* Papan Informasi Apple Ecosystem - Selalu muncul saat load awal */}
+      {showAppleBanner && (
+        <div className="flex-none bg-amber-500/15 border-b border-amber-500/20 px-4 py-2 flex items-center justify-between gap-3 animate-in slide-in-from-top duration-500">
+          <div className="flex items-center gap-3 justify-center flex-1">
+            <AlertTriangle size={14} className="text-amber-500 shrink-0" />
+            <p className="text-[10px] md:text-xs font-bold text-amber-200 text-center leading-tight">
+              Kami mohon maaf atas ketidaknyamanannya, saat ini isi website belum dapat ditampilkan bagi pengguna ekosistem Apple.
+            </p>
+          </div>
+          <button 
+            onClick={closeAppleBanner}
+            className="p-1.5 text-amber-500/50 hover:text-amber-500 hover:bg-white/5 rounded-full transition-all"
+            title="Tutup informasi"
+          >
+            <X size={16} />
+          </button>
+        </div>
+      )}
+
       {/* Header */}
       <nav className="flex-none h-16 bg-[#0f172a]/80 backdrop-blur-xl border-b border-white/5 flex items-center z-40 px-4 sm:px-8">
         <div className="container mx-auto flex justify-between items-center">
@@ -556,7 +580,6 @@ export default function App() {
                 <ChevronDown size={14} className={`text-slate-500 transition-transform ${profileOpen ? 'rotate-180' : ''}`} />
               </button>
               
-              {/* Menu Profil Terpisah */}
               <ProfileDropdown 
                 isOpen={profileOpen} 
                 onClose={() => setProfileOpen(false)} 
@@ -659,7 +682,7 @@ export default function App() {
           )}
 
           {view === 'watchlist' && (
-            <div className="animate-in fade-in duration-500">
+            <div className="animate-in fade-in duration-700">
               <Section icon={Bookmark} title="Koleksi Favorit">
                 {watchlist.length > 0 ? (
                   <div className="grid grid-cols-2 xs:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-6">
@@ -671,7 +694,7 @@ export default function App() {
           )}
 
           {view === 'history' && (
-            <div className="animate-in fade-in duration-500">
+            <div className="animate-in fade-in duration-700">
               <Section icon={History} title="Riwayat Tontonan">
                 {watchHistory.length > 0 ? (
                   <div className="grid grid-cols-2 xs:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-6">
