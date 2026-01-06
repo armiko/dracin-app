@@ -34,15 +34,29 @@ import {
 
 /**
  * --- KONFIGURASI ---
+ * Helper untuk mengakses environment variables secara aman tanpa merusak build ES2015
  */
+const getEnv = (key, fallback = '') => {
+  try {
+    // Mencoba akses variabel global lingkungan jika tersedia
+    if (key === 'VITE_APP_ID' && typeof __app_id !== 'undefined') return __app_id;
+    
+    // Akses via import.meta.env dengan pengecekan aman agar esbuild tidak error
+    const env = typeof import.meta !== 'undefined' && import.meta.env ? import.meta.env : {};
+    return env[key] || fallback;
+  } catch (e) {
+    return fallback;
+  }
+};
+
 const firebaseConfig = {
-  apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
-  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
-  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
-  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
-  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
-  appId: import.meta.env.VITE_FIREBASE_APP_ID,
-  measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID
+  apiKey: getEnv('VITE_FIREBASE_API_KEY', "AIzaSyDm5JBMP_NZTpiM-EmgvXNwRCLNtdROy8s"),
+  authDomain: getEnv('VITE_FIREBASE_AUTH_DOMAIN', "nontondracin-f5065.firebaseapp.com"),
+  projectId: getEnv('VITE_FIREBASE_PROJECT_ID', "nontondracin-f5065"),
+  storageBucket: getEnv('VITE_FIREBASE_STORAGE_BUCKET', "nontondracin-f5065.firebasestorage.app"),
+  messagingSenderId: getEnv('VITE_FIREBASE_MESSAGING_SENDER_ID', "166957230434"),
+  appId: getEnv('VITE_FIREBASE_APP_ID', "1:166957230434:web:dc20d828a59048765da43b"),
+  measurementId: getEnv('VITE_FIREBASE_MEASUREMENT_ID', "G-6B89Y55E2F")
 };
 
 // Initialize Firebase services
@@ -50,7 +64,7 @@ const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
 
-const appId = import.meta.env.VITE_APP_ID || '3KNDH1p5iIG6U7FmuGTS';
+const appId = getEnv('VITE_APP_ID', '3KNDH1p5iIG6U7FmuGTS');
 
 const CONFIG = {
   SCRIPT_URL: "https://cdn.jsdelivr.net/gh/armiko/dracin-app@169efe4fc99586d445cbf8780629c5ac210ca929/js/dramabox-core.js",
@@ -415,7 +429,7 @@ export default function App() {
             ) : (
               <div className="p-5 border-b border-white/5 text-center">
                 <p className="text-slate-400 text-[10px] font-black uppercase tracking-widest mb-3">Fitur Terbatas</p>
-                <button onClick={handleLogin} className="w-full py-2 bg-blue-600 text-white rounded-xl text-[10px] font-black uppercase tracking-widest">Login Google</button>
+                <button onClick={handleLogin} className="w-full py-2 bg-blue-600 text-white rounded-xl text-[10px] font-black uppercase tracking-widest shadow-lg">Masuk Google</button>
               </div>
             )}
             <div className="p-2">
@@ -557,7 +571,7 @@ export default function App() {
                       <h4 className="text-[8px] font-black text-slate-500 uppercase tracking-widest mb-4 flex items-center gap-2"><div className="w-1 h-1 bg-blue-500 rounded-full"></div> {f.title}</h4>
                       <div className="flex flex-wrap gap-2">
                         {f.options.map(o => (
-                          <button key={o.value} onClick={() => setActiveFilters(p => ({...p, [f.key]: p[f.key] === o.value ? '' : o.value}))} className={`px-3 py-1.5 rounded-xl text-[9px] font-bold uppercase tracking-wider border transition-all ${activeFilters[f.key] === o.value ? 'bg-blue-600 border-blue-600 text-white shadow-lg' : 'bg-white/5 border-white/10 text-slate-400 hover:text-white hover:bg-white/10'}`}>{o.display}</button>
+                          <button key={o.value} onClick={() => setActiveFilters(p => ({...p, [f.key]: p[f.key] === o.value ? '' : o.value}))} className={`px-4 py-2 rounded-xl text-[9px] font-bold uppercase tracking-wider border transition-all ${activeFilters[f.key] === o.value ? 'bg-blue-600 border-blue-600 text-white shadow-lg' : 'bg-white/5 border-white/10 text-slate-400 hover:text-white hover:bg-white/10'}`}>{o.display}</button>
                         ))}
                       </div>
                     </div>
@@ -589,7 +603,7 @@ export default function App() {
                   <div className="grid grid-cols-2 xs:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-6">
                     {watchHistory.map((item, idx) => <DramaCard key={idx} item={item} isHistory lastEpisode={item.lastEpisode} onRemove={clearHistoryItem} onClick={(it) => { setSelectedBookId(it.bookId); setView('detail'); }} />)}
                   </div>
-                ) : <EmptyState icon={History} title="Riwayat Kosong" message="Kamu belum menonton apapun." actionText="MULAI NONTON" onAction={() => setView('home')} />}
+                ) : <EmptyState icon={History} title="Riwayat Kosong" message="Anda belum menonton drama apapun baru-baru ini." actionText="MULAI NONTON" onAction={() => setView('home')} />}
               </Section>
             </div>
           )}
@@ -624,7 +638,7 @@ export default function App() {
       {searchModalOpen && (
         <div className="fixed inset-0 z-[100] flex items-start justify-center pt-32 px-4 animate-in fade-in duration-300">
           <div className="absolute inset-0 bg-[#0f172a]/95 backdrop-blur-md" onClick={() => setSearchModalOpen(false)}></div>
-          <div className="relative w-full max-w-2xl animate-in slide-in-from-top-8">
+          <div className="relative w-full max-w-2xl animate-in slide-in-from-top-8 duration-500">
              <div className="relative group">
                 <Search className="absolute left-6 top-1/2 -translate-y-1/2 text-slate-500" size={24} />
                 <input autoFocus type="text" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} onKeyDown={(e) => {
