@@ -83,7 +83,7 @@ const STATIC_FILTERS = [
 ];
 
 /**
- * --- UTILS & HELPERS (Logika Production) ---
+ * --- UTILS & HELPERS ---
  */
 const useExternalScript = (url) => {
   const [state, setState] = useState({ loaded: false, error: false });
@@ -95,7 +95,6 @@ const useExternalScript = (url) => {
     let script = document.querySelector(`script[src="${url}"]`);
     let checkCount = 0;
     const maxChecks = 30;
-
     const onScriptLoad = () => {
       setTimeout(() => {
         if (window.DramaboxCore || (url.includes('firebase') && window.firebase)) {
@@ -105,19 +104,14 @@ const useExternalScript = (url) => {
         }
       }, 1000);
     };
-
     const onScriptError = () => setState({ loaded: true, error: true });
-
     if (!script) {
       script = document.createElement("script");
       script.src = url; script.async = true;
-      script.crossOrigin = "anonymous";
       document.body.appendChild(script);
     }
-
     script.addEventListener("load", onScriptLoad);
     script.addEventListener("error", onScriptError);
-
     const interval = setInterval(() => {
       checkCount++;
       if (window.DramaboxCore || (url.includes('firebase') && window.firebase)) {
@@ -127,7 +121,6 @@ const useExternalScript = (url) => {
         clearInterval(interval);
       }
     }, 500);
-
     return () => {
       script.removeEventListener("load", onScriptLoad);
       script.removeEventListener("error", onScriptError);
@@ -139,12 +132,12 @@ const useExternalScript = (url) => {
 
 const cleanIntro = (h) => h ? String(h).replace(/<[^>]*>/g, ' ').replace(/&nbsp;/g, ' ').trim() : '';
 
-const extractVideoUrl = (chapter) => {
+// LOGIKA VIDEO DARI VERSI PRODUCTION
+const extractVideoUrlFromChapter = (chapter) => {
   if (!chapter) return '';
   let src = chapter.raw || chapter;
   if (typeof src.m3u8Url === 'string' && src.m3u8Url) return src.m3u8Url;
   if (typeof src.mp4 === 'string' && src.mp4) return src.mp4;
-  
   const cdnList = src.cdnList || [];
   let candidates = [];
   const extractPath = (entry) => {
@@ -152,20 +145,21 @@ const extractVideoUrl = (chapter) => {
     if (typeof entry === 'string') return entry;
     return entry.videoPath || entry.path || entry.url || '';
   };
-
   cdnList.forEach((cdn) => {
     (cdn.videoPathList || []).forEach((v) => {
       const path = extractPath(v);
       if (path) {
         candidates.push({
-          url: path, quality: v.quality || 0, isDefault: v.isDefault || 0,
-          isVip: v.isVipEquity || 0, isCdnDefault: cdn.isDefault || 0,
+          url: path,
+          quality: v.quality || 0,
+          isDefault: v.isDefault || 0,
+          isVip: v.isVipEquity || 0,
+          isCdnDefault: cdn.isDefault || 0,
           domain: cdn.cdnDomain || ''
         });
       }
     });
   });
-
   if (candidates.length > 0) {
     candidates.sort((a, b) => {
       if (a.isVip !== b.isVip) return a.isVip - b.isVip;
@@ -347,17 +341,10 @@ const CustomPlayerPage = ({ book, chapters, initialEp, onBack, audioSettings, se
   
   const videoRef = useRef(null);
   const hlsRef = useRef(null);
-  const controlsTimeoutRef = useRef(null);
   const requestRef = useRef(0);
 
-  const handleMouseMove = () => {
-    setShowControls(true);
-    if (controlsTimeoutRef.current) clearTimeout(controlsTimeoutRef.current);
-    if (isPlaying) controlsTimeoutRef.current = setTimeout(() => setShowControls(false), 3000);
-  };
-
   const loadEpisode = useCallback(async (epNum) => {
-    setLoading(true); setError(false); setVideoUrl(''); setIsPlaying(false); setShowControls(true);
+    setLoading(true); setError(false); setVideoUrl(''); setIsPlaying(false);
     const requestId = ++requestRef.current;
     try {
       if (!window.DramaboxCore) return;
@@ -365,7 +352,7 @@ const CustomPlayerPage = ({ book, chapters, initialEp, onBack, audioSettings, se
       if (requestId !== requestRef.current) return;
       const list = res.data?.chapterList || res.chapters || [];
       const batchCh = list.find(item => String(item.num) === String(epNum) || item.index === (epNum - 1)) || list[0];
-      const url = extractVideoUrl(batchCh);
+      const url = extractVideoUrlFromChapter(batchCh);
       if (url) setVideoUrl(url); else throw new Error();
     } catch (e) { 
       if (requestId === requestRef.current) setError(true); 
@@ -378,16 +365,12 @@ const CustomPlayerPage = ({ book, chapters, initialEp, onBack, audioSettings, se
     if (!videoRef.current || !videoUrl) return;
     const video = videoRef.current;
     if (hlsRef.current) hlsRef.current.destroy();
-    
     if (videoUrl.includes('.m3u8') && window.Hls && window.Hls.isSupported()) {
       const hls = new window.Hls({ enableWorker: true, lowLatencyMode: true });
       hls.loadSource(videoUrl); hls.attachMedia(video);
       hls.on(window.Hls.Events.MANIFEST_PARSED, () => video.play().catch(() => {}));
       hlsRef.current = hls;
-    } else {
-      video.src = videoUrl;
-      video.play().catch(() => {});
-    }
+    } else { video.src = videoUrl; video.play().catch(() => {}); }
     return () => hlsRef.current && hlsRef.current.destroy();
   }, [videoUrl]);
 
@@ -396,63 +379,78 @@ const CustomPlayerPage = ({ book, chapters, initialEp, onBack, audioSettings, se
     if (onEpisodeChange) onEpisodeChange(currentEp);
   }, [currentEp, loadEpisode, onEpisodeChange]);
 
-  const togglePlay = () => {
-    if (!videoRef.current) return;
-    if (isPlaying) videoRef.current.pause();
-    else {
-      const playPromise = videoRef.current.play();
-      if (playPromise !== undefined) playPromise.then(() => setIsPlaying(true)).catch(() => setIsPlaying(false));
-    }
-    handleMouseMove();
-  };
-
   const getVolumeIcon = () => {
     if (audioSettings.isMuted || audioSettings.volume === 0) return <VolumeX size={18} />;
     return audioSettings.volume < 0.5 ? <Volume1 size={18} /> : <Volume2 size={18} />;
   };
 
   const volumeVal = audioSettings.isMuted ? 0 : audioSettings.volume;
+  const volumePercent = volumeVal * 100;
 
   return (
-    <div className="fixed inset-0 z-[1000] bg-black flex flex-col items-center justify-center overflow-hidden" onMouseMove={handleMouseMove} onTouchStart={handleMouseMove}>
-      <div className={`absolute top-0 left-0 right-0 p-4 sm:p-6 z-50 flex items-center justify-between bg-gradient-to-b from-black/80 to-transparent transition-opacity duration-500 ${showControls ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}>
-        <button onClick={onBack} className="text-white/80 p-2 hover:bg-white/10 rounded-full transition-all"><ChevronLeft size={28} /></button>
-        <div className="text-center flex-1 min-w-0 px-4">
-          <h2 className="text-white font-bold text-sm sm:text-base truncate">{book.bookName}</h2>
-          <p className="text-blue-400 text-[10px] font-black uppercase tracking-widest">Episode {currentEp}</p>
+    <div className="fixed inset-0 z-[1000] bg-black flex flex-col items-center justify-center overflow-hidden" onMouseMove={() => { setShowControls(true); setTimeout(() => setShowControls(false), 5000); }}>
+      <div className={`absolute top-0 left-0 right-0 p-6 z-50 flex items-center justify-between bg-gradient-to-b from-black/90 via-black/40 to-transparent transition-opacity duration-500 ${showControls ? 'opacity-100' : 'opacity-0'}`}>
+        <button onClick={onBack} className="text-white hover:bg-white/10 p-2 rounded-full transition-all"><ChevronLeft size={24} /></button>
+        <div className="text-center flex-1 max-w-xl">
+          <h2 className="text-white font-black text-sm truncate uppercase tracking-tight">{book.bookName}</h2>
+          <p className="text-blue-400 text-[8px] font-black uppercase tracking-[0.2em]">Episode {currentEp}</p>
         </div>
-        <button className="text-white/80 p-2 hover:bg-white/10 rounded-full transition-all"><Share2 size={20} /></button>
+        <button className="text-white p-2 rounded-full"><Share2 size={18} /></button>
       </div>
 
-      <div className="relative w-full h-full flex items-center justify-center bg-black overflow-hidden" onClick={togglePlay}>
-        {loading ? <div className="flex flex-col items-center gap-3"><Loader2 className="animate-spin text-blue-500" size={48} /><p className="text-white/40 text-[10px] font-black uppercase tracking-[0.3em]">Loading...</p></div> : 
-         error ? <div className="text-center p-6 flex flex-col items-center bg-white/5 backdrop-blur-md rounded-3xl border border-white/10"><AlertTriangle className="text-red-500 mb-4" size={40} /><p className="text-white mb-6 text-xs font-bold uppercase tracking-wider">Video Gagal Dimuat</p><button onClick={() => loadEpisode(currentEp)} className="px-8 py-3 bg-blue-600 text-white rounded-full font-black text-xs tracking-[0.2em] shadow-lg shadow-blue-600/30 active:scale-95 transition">COBA LAGI</button></div> : 
-         <video ref={videoRef} className="w-full h-full object-contain cursor-pointer" onPlay={() => setIsPlaying(true)} onPause={() => setIsPlaying(false)} onTimeUpdate={() => setCurrentTime(videoRef.current?.currentTime || 0)} onLoadedMetadata={() => setDuration(videoRef.current?.duration || 0)} onEnded={() => audioSettings.autoNext && setCurrentEp(e => e + 1)} playsInline />
-        }
-        {!isPlaying && !loading && !error && <div className="absolute inset-0 flex items-center justify-center pointer-events-none bg-black/20"><div className="bg-white/10 p-6 rounded-full backdrop-blur-sm border border-white/20 scale-125 transition-transform duration-300"><Play size={40} fill="white" className="text-white ml-1" /></div></div>}
-      </div>
-
-      <div className={`absolute bottom-0 left-0 right-0 p-4 sm:p-8 z-50 transition-all duration-500 transform ${showControls ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4 pointer-events-none'}`}>
-        <div className="max-w-4xl mx-auto flex flex-col gap-4">
-          <div className="flex flex-col gap-2">
-            <input type="range" min="0" max={duration || 0} step="0.1" value={currentTime} onChange={(e) => { const time = parseFloat(e.target.value); setCurrentTime(time); if (videoRef.current) videoRef.current.currentTime = time; }} className="w-full h-1 bg-white/20 rounded-full appearance-none cursor-pointer accent-blue-600" />
-            <div className="flex justify-between text-[10px] font-mono font-bold text-white/50 tracking-tighter"><span>{formatTime(currentTime)}</span><span>{formatTime(duration)}</span></div>
-          </div>
-          <div className="flex items-center justify-between bg-black/40 backdrop-blur-xl border border-white/10 p-3 sm:p-4 rounded-2xl sm:rounded-3xl shadow-2xl">
-            <div className="flex items-center gap-4 sm:gap-8">
-              <button disabled={currentEp <= 1} onClick={(e) => { e.stopPropagation(); setCurrentEp(prev => prev - 1); }} className="text-white/60 hover:text-white transition disabled:opacity-20"><SkipBack size={24} fill="currentColor" /></button>
-              <button onClick={(e) => { e.stopPropagation(); togglePlay(); }} className="text-white transition-transform active:scale-90">{isPlaying ? <Pause size={36} fill="white" /> : <Play size={36} fill="white" />}</button>
-              <button disabled={currentEp >= (chapters?.length || 999)} onClick={(e) => { e.stopPropagation(); setCurrentEp(prev => prev + 1); }} className="text-white/60 hover:text-white transition disabled:opacity-20"><SkipForward size={24} fill="currentColor" /></button>
+      <div className="relative w-full h-full flex items-center justify-center bg-black" onClick={() => (isPlaying ? videoRef.current.pause() : videoRef.current.play())}>
+        {loading ? <Loader2 className="animate-spin text-blue-500" size={48} /> : error ? (
+          <div className="flex flex-col items-center gap-4 text-center px-6">
+            <AlertTriangle className="text-orange-500" size={48} />
+            <div className="text-white text-[10px] font-black bg-orange-600/40 px-8 py-4 rounded-2xl border border-orange-500/20 uppercase tracking-widest leading-relaxed">
+              Tautan Video Tidak Valid atau Diblokir oleh Browser Lingkungan Pratinjau
             </div>
-            <div className="flex items-center gap-3 sm:gap-6">
-              <div className="hidden sm:flex items-center gap-2 group/vol bg-white/5 px-3 py-1.5 rounded-xl border border-white/5 hover:bg-white/10 transition-all">
-                <button onClick={(e) => { e.stopPropagation(); setAudioSettings(p => ({ ...p, isMuted: !p.isMuted })); }} className="text-white/70 hover:text-white">{getVolumeIcon()}</button>
-                <div className="w-0 group-hover/vol:w-28 overflow-hidden transition-all duration-300 ease-out flex items-center">
-                  <input type="range" min="0" max="1" step="0.01" value={volumeVal} onChange={(e) => { const val = parseFloat(e.target.value); setAudioSettings(p => ({ ...p, volume: val, isMuted: val === 0 })); }} style={{ background: `linear-gradient(to right, #3b82f6 ${volumeVal*100}%, rgba(255,255,255,0.1) ${volumeVal*100}%)` }} className="volume-premium w-28 h-1 appearance-none rounded-full cursor-pointer outline-none" />
-                </div>
-              </div>
-              <button onClick={(e) => { e.stopPropagation(); setAudioSettings(p => ({ ...p, playbackRate: p.playbackRate === 1 ? 1.5 : p.playbackRate === 1.5 ? 2 : 1 })); }} className="px-3 py-1.5 bg-blue-600/20 border border-blue-500/30 rounded-xl text-[10px] font-black text-blue-400 hover:bg-blue-600 hover:text-white transition-all uppercase tracking-widest shadow-lg active:scale-95">{audioSettings.playbackRate}X SPEED</button>
-              <div className="hidden xs:flex items-center gap-2"><label className="flex items-center gap-2 cursor-pointer opacity-60 hover:opacity-100 transition"><input type="checkbox" checked={audioSettings.autoNext} onChange={(e) => { e.stopPropagation(); setAudioSettings(p => ({ ...p, autoNext: e.target.checked })); }} className="w-3 h-3 accent-blue-600 rounded-sm bg-black border-white/20" /><span className="text-[9px] font-bold text-white uppercase tracking-tighter">Auto</span></label></div>
+          </div>
+        ) : (
+          <video ref={videoRef} className="w-full h-full object-contain cursor-pointer" onPlay={() => setIsPlaying(true)} onPause={() => setIsPlaying(false)} onTimeUpdate={() => setCurrentTime(videoRef.current?.currentTime || 0)} onLoadedMetadata={() => setDuration(videoRef.current?.duration || 0)} onEnded={() => audioSettings.autoNext && setCurrentEp(e => e + 1)} playsInline />
+        )}
+        {!isPlaying && !loading && !error && <div className="absolute inset-0 flex items-center justify-center pointer-events-none bg-black/30"><div className="bg-white/10 p-8 rounded-full backdrop-blur-md border border-white/20"><Play size={40} fill="white" className="text-white ml-1.5" /></div></div>}
+      </div>
+
+      <div className={`absolute bottom-0 left-0 right-0 p-6 z-50 transition-all duration-500 ${showControls ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-8 pointer-events-none'}`}>
+        <div className="max-w-4xl mx-auto flex flex-col gap-3">
+          <div className="flex flex-col gap-1.5">
+            <input type="range" min="0" max={duration || 0} step="0.1" value={currentTime} onChange={(e) => { videoRef.current.currentTime = e.target.value; }} className="w-full h-1 accent-blue-600 bg-white/20 rounded-full appearance-none cursor-pointer hover:h-1.5 transition-all" />
+            <div className="flex justify-between items-center px-1 text-[9px] font-mono font-bold text-white/50 tracking-tighter">
+              <span>{formatTime(currentTime)}</span>
+              <span>{formatTime(duration)}</span>
+            </div>
+          </div>
+
+          <div className="flex items-center justify-between bg-slate-900/60 backdrop-blur-2xl p-4 rounded-[1.5rem] border border-white/10 shadow-2xl">
+            <div className="flex items-center gap-6">
+              <button disabled={currentEp <= 1} onClick={(e) => { e.stopPropagation(); setCurrentEp(e => e - 1); }} className="text-white/40 hover:text-white disabled:opacity-10"><SkipBack size={24} fill="currentColor" /></button>
+              <button onClick={(e) => { e.stopPropagation(); isPlaying ? videoRef.current.pause() : videoRef.current.play(); }} className="text-white transform active:scale-90 transition-transform">{isPlaying ? <Pause size={40} fill="white" /> : <Play size={40} fill="white" />}</button>
+              <button onClick={(e) => { e.stopPropagation(); setCurrentEp(e => e + 1); }} className="text-white/40 hover:text-white"><SkipForward size={24} fill="currentColor" /></button>
+            </div>
+            <div className="flex items-center gap-6">
+               <div className="hidden sm:flex items-center gap-2 group/vol bg-white/5 px-3 py-1.5 rounded-xl border border-white/5 hover:bg-white/10 transition-all">
+                  <button onClick={(e) => { e.stopPropagation(); setAudioSettings(s => ({...s, isMuted: !s.isMuted}))}} className="text-white/70 hover:text-white transition-colors">
+                    {getVolumeIcon()}
+                  </button>
+                  <div className="w-0 group-hover/vol:w-28 overflow-hidden transition-all duration-300 ease-out flex items-center">
+                    <input 
+                      type="range" min="0" max="1" step="0.01" 
+                      value={volumeVal} 
+                      onChange={(e) => {
+                        const val = parseFloat(e.target.value);
+                        setAudioSettings(s => ({...s, volume: val, isMuted: val === 0}));
+                      }} 
+                      style={{
+                        background: `linear-gradient(to right, #3b82f6 ${volumePercent}%, rgba(255,255,255,0.1) ${volumePercent}%)`
+                      }} 
+                      className="volume-premium w-28 h-1 appearance-none rounded-full cursor-pointer outline-none" 
+                    />
+                  </div>
+               </div>
+               <button onClick={(e) => { e.stopPropagation(); setAudioSettings(s => ({...s, playbackRate: s.playbackRate === 1 ? 1.5 : s.playbackRate === 1.5 ? 2 : 1}))}} className="px-3 py-1.5 bg-blue-600 text-white rounded-lg text-[9px] font-black tracking-widest uppercase shadow-lg shadow-blue-600/20 active:scale-95 transition-all">
+                 {audioSettings.playbackRate}X SPEED
+               </button>
             </div>
           </div>
         </div>
@@ -587,7 +585,7 @@ export default function App() {
 
   const handleCloseAd = async (isPersistent) => {
     setShowAd(false);
-    if (user && fbReady && window.firebase) {
+    if (user && fbReady && window.firebase && window.firebase.apps.length) {
       try {
         const fb = window.firebase;
         await fb.firestore().doc(`artifacts/${customAppId}/users/${user.uid}/settings/ad_pref`).set({ 
