@@ -18,7 +18,8 @@ import {
   signInWithPopup, 
   GoogleAuthProvider, 
   onAuthStateChanged, 
-  signOut 
+  signOut,
+  signInWithCustomToken
 } from 'firebase/auth';
 import { 
   getFirestore,
@@ -54,21 +55,25 @@ const defaultFirebaseConfig = {
   measurementId: "G-6B89Y55E2F"
 };
 
-const firebaseConfig = {
-  apiKey: getSafeEnv('VITE_FIREBASE_API_KEY', defaultFirebaseConfig.apiKey),
-  authDomain: getSafeEnv('VITE_FIREBASE_AUTH_DOMAIN', defaultFirebaseConfig.authDomain),
-  projectId: getSafeEnv('VITE_FIREBASE_PROJECT_ID', defaultFirebaseConfig.projectId),
-  storageBucket: getSafeEnv('VITE_FIREBASE_STORAGE_BUCKET', defaultFirebaseConfig.storageBucket),
-  messagingSenderId: getSafeEnv('VITE_FIREBASE_MESSAGING_SENDER_ID', defaultFirebaseConfig.messagingSenderId),
-  appId: getSafeEnv('VITE_FIREBASE_APP_ID', defaultFirebaseConfig.appId),
-  measurementId: getSafeEnv('VITE_FIREBASE_MEASUREMENT_ID', defaultFirebaseConfig.measurementId)
-};
+// Inisialisasi Firebase Config dengan prioritas environment global
+const firebaseConfig = typeof __firebase_config !== 'undefined' 
+  ? JSON.parse(__firebase_config) 
+  : {
+      apiKey: getSafeEnv('VITE_FIREBASE_API_KEY', defaultFirebaseConfig.apiKey),
+      authDomain: getSafeEnv('VITE_FIREBASE_AUTH_DOMAIN', defaultFirebaseConfig.authDomain),
+      projectId: getSafeEnv('VITE_FIREBASE_PROJECT_ID', defaultFirebaseConfig.projectId),
+      storageBucket: getSafeEnv('VITE_FIREBASE_STORAGE_BUCKET', defaultFirebaseConfig.storageBucket),
+      messagingSenderId: getSafeEnv('VITE_FIREBASE_MESSAGING_SENDER_ID', defaultFirebaseConfig.messagingSenderId),
+      appId: getSafeEnv('VITE_FIREBASE_APP_ID', defaultFirebaseConfig.appId),
+      measurementId: getSafeEnv('VITE_FIREBASE_MEASUREMENT_ID', defaultFirebaseConfig.measurementId)
+    };
 
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
-// Perubahan ID Aplikasi di bawah ini
-const appId = getSafeEnv('VITE_APP_ID', 'zxK1vPSy15CtEAAnHLeV');
+
+// Rule 1: Gunakan appId yang benar dari lingkungan atau fallback
+const appId = typeof __app_id !== 'undefined' ? __app_id : 'zxK1vPSy15CtEAAnHLeV';
 
 const STORAGE_KEYS = {
   SETTINGS: `dracin_settings_${appId}`,
@@ -428,39 +433,48 @@ export default function App() {
   }, []);
 
   // FIRESTORE SYNC LOGIC (Watchlist & History)
+  // Rule 3: Auth BEFORE queries
   useEffect(() => {
     const initAuth = async () => {
-      onAuthStateChanged(auth, async (u) => {
-        if (u) {
-          setUser(u);
-          setTimeout(() => setShowPromo(true), 3500);
+      try {
+        // Cek token custom dari environment jika ada
+        if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+          await signInWithCustomToken(auth, __initial_auth_token);
         } else {
-          try {
-            await signInAnonymously(auth);
-          } catch (err) {
-            console.error("Auth failed:", err);
-          }
+          await signInAnonymously(auth);
         }
-      });
+      } catch (err) {
+        console.error("Auth failed:", err);
+      }
     };
+
     initAuth();
+
+    const unsubscribe = onAuthStateChanged(auth, (u) => {
+      if (u) {
+        setUser(u);
+        setTimeout(() => setShowPromo(true), 3500);
+      }
+    });
+
+    return () => unsubscribe();
   }, []);
 
   useEffect(() => {
     if (!user) return;
 
-    // Real-time listener for Watchlist
+    // Rule 1 & 2: Real-time listener for Watchlist (Strict Path & Simple Query)
     const watchlistRef = collection(db, 'artifacts', appId, 'users', user.uid, 'watchlist');
     const unsubWatchlist = onSnapshot(watchlistRef, (snapshot) => {
-      const data = snapshot.docs.map(doc => doc.data());
-      setWatchlist(data.sort((a, b) => b.addedAt - a.addedAt));
+      const data = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id }));
+      setWatchlist(data.sort((a, b) => (b.addedAt || 0) - (a.addedAt || 0)));
     }, (err) => console.error("Watchlist error:", err));
 
-    // Real-time listener for History
+    // Rule 1 & 2: Real-time listener for History (Strict Path & Simple Query)
     const historyRef = collection(db, 'artifacts', appId, 'users', user.uid, 'history');
     const unsubHistory = onSnapshot(historyRef, (snapshot) => {
-      const data = snapshot.docs.map(doc => doc.data());
-      setWatchHistory(data.sort((a, b) => b.updatedAt - a.updatedAt));
+      const data = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id }));
+      setWatchHistory(data.sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0)));
     }, (err) => console.error("History error:", err));
 
     return () => {
@@ -513,7 +527,7 @@ export default function App() {
     const fetchTagDramas = async () => {
       if (view !== 'tag-dramas' || !activeTag || !window.DramaboxCore) return;
       setLoading(true);
-      setTagData([]); // Reset data lama
+      setTagData([]); 
       try {
         const core = window.DramaboxCore;
         const res = await core.searchBooks(CONFIG.API_BASE, currentLocale, activeTag, 1, 60);
@@ -539,40 +553,54 @@ export default function App() {
   const handleToggleWatchlist = useCallback(async (book) => {
     if (!user) return;
     const bid = String(book.bookId || book.id);
+    // Rule 1: Strict Path
     const docRef = doc(db, 'artifacts', appId, 'users', user.uid, 'watchlist', bid);
     
     const exists = watchlist.find(i => String(i.bookId || i.id) === bid);
-    if (exists) {
-      await deleteDoc(docRef);
-    } else {
-      await setDoc(docRef, { 
-        bookId: bid,
-        bookName: book.bookName || book.title || 'Drama',
-        cover: book.coverWap || book.cover || book.coverUrl || '',
-        chapterCount: book.chapterCount || 0,
-        addedAt: Date.now() 
-      });
+    try {
+      if (exists) {
+        await deleteDoc(docRef);
+      } else {
+        await setDoc(docRef, { 
+          bookId: bid,
+          bookName: book.bookName || book.title || 'Drama',
+          cover: book.coverWap || book.cover || book.coverUrl || '',
+          chapterCount: book.chapterCount || 0,
+          addedAt: Date.now() 
+        });
+      }
+    } catch (e) {
+      console.error("Watchlist toggle failed", e);
     }
   }, [user, watchlist]);
 
   const updateHistory = useCallback(async (book, episode) => {
     if (!user) return;
     const bid = String(book.bookId || book.id);
+    // Rule 1: Strict Path
     const docRef = doc(db, 'artifacts', appId, 'users', user.uid, 'history', bid);
     
-    await setDoc(docRef, {
-      bookId: bid,
-      bookName: book.bookName || book.title,
-      cover: book.cover || book.coverWap,
-      lastEpisode: episode,
-      updatedAt: Date.now()
-    });
+    try {
+      await setDoc(docRef, {
+        bookId: bid,
+        bookName: book.bookName || book.title,
+        cover: book.cover || book.coverWap,
+        lastEpisode: episode,
+        updatedAt: Date.now()
+      });
+    } catch (e) {
+      console.error("History update failed", e);
+    }
   }, [user]);
 
   const clearHistoryItem = useCallback(async (bid) => {
     if (!user) return;
     const docRef = doc(db, 'artifacts', appId, 'users', user.uid, 'history', String(bid));
-    await deleteDoc(docRef);
+    try {
+      await deleteDoc(docRef);
+    } catch (e) {
+      console.error("History clear failed", e);
+    }
   }, [user]);
 
   const handlePlayerBack = useCallback(() => {
