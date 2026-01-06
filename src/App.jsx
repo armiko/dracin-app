@@ -79,10 +79,10 @@ const CONFIG = {
   PER_PAGE: 24
 };
 
+// Menghapus China dan menyetel bendera dengan label tambahan untuk kompatibilitas sistem operasi
 const SUPPORTED_LANGUAGES = [
   { code: 'in', label: 'Indonesia', flag: '🇮🇩' },
   { code: 'en', label: 'English', flag: '🇺🇸' },
-  { code: 'zh-cn', label: 'Chinese', flag: '🇨🇳' },
   { code: 'ko', label: 'Korean', flag: '🇰🇷' },
   { code: 'ja', label: 'Japanese', flag: '🇯🇵' }
 ];
@@ -380,7 +380,7 @@ const ProfileDropdown = ({ isOpen, onClose, user, setView, handleLogout }) => {
           {user && !user.isAnonymous && (
             <button 
               onClick={handleLogout} 
-              className="w-full flex items-center gap-3 px-4 py-3 text-red-400 hover:bg-red-400/10 rounded-xl transition-colors text-left group text-left"
+              className="w-full flex items-center gap-3 px-4 py-3 text-red-400 hover:bg-red-400/10 rounded-xl transition-colors text-left group"
             >
               <LogOut size={16} className="text-left" />
               <span className="text-[10px] font-black uppercase tracking-widest">Logout Akun</span>
@@ -586,6 +586,9 @@ export default function App() {
     return result;
   }, [allDramaData, activeFilters]);
 
+  /**
+   * UI: Language Selector Dropdown dengan Bendera
+   */
   const LanguageSelector = () => (
     <div className="relative">
       <button 
@@ -593,14 +596,14 @@ export default function App() {
         className="p-1.5 hover:bg-white/10 transition-all flex items-center justify-center bg-white/5 rounded-full border border-white/10 w-10 h-10 active:scale-95 text-left"
         title="Ganti Bahasa"
       >
-        <span className="text-xl leading-none">
+        <span className="text-xl leading-none" style={{ filter: 'drop-shadow(0 2px 4px rgba(0,0,0,0.3))' }}>
           {SUPPORTED_LANGUAGES.find(l => l.code === currentLocale)?.flag}
         </span>
       </button>
       {langMenuOpen && (
         <>
           <div className="fixed inset-0 z-[100]" onClick={() => setLangMenuOpen(false)}></div>
-          <div className="absolute right-0 mt-3 w-44 bg-slate-900 border border-white/10 rounded-2xl shadow-2xl z-[101] overflow-hidden animate-in fade-in zoom-in-95 duration-200 text-left">
+          <div className="absolute right-0 mt-3 w-44 bg-slate-900 border border-white/10 rounded-2xl shadow-2xl z-[101] overflow-hidden animate-in fade-in zoom-in-95 duration-200">
             <div className="p-2">
               <p className="px-3 py-2 text-[8px] font-black text-slate-500 uppercase tracking-widest border-b border-white/5 mb-1 text-left">Pilih Bahasa</p>
               {SUPPORTED_LANGUAGES.map((lang) => (
@@ -648,36 +651,36 @@ export default function App() {
               Kami mohon maaf atas ketidaknyamanannya, saat ini isi website belum dapat ditampilkan bagi pengguna ekosistem Apple.
             </p>
           </div>
-          <button onClick={closeAppleBanner} className="p-1.5 text-amber-500/50 hover:text-amber-500 hover:bg-white/5 rounded-full transition-all text-left text-left">
+          <button onClick={closeAppleBanner} className="p-1.5 text-amber-500/50 hover:text-amber-500 hover:bg-white/5 rounded-full transition-all text-left">
             <X size={16} />
           </button>
         </div>
       )}
 
-      <nav className="flex-none h-16 bg-[#0f172a]/80 backdrop-blur-xl border-b border-white/5 flex items-center z-40 px-4 sm:px-8">
+      <nav className="flex-none h-16 bg-[#0f172a]/80 backdrop-blur-xl border-b border-white/5 flex items-center z-40 px-4 sm:px-8 text-left">
         <div className="container mx-auto flex justify-between items-center">
           <button onClick={() => setView('home')} className="flex items-center gap-2 group transition-all active:scale-95 text-left">
             <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center text-white font-black shadow-lg shadow-blue-600/20">D</div>
             <span className="text-base font-black text-white hidden xs:block tracking-tighter">NontonDracin</span>
           </button>
           
-          <div className="flex items-center gap-2">
-            <div className="hidden md:flex items-center gap-1 bg-white/5 p-1 rounded-full border border-white/10 mr-1">
+          <div className="flex items-center gap-2 text-left">
+            <div className="hidden md:flex items-center gap-1 bg-white/5 p-1 rounded-full border border-white/10 mr-1 text-left">
               {[ {id:'home', icon:Home}, {id:'rank', icon:Trophy}, {id:'filter', icon:Filter} ].map(m => (
-                <button key={m.id} onClick={() => setView(m.id)} className={`p-2 rounded-full transition-all ${view === m.id ? 'bg-blue-600 text-white shadow-lg' : 'text-slate-400 hover:text-white'}`}><m.icon size={16} /></button>
+                <button key={m.id} onClick={() => setView(m.id)} className={`p-2 rounded-full transition-all ${view === m.id ? 'bg-blue-600 text-white shadow-lg' : 'text-slate-400 hover:text-white'} text-left`}><m.icon size={16} /></button>
               ))}
             </div>
             
             <LanguageSelector />
 
-            <button onClick={() => setSearchModalOpen(true)} className="p-2 text-slate-400 hover:text-white transition-colors active:scale-90"><Search size={20} /></button>
-            <div className="h-6 w-[1px] bg-white/10 mx-1"></div>
+            <button onClick={() => setSearchModalOpen(true)} className="p-2 text-slate-400 hover:text-white transition-colors active:scale-90 text-left"><Search size={20} /></button>
+            <div className="h-6 w-[1px] bg-white/10 mx-1 text-left"></div>
             
-            <div className="relative">
+            <div className="relative text-left">
               <button onClick={() => setProfileOpen(!profileOpen)} className="flex items-center gap-2 p-1 pl-1.5 pr-2.5 rounded-full bg-white/5 border border-white/10 hover:bg-white/10 transition-all active:scale-95">
                 {user && !user.isAnonymous && user.photoURL ? 
                   <img src={user.photoURL} alt="User" className="w-7 h-7 rounded-full border border-white/20" /> : 
-                  <div className="w-7 h-7 rounded-full bg-slate-800 flex items-center justify-center text-slate-400"><UserIcon size={14}/></div>
+                  <div className="w-7 h-7 rounded-full bg-slate-800 flex items-center justify-center text-slate-400 text-left"><UserIcon size={14}/></div>
                 }
                 <ChevronDown size={14} className={`text-slate-500 transition-transform ${profileOpen ? 'rotate-180' : ''}`} />
               </button>
@@ -695,21 +698,21 @@ export default function App() {
                  <div className="mb-10 relative rounded-[2rem] overflow-hidden min-h-[350px] flex items-center bg-slate-900 border border-white/5 shadow-2xl">
                    <div className="absolute inset-0">
                      <img src={homeData.popular[0].coverWap || homeData.popular[0].cover} className="w-full h-full object-cover opacity-30 blur-sm scale-105" alt="" />
-                     <div className="absolute inset-0 bg-gradient-to-t from-[#0f172a] via-[#0f172a]/60 to-transparent"></div>
+                     <div className="absolute inset-0 bg-gradient-to-t from-[#0f172a] via-[#0f172a]/60 to-transparent text-left"></div>
                    </div>
-                   <div className="relative z-10 flex flex-col md:flex-row items-center gap-8 p-10 sm:p-14 w-full text-left">
+                   <div className="relative z-10 flex flex-col md:flex-row items-center gap-8 p-10 sm:p-14 w-full text-left text-left">
                      <div className="hidden lg:block w-[200px] shrink-0 transform -rotate-2 hover:rotate-0 transition-all duration-500">
-                       <div className="aspect-[2/3] rounded-2xl overflow-hidden shadow-2xl border-2 border-white/10 cursor-pointer" onClick={() => { setSelectedBookId(homeData.popular[0].bookId || homeData.popular[0].id); setView('detail'); }}>
+                       <div className="aspect-[2/3] rounded-2xl overflow-hidden shadow-2xl border-2 border-white/10 cursor-pointer text-left" onClick={() => { setSelectedBookId(homeData.popular[0].bookId || homeData.popular[0].id); setView('detail'); }}>
                          <img src={homeData.popular[0].coverWap || homeData.popular[0].cover} className="w-full h-full object-cover" alt="" />
                        </div>
                      </div>
-                     <div className="flex-1 text-center md:text-left text-left text-left">
-                       <div className="inline-flex items-center gap-2 px-3 py-1 bg-blue-600 text-white text-[8px] font-black rounded-full mb-5 uppercase tracking-widest"><Flame size={12} fill="white" /> Rekomendasi Hari Ini</div>
-                       <h1 className="text-3xl sm:text-6xl font-black text-white mb-6 leading-tight tracking-tighter">{homeData.popular[0].bookName || homeData.popular[0].title}</h1>
-                       <div className="flex flex-wrap items-center justify-center md:justify-start gap-4">
-                        <button onClick={() => { setSelectedBookId(homeData.popular[0].bookId || homeData.popular[0].id); setView('detail'); }} className="bg-white text-black hover:bg-blue-600 hover:text-white px-8 py-3.5 rounded-xl font-black text-[10px] uppercase tracking-widest transition-all shadow-xl flex items-center gap-2 shadow-white/10">MULAI TONTON <Play size={16} fill="currentColor"/></button>
-                        <button onClick={() => handleToggleWatchlist(homeData.popular[0])} className="bg-white/10 hover:bg-white/20 text-white px-6 py-3.5 rounded-xl font-black text-[10px] uppercase tracking-widest transition-all backdrop-blur-md border border-white/10 flex items-center gap-2">
-                           {watchlist.some(i => String(i.bookId || i.id) === String(homeData.popular[0].bookId || homeData.popular[0].id)) ? <BookmarkCheck size={18} className="text-blue-400" /> : <Bookmark size={18} />} SIMPAN
+                     <div className="flex-1 text-center md:text-left text-left">
+                       <div className="inline-flex items-center gap-2 px-3 py-1 bg-blue-600 text-white text-[8px] font-black rounded-full mb-5 uppercase tracking-widest text-left"><Flame size={12} fill="white" /> Rekomendasi Hari Ini</div>
+                       <h1 className="text-3xl sm:text-6xl font-black text-white mb-6 leading-tight tracking-tighter text-left">{homeData.popular[0].bookName || homeData.popular[0].title}</h1>
+                       <div className="flex flex-wrap items-center justify-center md:justify-start gap-4 text-left">
+                        <button onClick={() => { setSelectedBookId(homeData.popular[0].bookId || homeData.popular[0].id); setView('detail'); }} className="bg-white text-black hover:bg-blue-600 hover:text-white px-8 py-3.5 rounded-xl font-black text-[10px] uppercase tracking-widest transition-all shadow-xl flex items-center gap-2 shadow-white/10 text-left">MULAI TONTON <Play size={16} fill="currentColor"/></button>
+                        <button onClick={() => handleToggleWatchlist(homeData.popular[0])} className="bg-white/10 hover:bg-white/20 text-white px-6 py-3.5 rounded-xl font-black text-[10px] uppercase tracking-widest transition-all backdrop-blur-md border border-white/10 flex items-center gap-2 text-left">
+                           {watchlist.some(i => String(i.bookId || i.id) === String(homeData.popular[0].bookId || homeData.popular[0].id)) ? <BookmarkCheck size={18} className="text-blue-400 text-left" /> : <Bookmark size={18} className="text-left" />} SIMPAN
                         </button>
                        </div>
                      </div>
@@ -744,17 +747,17 @@ export default function App() {
           )}
 
           {view === 'rank' && (
-            <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 text-left">
+            <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
                <div className="flex justify-center gap-3 mb-10 overflow-x-auto no-scrollbar py-1">
                  {[ { id: 'popular', label: 'Populer' }, { id: 'trending', label: 'Trending' }, { id: 'latest', label: 'Terbaru' } ].map(t => (
                     <button key={t.id} onClick={() => { setRankTab(t.id); setRankPage(1); }} className={`px-8 py-2.5 rounded-xl font-black text-[10px] uppercase tracking-widest border transition-all ${rankTab === t.id ? 'bg-blue-600 border-blue-600 text-white shadow-lg' : 'bg-white/5 border-white/10 text-slate-400 hover:border-white/20'}`}>{t.label}</button>
                  ))}
                </div>
-               <div className="grid grid-cols-2 xs:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-6">
+               <div className="grid grid-cols-2 xs:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-6 text-left">
                   {rankData.map((item, idx) => <DramaCard key={idx} item={item} rank={idx+1} onClick={(it) => { setSelectedBookId(it.bookId || it.id); setView('detail'); }} />)}
                </div>
-               <div className="mt-12 flex justify-center">
-                  <button onClick={() => setRankPage(p => p + 1)} disabled={loading} className="px-10 py-3.5 bg-blue-600 hover:bg-blue-500 text-white rounded-2xl font-black text-[10px] uppercase tracking-[0.2em] shadow-xl flex items-center gap-3 disabled:opacity-50 transition-all">
+               <div className="mt-12 flex justify-center text-left">
+                  <button onClick={() => setRankPage(p => p + 1)} disabled={loading} className="px-10 py-3.5 bg-blue-600 hover:bg-blue-500 text-white rounded-2xl font-black text-[10px] uppercase tracking-[0.2em] shadow-xl flex items-center gap-3 disabled:opacity-50 transition-all text-left">
                     {loading ? <Loader2 size={16} className="animate-spin" /> : <Plus size={16} />} MUAT LEBIH BANYAK
                   </button>
                </div>
@@ -763,19 +766,19 @@ export default function App() {
 
           {view === 'filter' && (
             <div className="animate-in fade-in duration-500 text-left">
-               <div className="bg-slate-900/50 p-8 rounded-3xl border border-white/5 mb-10 grid grid-cols-1 md:grid-cols-3 gap-8 backdrop-blur-sm">
+               <div className="bg-slate-900/50 p-8 rounded-3xl border border-white/5 mb-10 grid grid-cols-1 md:grid-cols-3 gap-8 backdrop-blur-sm text-left">
                   {STATIC_FILTERS.map(f => (
                     <div key={f.key}>
-                      <h4 className="text-[8px] font-black text-slate-500 uppercase tracking-widest mb-4 flex items-center gap-2 text-left"><div className="w-1 h-1 bg-blue-500 rounded-full"></div> {f.title}</h4>
-                      <div className="flex flex-wrap gap-2">
+                      <h4 className="text-[8px] font-black text-slate-500 uppercase tracking-widest mb-4 flex items-center gap-2 text-left"><div className="w-1 h-1 bg-blue-500 rounded-full text-left"></div> {f.title}</h4>
+                      <div className="flex flex-wrap gap-2 text-left">
                         {f.options.map(o => (
-                          <button key={o.value} onClick={() => setActiveFilters(p => ({...p, [f.key]: p[f.key] === o.value ? '' : o.value}))} className={`px-4 py-2 rounded-xl text-[9px] font-bold uppercase tracking-wider border transition-all ${activeFilters[f.key] === o.value ? 'bg-blue-600 border-blue-600 text-white shadow-lg' : 'bg-white/5 border-white/10 text-slate-400 hover:text-white hover:bg-white/10'}`}>{o.display}</button>
+                          <button key={o.value} onClick={() => setActiveFilters(p => ({...p, [f.key]: p[f.key] === o.value ? '' : o.value}))} className={`px-4 py-2 rounded-xl text-[9px] font-bold uppercase tracking-wider border transition-all ${activeFilters[f.key] === o.value ? 'bg-blue-600 border-blue-600 text-white shadow-lg' : 'bg-white/5 border-white/10 text-slate-400 hover:text-white hover:bg-white/10'} text-left`}>{o.display}</button>
                         ))}
                       </div>
                     </div>
                   ))}
                </div>
-               <div className="grid grid-cols-2 xs:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-6">
+               <div className="grid grid-cols-2 xs:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-6 text-left">
                   {filteredItems.map((item, idx) => <DramaCard key={idx} item={item} onClick={(it) => { setSelectedBookId(it.bookId || it.id); setView('detail'); }} />)}
                </div>
                {filteredItems.length === 0 && <EmptyState icon={Filter} title="Hasil Kosong" message="Coba ganti filter genre atau urutan lainnya." />}
@@ -792,10 +795,10 @@ export default function App() {
           )}
 
           {view === 'watchlist' && (
-            <div className="animate-in fade-in duration-700">
+            <div className="animate-in fade-in duration-700 text-left">
               <Section icon={Bookmark} title="Koleksi Favorit Saya">
                 {watchlist.length > 0 ? (
-                  <div className="grid grid-cols-2 xs:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-6">
+                  <div className="grid grid-cols-2 xs:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-6 text-left">
                     {watchlist.map((item, idx) => <DramaCard key={idx} item={item} onRemove={() => handleToggleWatchlist(item)} onClick={(it) => { setSelectedBookId(it.bookId || it.id); setView('detail'); }} />)}
                   </div>
                 ) : <EmptyState icon={Bookmark} title="Favorit Kosong" message="Ayo simpan drama favoritmu agar mudah ditemukan kembali." actionText="CARI DRAMA" onAction={() => setView('home')} />}
@@ -807,7 +810,7 @@ export default function App() {
             <div className="animate-in fade-in duration-700 text-left">
               <Section icon={History} title="Sudah Ditonton">
                 {watchHistory.length > 0 ? (
-                  <div className="grid grid-cols-2 xs:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-6">
+                  <div className="grid grid-cols-2 xs:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-6 text-left">
                     {watchHistory.map((item, idx) => <DramaCard key={idx} item={item} isHistory lastEpisode={item.lastEpisode} onRemove={clearHistoryItem} onClick={(it) => { setSelectedBookId(it.bookId); setView('detail'); }} />)}
                   </div>
                 ) : <EmptyState icon={History} title="Riwayat Kosong" message="Anda belum pernah menonton drama apa pun." actionText="NONTON SEKARANG" onAction={() => setView('home')} />}
@@ -827,17 +830,18 @@ export default function App() {
         </div>
       </main>
 
-      <div className="md:hidden fixed bottom-0 left-0 right-0 bg-[#0f172a]/95 backdrop-blur-xl border-t border-white/5 px-6 py-4 flex justify-between items-center z-50 text-left text-left">
+      {/* Navigasi Mobile Bawah */}
+      <div className="md:hidden fixed bottom-0 left-0 right-0 bg-[#0f172a]/95 backdrop-blur-xl border-t border-white/5 px-6 py-4 flex justify-between items-center z-50 text-left">
         {[ {id:'home', icon:Home, label:'Home'}, {id:'rank', icon:Trophy, label:'Top'}, {id:'filter', icon:Filter, label:'Saring'}, {id:'watchlist', icon:Bookmark, label:'Favorit'} ].map(m => (
-          <button key={m.id} onClick={() => setView(m.id)} className={`flex flex-col items-center gap-1 transition-all active:scale-90 ${view === m.id ? 'text-blue-500' : 'text-slate-500'} text-left`}><m.icon size={20} /><span className="text-[8px] font-black uppercase tracking-widest text-left">{m.label}</span></button>
+          <button key={m.id} onClick={() => setView(m.id)} className={`flex flex-col items-center gap-1 transition-all active:scale-90 ${view === m.id ? 'text-blue-500' : 'text-slate-500'} text-left`}><m.icon size={20} className="text-left" /><span className="text-[8px] font-black uppercase tracking-widest text-left">{m.label}</span></button>
         ))}
       </div>
 
       {searchModalOpen && (
         <div className="fixed inset-0 z-[100] flex items-start justify-center pt-32 px-4 animate-in fade-in duration-300 text-left">
           <div className="absolute inset-0 bg-[#0f172a]/95 backdrop-blur-md text-left" onClick={() => setSearchModalOpen(false)}></div>
-          <div className="relative w-full max-w-2xl animate-in slide-in-from-top-8 duration-500 text-left">
-             <div className="relative group text-left text-left">
+          <div className="relative w-full max-w-2xl animate-in slide-in-from-top-8 duration-500 text-left text-left">
+             <div className="relative group text-left">
                 <Search className="absolute left-6 top-1/2 -translate-y-1/2 text-slate-500 text-left" size={24} />
                 <input autoFocus type="text" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} onKeyDown={(e) => {
                   if (e.key === 'Enter' && searchQuery.trim()) {
@@ -880,55 +884,55 @@ const DramaDetailPage = ({ bookId, onBack, user, watchlist, history, onToggleWat
   if (loading) return <div className="flex flex-col items-center justify-center p-20 gap-4 text-center text-left"><Loader2 className="animate-spin text-blue-500 text-left" size={40} /><p className="text-[10px] font-black text-slate-600 uppercase tracking-[0.3em] text-left">Memuat Drama...</p></div>;
 
   return (
-    <div className="animate-in fade-in duration-700 text-left">
+    <div className="animate-in fade-in duration-700 text-left text-left">
       <button onClick={onBack} className="flex items-center gap-2 text-slate-500 font-bold hover:text-white transition-colors text-[10px] uppercase tracking-widest mb-8 text-left"><ChevronLeft size={18} className="text-left"/> Kembali</button>
 
-      <div className="flex flex-col lg:flex-row gap-10 bg-slate-900/40 rounded-[2.5rem] p-6 sm:p-10 border border-white/5 backdrop-blur-xl shadow-2xl text-left">
+      <div className="flex flex-col lg:flex-row gap-10 bg-slate-900/40 rounded-[2.5rem] p-6 sm:p-10 border border-white/5 backdrop-blur-xl shadow-2xl text-left text-left">
         <div className="w-full lg:w-[320px] shrink-0 text-left">
           <div className="relative aspect-[2/3] rounded-3xl overflow-hidden shadow-2xl border border-white/10 text-left text-left">
-            <img src={data.book.cover} className="w-full h-full object-cover" alt="" />
-            <div className="absolute top-4 left-4 flex gap-2 text-left text-left">
+            <img src={data.book.cover} className="w-full h-full object-cover text-left text-left" alt="" />
+            <div className="absolute top-4 left-4 flex gap-2 text-left">
                <span className="bg-blue-600 text-white text-[8px] font-black px-2 py-1 rounded-lg shadow-lg uppercase tracking-wider text-left">{data.book.chapterCount} EPS</span>
             </div>
           </div>
         </div>
 
-        <div className="flex-1 flex flex-col justify-center text-left">
+        <div className="flex-1 flex flex-col justify-center text-left text-left">
           <h2 className="text-3xl sm:text-5xl font-black text-white mb-4 leading-tight tracking-tighter text-left">{data.book.bookName}</h2>
           
-          <div className="mb-6 flex flex-wrap gap-2 text-left">
+          <div className="mb-6 flex flex-wrap gap-2 text-left text-left">
              {data.book.typeTwoNames?.map((tag, idx) => (
                <button 
                 key={idx} 
                 onClick={() => onTagClick(tag)}
-                className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600/10 border border-blue-500/20 text-blue-400 text-[9px] font-black rounded-xl uppercase tracking-wider hover:bg-blue-600 hover:text-white transition-all active:scale-95 text-left"
+                className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600/10 border border-blue-500/20 text-blue-400 text-[9px] font-black rounded-xl uppercase tracking-wider hover:bg-blue-600 hover:text-white transition-all active:scale-95 text-left text-left"
                >
-                 <Tag size={10} className="text-left"/> {tag}
+                 <Tag size={10} className="text-left text-left"/> {tag}
                </button>
              ))}
           </div>
 
-          <div className="flex flex-wrap gap-3 mb-8 text-left text-left">
-            <button onClick={() => onPlayEpisode(lastWatched || 1, data.book, data.chapters)} className="bg-blue-600 hover:bg-blue-500 text-white px-8 py-3.5 rounded-2xl font-black text-[10px] uppercase tracking-widest shadow-xl shadow-blue-600/30 transition-all flex items-center gap-2 group active:scale-95 text-left text-left"><Play size={18} fill="currentColor" className="text-left"/> {lastWatched ? `LANJUT EPS ${lastWatched}` : 'TONTON SEKARANG'}</button>
-            <button onClick={() => onToggleWatchlist(data.book)} className={`px-6 py-3.5 rounded-2xl font-black text-[10px] uppercase tracking-widest transition-all border flex items-center gap-2 active:scale-95 ${isBookmarked ? 'bg-blue-600/10 border-blue-500/30 text-blue-400' : 'bg-white/5 border-white/10 text-white hover:bg-white/10'} text-left text-left`}>
+          <div className="flex flex-wrap gap-3 mb-8 text-left">
+            <button onClick={() => onPlayEpisode(lastWatched || 1, data.book, data.chapters)} className="bg-blue-600 hover:bg-blue-500 text-white px-8 py-3.5 rounded-2xl font-black text-[10px] uppercase tracking-widest shadow-xl shadow-blue-600/30 transition-all flex items-center gap-2 group active:scale-95 text-left"><Play size={18} fill="currentColor" className="text-left"/> {lastWatched ? `LANJUT EPS ${lastWatched}` : 'TONTON SEKARANG'}</button>
+            <button onClick={() => onToggleWatchlist(data.book)} className={`px-6 py-3.5 rounded-2xl font-black text-[10px] uppercase tracking-widest transition-all border flex items-center gap-2 active:scale-95 ${isBookmarked ? 'bg-blue-600/10 border-blue-500/30 text-blue-400' : 'bg-white/5 border-white/10 text-white hover:bg-white/10'} text-left`}>
               {isBookmarked ? <BookmarkCheck size={18} className="text-left" /> : <Bookmark size={18} className="text-left" />} {isBookmarked ? 'FAVORIT' : 'SIMPAN'}
             </button>
           </div>
 
           <div className="mb-10 text-left text-left">
             <h4 className="text-[9px] font-black text-slate-500 uppercase tracking-[0.3em] mb-3 text-left">SINOPSIS</h4>
-            <div className="p-5 bg-white/5 rounded-2xl border border-white/5 text-slate-400 text-xs leading-relaxed italic line-clamp-4 hover:line-clamp-none transition-all duration-300 text-left text-left">
+            <div className="p-5 bg-white/5 rounded-2xl border border-white/5 text-slate-400 text-xs leading-relaxed italic line-clamp-4 hover:line-clamp-none transition-all duration-300 text-left">
                {cleanIntro(data.book.introduction)}
             </div>
           </div>
 
           <div className="text-left text-left">
              <h4 className="text-[9px] font-black text-slate-500 uppercase tracking-[0.3em] mb-4 text-slate-400 text-left">DAFTAR EPISODE</h4>
-             <div className="grid grid-cols-4 xs:grid-cols-6 sm:grid-cols-8 lg:grid-cols-12 gap-2 max-h-[160px] overflow-y-auto pr-3 no-scrollbar pb-2 text-left text-left">
+             <div className="grid grid-cols-4 xs:grid-cols-6 sm:grid-cols-8 lg:grid-cols-12 gap-2 max-h-[160px] overflow-y-auto pr-3 no-scrollbar pb-2 text-left">
               {data.chapters?.map((ch, i) => {
                 const num = ch.num || (ch.index + 1);
                 return (
-                  <button key={i} onClick={() => onPlayEpisode(num, data.book, data.chapters)} className={`aspect-square rounded-xl text-[10px] font-black flex items-center justify-center transition-all border ${num === lastWatched ? 'bg-blue-600 border-blue-600 text-white shadow-lg' : 'bg-slate-800 border-white/5 text-slate-500 hover:text-white'} text-left text-left`}>
+                  <button key={i} onClick={() => onPlayEpisode(num, data.book, data.chapters)} className={`aspect-square rounded-xl text-[10px] font-black flex items-center justify-center transition-all border ${num === lastWatched ? 'bg-blue-600 border-blue-600 text-white shadow-lg' : 'bg-slate-800 border-white/5 text-slate-500 hover:text-white'} text-left`}>
                     {num}
                   </button>
                 );
@@ -1068,15 +1072,13 @@ const CustomPlayerPage = ({
 
   return (
     <div className="bg-[#0b1120] min-h-screen text-slate-200 text-left">
-      {/* Konten Utama Player */}
-      <div className="container mx-auto px-4 py-8">
-        <div className="flex flex-col lg:flex-row gap-10">
+      <div className="container mx-auto px-4 pb-20 pt-8 text-left">
+        <div className="flex flex-col lg:flex-row gap-8 items-start">
           
-          {/* Sisi Kiri: Video Player & Info */}
-          <div className="flex-1 min-w-0">
+          <div className="flex-1 w-full text-left">
             <div 
               ref={containerRef}
-              className="relative aspect-video bg-black rounded-[2rem] overflow-hidden shadow-2xl group border border-white/5"
+              className="relative aspect-video bg-black rounded-[2.5rem] overflow-hidden shadow-2xl group border border-white/5"
               onMouseMove={() => { setShowControls(true); clearTimeout(timerRef.current); timerRef.current = setTimeout(() => setShowControls(false), 3000); }}
             >
               <video 
@@ -1093,39 +1095,35 @@ const CustomPlayerPage = ({
                 onClick={togglePlay}
               />
 
-              {loading && (
-                <div className="absolute inset-0 flex items-center justify-center bg-black/40 backdrop-blur-sm z-10">
-                  <Loader2 className="animate-spin text-blue-500" size={48} />
-                </div>
-              )}
+              {loading && <div className="absolute inset-0 flex items-center justify-center bg-black/40 backdrop-blur-sm z-10"><Loader2 className="animate-spin text-blue-500" size={48} /></div>}
               
-              <div className={`absolute inset-0 bg-gradient-to-t from-black/90 via-transparent to-black/60 flex flex-col justify-between p-6 transition-opacity duration-500 ${showControls ? 'opacity-100' : 'opacity-0'}`}>
-                <div className="flex justify-between items-center">
-                  <button onClick={onBack} className="p-2.5 bg-white/10 backdrop-blur-md rounded-full hover:bg-white/20 transition-all border border-white/10 active:scale-90"><ChevronLeft size={22}/></button>
-                  <div className="text-center drop-shadow-md">
-                    <h2 className="text-[10px] font-black uppercase tracking-[0.2em] text-white opacity-90">{book.bookName || book.title}</h2>
-                    <p className="text-[9px] font-bold text-blue-400 uppercase tracking-[0.3em]">Eps {currentEp}</p>
+              <div className={`absolute inset-0 bg-gradient-to-t from-black/90 via-transparent to-black/60 flex flex-col justify-between p-8 transition-opacity duration-500 ${showControls ? 'opacity-100' : 'opacity-0'}`}>
+                <div className="flex justify-between items-center text-left">
+                  <button onClick={onBack} className="p-2.5 bg-white/10 backdrop-blur-md rounded-full hover:bg-white/20 transition-all border border-white/10 active:scale-90"><ChevronLeft size={22} className="text-left"/></button>
+                  <div className="text-center text-left">
+                    <h2 className="text-[10px] font-black uppercase tracking-[0.2em] text-white shadow-sm text-left">Episode {currentEp}</h2>
+                    <p className="text-[9px] font-bold text-blue-400 uppercase tracking-[0.3em] text-left">{book.bookName || book.title}</p>
                   </div>
-                  <button onClick={toggleFullScreen} className="p-2.5 bg-white/10 backdrop-blur-md rounded-full hover:bg-white/20 transition-all border border-white/10 active:scale-90"><Maximize size={22}/></button>
+                  <button onClick={toggleFullScreen} className="p-2.5 bg-white/10 backdrop-blur-md rounded-full hover:bg-white/20 transition-all border border-white/10 active:scale-90"><Maximize size={22} className="text-left"/></button>
                 </div>
 
-                <div className="flex flex-col gap-6">
-                  <div className="flex flex-col gap-2">
-                    <input type="range" min="0" max={duration || 0} step="0.1" value={currentTime} onChange={(e) => { if (videoRef.current) videoRef.current.currentTime = parseFloat(e.target.value); }} className="w-full h-1 accent-blue-600 bg-white/20 rounded-full appearance-none cursor-pointer hover:h-1.5 transition-all" />
-                    <div className="flex justify-between text-[8px] font-mono font-black text-white/60 tracking-tighter"><span>{formatTime(currentTime)}</span><span>{formatTime(duration)}</span></div>
+                <div className="flex flex-col gap-6 text-left">
+                  <div className="flex flex-col gap-2 text-left text-left">
+                    <input type="range" min="0" max={duration || 0} step="0.1" value={currentTime} onChange={(e) => { if (videoRef.current) videoRef.current.currentTime = parseFloat(e.target.value); }} className="w-full h-1 accent-blue-600 bg-white/20 rounded-full appearance-none cursor-pointer hover:h-1.5 transition-all text-left" />
+                    <div className="flex justify-between text-[8px] font-mono font-black text-white/50 tracking-tighter text-left"><span>{formatTime(currentTime)}</span><span>{formatTime(duration)}</span></div>
                   </div>
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-8">
-                      <button onClick={handlePrev} disabled={currentEp <= 1} className="text-white/60 hover:text-blue-400 disabled:opacity-20 transition-colors"><SkipBack size={26} fill="currentColor"/></button>
-                      <button onClick={togglePlay} className="text-white transform active:scale-95 transition-transform">{isPlaying ? <Pause size={42} fill="white" /> : <Play size={42} fill="white" />}</button>
-                      <button onClick={handleNext} disabled={currentEp >= (details?.book?.chapterCount || 0)} className="text-white/60 hover:text-blue-400 disabled:opacity-20 transition-colors"><SkipForward size={26} fill="currentColor"/></button>
+                  <div className="flex items-center justify-between text-left text-left">
+                    <div className="flex items-center gap-8 text-left text-left">
+                      <button onClick={handlePrev} disabled={currentEp <= 1} className="text-white/60 hover:text-blue-400 disabled:opacity-20 transition-colors text-left"><SkipBack size={28} fill="currentColor" className="text-left"/></button>
+                      <button onClick={togglePlay} className="text-white transform active:scale-90 transition-transform text-left">{isPlaying ? <Pause size={42} fill="white" className="text-left" /> : <Play size={42} fill="white" className="text-left" />}</button>
+                      <button onClick={handleNext} disabled={currentEp >= (details?.book?.chapterCount || 0)} className="text-white/60 hover:text-blue-400 disabled:opacity-20 transition-colors text-left"><SkipForward size={28} fill="currentColor" className="text-left"/></button>
                     </div>
-                    <div className="flex items-center gap-4">
-                      <div className="flex items-center gap-3 px-4 py-2.5 bg-white/10 backdrop-blur-md rounded-2xl border border-white/10">
-                        <button onClick={() => setVolume(v => v === 0 ? 1 : 0)} className="text-white/60 hover:text-white">
-                          {volume === 0 ? <VolumeX size={18}/> : <Volume2 size={18}/>}
+                    <div className="flex items-center gap-5 text-left text-left">
+                      <div className="flex items-center gap-3 px-4 py-2 bg-white/10 backdrop-blur-md rounded-2xl border border-white/5 text-left text-left">
+                        <button onClick={() => setVolume(v => v === 0 ? 1 : 0)} className="text-white/60 hover:text-white text-left text-left">
+                          {volume === 0 ? <VolumeX size={18} className="text-left"/> : <Volume2 size={18} className="text-left"/>}
                         </button>
-                        <input type="range" min="0" max="1" step="0.05" value={volume} onChange={(e) => setVolume(parseFloat(e.target.value))} className="w-16 h-0.5 accent-white appearance-none bg-white/20 rounded-full cursor-pointer" />
+                        <input type="range" min="0" max="1" step="0.05" value={volume} onChange={(e) => setVolume(parseFloat(e.target.value))} className="w-20 h-0.5 accent-white appearance-none bg-white/20 rounded-full cursor-pointer text-left" />
                       </div>
                     </div>
                   </div>
@@ -1133,110 +1131,83 @@ const CustomPlayerPage = ({
               </div>
             </div>
 
-            {/* Quick Actions Panel */}
-            <div className="mt-10 grid grid-cols-1 md:grid-cols-2 gap-5">
-              <div className="p-6 bg-slate-900/60 rounded-[2rem] border border-white/5 flex items-center justify-between group/card transition-all hover:bg-slate-900/80">
-                <div className="flex items-center gap-5">
-                  <div className="w-12 h-12 rounded-2xl bg-blue-600/10 flex items-center justify-center text-blue-500 shadow-inner group-hover/card:scale-110 transition-transform">
-                    <RotateCcw size={22} />
-                  </div>
-                  <div>
-                    <h4 className="text-[11px] font-black uppercase text-white tracking-widest">Auto Next</h4>
-                    <p className="text-[9px] font-bold text-slate-500 uppercase tracking-widest">Ganti Eps Otomatis</p>
-                  </div>
-                </div>
-                <button 
-                  onClick={() => setLocalAutoNext(!localAutoNext)}
-                  className={`w-14 h-7 rounded-full relative transition-all duration-300 shadow-lg ${localAutoNext ? 'bg-blue-600' : 'bg-slate-700'}`}
-                >
-                  <div className={`absolute top-1 w-5 h-5 rounded-full bg-white shadow-sm transition-all duration-300 ${localAutoNext ? 'left-8' : 'left-1'}`}></div>
-                </button>
+            <div className="mt-8 grid grid-cols-1 md:grid-cols-2 gap-4 text-left">
+              <div className="flex items-center justify-between p-6 bg-slate-900/60 rounded-[2rem] border border-white/5 text-left">
+                 <div className="flex items-center gap-4 text-left">
+                    <div className="w-12 h-12 bg-blue-600/10 rounded-2xl flex items-center justify-center text-blue-500 text-left"><RotateCcw size={22} className="text-left"/></div>
+                    <div className="text-left">
+                      <p className="text-[11px] font-black text-white uppercase tracking-widest text-left">Auto Next</p>
+                      <p className="text-[9px] text-slate-500 font-bold text-left">Ganti episode otomatis</p>
+                    </div>
+                 </div>
+                 <button onClick={() => setLocalAutoNext(!localAutoNext)} className={`w-14 h-7 rounded-full relative transition-all duration-300 ${localAutoNext ? 'bg-blue-600' : 'bg-slate-700'}`}>
+                    <div className={`absolute top-1 w-5 h-5 rounded-full bg-white transition-all ${localAutoNext ? 'left-8' : 'left-1'}`}></div>
+                 </button>
               </div>
 
-              <div className="p-6 bg-slate-900/60 rounded-[2rem] border border-white/5 flex items-center justify-between group/card transition-all hover:bg-slate-900/80">
-                <div className="flex items-center gap-5">
-                  <div className="w-12 h-12 rounded-2xl bg-blue-600/10 flex items-center justify-center text-blue-500 shadow-inner group-hover/card:scale-110 transition-transform">
-                    <Settings size={22} />
-                  </div>
-                  <div>
-                    <h4 className="text-[11px] font-black uppercase text-white tracking-widest">Playback Speed</h4>
-                    <p className="text-[9px] font-bold text-slate-500 uppercase tracking-widest">Sekarang: {audioSettings.playbackRate}x</p>
-                  </div>
-                </div>
-                <button 
+              <div className="flex items-center justify-between p-6 bg-slate-900/60 rounded-[2rem] border border-white/5 text-left">
+                 <div className="flex items-center gap-4 text-left">
+                    <div className="w-12 h-12 bg-blue-600/10 rounded-2xl flex items-center justify-center text-blue-500 text-left"><Settings size={22} className="text-left"/></div>
+                    <div className="text-left">
+                      <p className="text-[11px] font-black text-white uppercase tracking-widest text-left">Kecepatan</p>
+                      <p className="text-[9px] text-slate-500 font-bold text-left">{audioSettings.playbackRate}x Tempo</p>
+                    </div>
+                 </div>
+                 <button 
                   onClick={() => {
                     const rates = [1, 1.25, 1.5, 2];
                     const next = rates[(rates.indexOf(audioSettings.playbackRate) + 1) % rates.length];
                     setAudioSettings({...audioSettings, playbackRate: next});
                   }}
-                  className="px-5 py-2.5 bg-white/5 hover:bg-blue-600 hover:text-white border border-white/10 rounded-2xl text-[10px] font-black text-white uppercase transition-all shadow-md active:scale-95"
-                >
-                  Ganti
-                </button>
+                  className="px-5 py-2.5 bg-white/5 hover:bg-white/10 border border-white/10 rounded-2xl text-[10px] font-black text-white uppercase text-left transition-all active:scale-95"
+                 >Ganti</button>
               </div>
             </div>
 
-            {/* Info Drama & Sinopsis */}
             <div className="mt-12 text-left space-y-6">
-              <div className="flex flex-wrap gap-2.5">
+              <div className="flex flex-wrap gap-2.5 text-left">
                  {details?.book?.typeTwoNames?.map((tag, idx) => (
-                   <button key={idx} onClick={() => onTagClick(tag)} className="flex items-center gap-2 px-4 py-2 bg-blue-600/10 border border-blue-500/20 text-blue-400 text-[10px] font-black rounded-full hover:bg-blue-600 hover:text-white transition-all uppercase tracking-widest">
-                     <Tag size={12} /> {tag}
+                   <button key={idx} onClick={() => onTagClick(tag)} className="flex items-center gap-2 px-4 py-2 bg-blue-600/10 border border-blue-500/20 text-blue-400 text-[10px] font-black rounded-full hover:bg-blue-600 hover:text-white transition-all uppercase tracking-widest text-left">
+                     <Tag size={12} className="text-left" /> {tag}
                    </button>
                  ))}
               </div>
-              <div className="relative p-10 bg-[#0f172a]/40 border border-white/5 rounded-[3rem] text-sm text-slate-400 leading-relaxed italic group/sinopsis">
-                 <div className="absolute top-6 left-10 text-blue-600/30 font-black text-4xl leading-none">“</div>
-                 <div className="relative z-10 px-4 pt-4">
+              <div className="relative p-10 bg-[#0f172a]/40 border border-white/5 rounded-[3rem] text-sm text-slate-400 leading-relaxed italic text-left">
+                 <div className="absolute top-6 left-10 text-blue-600/30 font-black text-4xl text-left">“</div>
+                 <div className="relative z-10 px-4 pt-4 text-left">
                     {details?.book?.introduction ? cleanIntro(details.book.introduction) : "Memuat sinopsis drama..."}
                  </div>
-                 <div className="absolute bottom-6 right-10 text-blue-600/30 font-black text-4xl leading-none">”</div>
+                 <div className="absolute bottom-6 right-10 text-blue-600/30 font-black text-4xl text-left">”</div>
               </div>
-            </div>
-
-            {/* Grid Episode untuk Mobile */}
-            <div className="mt-16 lg:hidden">
-               <div className="flex items-center justify-between mb-8 border-b border-white/5 pb-4">
-                 <h3 className="text-[11px] font-black uppercase tracking-[0.4em] text-white">Daftar Episode</h3>
-                 <span className="text-[9px] font-black text-blue-400 bg-blue-400/10 px-3 py-1.5 rounded-full">{details?.book?.chapterCount} EPS</span>
-               </div>
-               <div className="grid grid-cols-5 gap-3 max-h-[300px] overflow-y-auto no-scrollbar pb-10">
-                  {details?.chapters?.map((ch, i) => {
-                    const num = ch.num || (i + 1);
-                    return (
-                      <button key={i} onClick={() => setCurrentEp(num)} className={`aspect-square rounded-2xl text-[11px] font-black transition-all border ${num === currentEp ? 'bg-blue-600 border-blue-600 text-white shadow-xl shadow-blue-600/40 scale-105' : 'bg-slate-900 border-white/5 text-slate-500 hover:text-white'}`}>{num}</button>
-                    );
-                  })}
-               </div>
             </div>
           </div>
 
-          {/* Sisi Kanan: Daftar Episode Desktop (Sidebar) */}
-          <div className="hidden lg:block w-[360px] shrink-0">
-             <div className="sticky top-24 bg-[#0f172a]/60 backdrop-blur-2xl border border-white/10 rounded-[3rem] p-10 max-h-[85vh] flex flex-col shadow-2xl">
-                <div className="flex items-center gap-4 mb-10 border-b border-white/5 pb-6">
-                   <div className="w-12 h-12 bg-blue-600 rounded-2xl shadow-xl shadow-blue-600/20 flex items-center justify-center text-white"><List size={22}/></div>
-                   <div>
-                     <h3 className="text-[11px] font-black uppercase tracking-[0.3em] text-white">List Episode</h3>
-                     <p className="text-[9px] font-bold text-slate-500 uppercase mt-0.5">{details?.book?.chapterCount || 0} Total Eps</p>
+          {/* Sisi Kanan: Daftar Episode (Desktop) */}
+          <div className="hidden lg:block w-[360px] shrink-0 text-left">
+             <div className="sticky top-10 bg-[#0f172a]/60 backdrop-blur-2xl border border-white/10 rounded-[3rem] p-10 max-h-[90vh] flex flex-col shadow-2xl text-left">
+                <div className="flex items-center gap-4 mb-10 border-b border-white/5 pb-6 text-left">
+                   <div className="w-12 h-12 bg-blue-600 rounded-2xl shadow-xl shadow-blue-600/20 flex items-center justify-center text-white text-left"><List size={22} className="text-left"/></div>
+                   <div className="text-left">
+                     <h3 className="text-[11px] font-black uppercase tracking-[0.3em] text-white text-left">List Episode</h3>
+                     <p className="text-[9px] font-bold text-slate-500 uppercase mt-0.5 text-left">{details?.book?.chapterCount || 0} Total Eps</p>
                    </div>
                 </div>
-                <div className="flex-1 overflow-y-auto no-scrollbar grid grid-cols-4 gap-3 pr-2 py-2">
+                <div className="flex-1 overflow-y-auto no-scrollbar grid grid-cols-4 gap-3 pr-2 py-2 text-left">
                    {details?.chapters?.map((ch, i) => {
                      const num = ch.num || (i + 1);
                      return (
                        <button 
                         key={i} 
                         onClick={() => setCurrentEp(num)} 
-                        className={`aspect-square rounded-2xl text-[11px] font-black transition-all border ${num === currentEp ? 'bg-blue-600 border-blue-600 text-white shadow-xl shadow-blue-600/40 scale-110' : 'bg-slate-800/40 border-white/5 text-slate-500 hover:text-white hover:bg-blue-600/20 hover:border-blue-600/30'}`}
+                        className={`aspect-square rounded-2xl text-[11px] font-black transition-all border ${num === currentEp ? 'bg-blue-600 border-blue-600 text-white shadow-xl shadow-blue-600/40 scale-110' : 'bg-slate-800/40 border-white/5 text-slate-500 hover:text-white hover:bg-blue-600/20 hover:border-blue-600/30'} text-left`}
                        >
                          {num}
                        </button>
                      );
                    })}
                 </div>
-                <div className="mt-10 pt-8 border-t border-white/5 text-center">
-                   <p className="text-[10px] font-black text-slate-600 uppercase tracking-widest italic opacity-60">Enjoy your Drama!</p>
+                <div className="mt-10 pt-8 border-t border-white/5 text-center text-left">
+                   <p className="text-[10px] font-black text-slate-600 uppercase tracking-widest italic opacity-60 text-left text-left">Enjoy your Drama!</p>
                 </div>
              </div>
           </div>
