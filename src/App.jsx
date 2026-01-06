@@ -7,7 +7,8 @@ import {
   Volume1, Gamepad2, CheckCircle2, ExternalLink,
   LogOut, LogIn, User as UserIcon, AlertCircle,
   Bookmark, BookmarkCheck, History, Trash2, 
-  ChevronDown, Zap, ShoppingCart, Info, Tag
+  ChevronDown, Zap, ShoppingCart, Info, Tag, Languages,
+  Maximize, List, Settings, RotateCcw
 } from 'lucide-react';
 
 import { initializeApp } from 'firebase/app';
@@ -65,7 +66,8 @@ const appId = getSafeEnv('VITE_APP_ID', '3KNDH1p5iIG6U7FmuGTS');
 const STORAGE_KEYS = {
   SETTINGS: `dracin_settings_${appId}`,
   WATCHLIST: `dracin_watchlist_${appId}`,
-  HISTORY: `dracin_history_${appId}`
+  HISTORY: `dracin_history_${appId}`,
+  LOCALE: `dracin_locale_${appId}`
 };
 
 const CONFIG = {
@@ -77,7 +79,15 @@ const CONFIG = {
   PER_PAGE: 24
 };
 
-const apiCache = { home: null, timestamp: 0 };
+const SUPPORTED_LANGUAGES = [
+  { code: 'in', label: 'Indonesia', flag: '🇮🇩' },
+  { code: 'en', label: 'English', flag: '🇺🇸' },
+  { code: 'zh-cn', label: 'Chinese', flag: '🇨🇳' },
+  { code: 'ko', label: 'Korean', flag: '🇰🇷' },
+  { code: 'ja', label: 'Japanese', flag: '🇯🇵' }
+];
+
+const apiCache = { home: {}, timestamp: {} };
 
 /**
  * --- UTILS ---
@@ -217,9 +227,9 @@ const DramaCard = React.memo(({ item, onClick, rank, onRemove, isHistory, lastEp
   const bid = item.bookId || item.id;
 
   return (
-    <div className="group relative animate-in fade-in duration-300 text-left">
+    <div className="group relative animate-in fade-in duration-300">
       <div className="cursor-pointer" onClick={() => onClick(item)}>
-        <div className="relative aspect-[2/3] rounded-xl overflow-hidden bg-slate-800 shadow-md mb-2 border border-white/5 text-left">
+        <div className="relative aspect-[2/3] rounded-xl overflow-hidden bg-slate-800 shadow-md mb-2 border border-white/5">
           <img src={cover} alt={title} className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110" loading="lazy" />
           <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
             <div className="bg-white/20 backdrop-blur-md p-3 rounded-full border border-white/30 transform translate-y-3 group-hover:translate-y-0 transition-transform duration-500">
@@ -273,7 +283,7 @@ const SanPoiPromoModal = ({ onClose }) => {
         </button>
         
         <div className="p-8 pt-10 text-center">
-          <div className="flex justify-center mb-6 text-center">
+          <div className="flex justify-center mb-6">
             <div className="w-20 h-20 bg-blue-600 rounded-[2rem] flex items-center justify-center shadow-2xl shadow-blue-600/40 transform -rotate-6">
               <Gamepad2 size={40} className="text-white" />
             </div>
@@ -396,7 +406,8 @@ export default function App() {
   const [allDramaData, setAllDramaData] = useState([]);
   const [searchData, setSearchData] = useState([]);
   
-  // State untuk tag khusus
+  const [currentLocale, setCurrentLocale] = useState(() => localStorage.getItem(STORAGE_KEYS.LOCALE) || 'in');
+  const [langMenuOpen, setLangMenuOpen] = useState(false);
   const [activeTag, setActiveTag] = useState('');
   
   const [watchlist, setWatchlist] = useState(() => {
@@ -415,6 +426,7 @@ export default function App() {
 
   useEffect(() => { localStorage.setItem(STORAGE_KEYS.WATCHLIST, JSON.stringify(watchlist)); }, [watchlist]);
   useEffect(() => { localStorage.setItem(STORAGE_KEYS.HISTORY, JSON.stringify(watchHistory)); }, [watchHistory]);
+  useEffect(() => { localStorage.setItem(STORAGE_KEYS.LOCALE, currentLocale); }, [currentLocale]);
   
   const [loading, setLoading] = useState(false);
   const [searchModalOpen, setSearchModalOpen] = useState(false);
@@ -434,10 +446,13 @@ export default function App() {
   const [audioSettings, setAudioSettings] = useState(() => {
     try {
       const saved = localStorage.getItem(STORAGE_KEYS.SETTINGS);
-      return saved ? JSON.parse(saved) : { volume: 1, isMuted: false, playbackRate: 1, autoNext: true };
-    } catch (e) { return { volume: 1, isMuted: false, playbackRate: 1, autoNext: true }; }
+      return saved ? JSON.parse(saved) : { volume: 1, isMuted: false, playbackRate: 1, autoNext: true, autoPlay: true };
+    } catch (e) { return { volume: 1, isMuted: false, playbackRate: 1, autoNext: true, autoPlay: true }; }
   });
 
+  /**
+   * --- LOGIKA AUTH & PROMO ---
+   */
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (u) => {
       if (u) {
@@ -452,28 +467,31 @@ export default function App() {
 
   const fetchHome = useCallback(async () => {
     if (!window.DramaboxCore) return;
-    if (apiCache.home && Date.now() - apiCache.timestamp < 300000) {
-      setHomeData(apiCache.home);
+    
+    const cacheKey = `home_${currentLocale}`;
+    if (apiCache.home[cacheKey] && Date.now() - apiCache.timestamp[cacheKey] < 300000) {
+      setHomeData(apiCache.home[cacheKey]);
       return;
     }
+
     try {
       const core = window.DramaboxCore;
       const device = await core.getDevice();
-      const tokenRes = await fetchWithRetry(() => core.getToken(CONFIG.API_BASE, 'in', device, false));
+      const tokenRes = await fetchWithRetry(() => core.getToken(CONFIG.API_BASE, currentLocale, device, false));
       const [pop, lat, trd] = await Promise.all([
-        core.doClassify(CONFIG.API_BASE, 'in', device, tokenRes.token, CONFIG.FEED_IDS.POPULAR, 18),
-        core.doClassify(CONFIG.API_BASE, 'in', device, tokenRes.token, CONFIG.FEED_IDS.LATEST, 12),
-        core.doClassify(CONFIG.API_BASE, 'in', device, tokenRes.token, CONFIG.FEED_IDS.TRENDING, 12)
+        core.doClassify(CONFIG.API_BASE, currentLocale, device, tokenRes.token, CONFIG.FEED_IDS.POPULAR, 18),
+        core.doClassify(CONFIG.API_BASE, currentLocale, device, tokenRes.token, CONFIG.FEED_IDS.LATEST, 12),
+        core.doClassify(CONFIG.API_BASE, currentLocale, device, tokenRes.token, CONFIG.FEED_IDS.TRENDING, 12)
       ]);
       const data = { popular: pop || [], latest: lat || [], trending: trd || [] };
       setHomeData(data);
-      apiCache.home = data;
-      apiCache.timestamp = Date.now();
+      apiCache.home[cacheKey] = data;
+      apiCache.timestamp[cacheKey] = Date.now();
       
       const merged = [...(pop || []), ...(lat || []), ...(trd || [])];
       setAllDramaData(merged.filter((v, i, a) => a.findIndex(t => (t.bookId || t.id) === (v.bookId || v.id)) === i));
     } catch (e) { console.error("Fetch home error:", e); }
-  }, []);
+  }, [currentLocale]);
 
   const fetchRank = useCallback(async (tab, page = 1) => {
     if (!window.DramaboxCore) return;
@@ -481,13 +499,13 @@ export default function App() {
     try {
       const core = window.DramaboxCore;
       const device = await core.getDevice();
-      const tokenRes = await fetchWithRetry(() => core.getToken(CONFIG.API_BASE, 'in', device, false));
+      const tokenRes = await fetchWithRetry(() => core.getToken(CONFIG.API_BASE, currentLocale, device, false));
       const fid = tab === 'popular' ? CONFIG.FEED_IDS.POPULAR : tab === 'latest' ? CONFIG.FEED_IDS.LATEST : CONFIG.FEED_IDS.TRENDING;
       const count = page * CONFIG.PER_PAGE;
-      const res = await core.doClassify(CONFIG.API_BASE, 'in', device, tokenRes.token, fid, count);
+      const res = await core.doClassify(CONFIG.API_BASE, currentLocale, device, tokenRes.token, fid, count);
       setRankData(res || []);
     } catch (e) { console.error("Rank error:", e); } finally { setLoading(false); }
-  }, []);
+  }, [currentLocale]);
 
   const handleToggleWatchlist = useCallback((book) => {
     const bid = String(book.bookId || book.id);
@@ -540,19 +558,16 @@ export default function App() {
     signOut(auth).then(() => { setView('home'); setProfileOpen(false); });
   }, []);
 
-  /**
-   * FIX: Pindah ke halaman hasil tag khusus (Bukan halaman filter umum)
-   */
   const handleTagClick = useCallback((tagName) => {
     setActiveTag(tagName);
+    setActiveFilters(prev => ({ ...prev, category: tagName.toLowerCase() }));
     setPreviousView(view);
-    setView('tag-results');
+    setView('filter');
   }, [view]);
 
   useEffect(() => { if (scriptLoaded) fetchHome(); }, [scriptLoaded, fetchHome]);
   useEffect(() => { if (view === 'rank') fetchRank(rankTab, rankPage); }, [view, rankTab, rankPage, fetchRank]);
 
-  // Logika saringan untuk tab filter umum
   const filteredItems = useMemo(() => {
     let result = [...allDramaData];
     if (activeFilters.voice === '1') result = result.filter(i => (i.bookName || i.title || '').toLowerCase().includes('(sulih suara)'));
@@ -572,15 +587,45 @@ export default function App() {
   }, [allDramaData, activeFilters]);
 
   /**
-   * FIX: Logika untuk halaman tag-results mandiri
+   * UI: Language Selector Dropdown
    */
-  const dramasInTag = useMemo(() => {
-    if (!activeTag) return [];
-    return allDramaData.filter(i => {
-      const tags = [...(i.typeTwoNames || []), ...(i.tags || [])].map(t => String(t).toLowerCase());
-      return tags.some(tag => tag.includes(activeTag.toLowerCase()));
-    });
-  }, [allDramaData, activeTag]);
+  const LanguageSelector = () => (
+    <div className="relative">
+      <button 
+        onClick={() => setLangMenuOpen(!langMenuOpen)}
+        className="p-1.5 hover:bg-white/10 transition-all flex items-center justify-center bg-white/5 rounded-full border border-white/10 w-10 h-10 active:scale-95"
+      >
+        <span className="text-xl leading-none">
+          {SUPPORTED_LANGUAGES.find(l => l.code === currentLocale)?.flag}
+        </span>
+      </button>
+      {langMenuOpen && (
+        <>
+          <div className="fixed inset-0 z-[100]" onClick={() => setLangMenuOpen(false)}></div>
+          <div className="absolute right-0 mt-3 w-44 bg-slate-900 border border-white/10 rounded-2xl shadow-2xl z-[101] overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+            <div className="p-2">
+              <p className="px-3 py-2 text-[8px] font-black text-slate-500 uppercase tracking-widest border-b border-white/5 mb-1 text-left">Pilih Bahasa</p>
+              {SUPPORTED_LANGUAGES.map((lang) => (
+                <button 
+                  key={lang.code}
+                  onClick={() => {
+                    setCurrentLocale(lang.code);
+                    setLangMenuOpen(false);
+                    setHomeData({ popular: [], latest: [], trending: [] });
+                  }}
+                  className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-left transition-colors ${currentLocale === lang.code ? 'bg-blue-600 text-white' : 'text-slate-300 hover:bg-white/5'}`}
+                >
+                  <span className="text-lg leading-none">{lang.flag}</span>
+                  <span className="text-[10px] font-black uppercase tracking-widest">{lang.label}</span>
+                  {currentLocale === lang.code && <CheckCircle2 size={12} className="ml-auto" />}
+                </button>
+              ))}
+            </div>
+          </div>
+        </>
+      )}
+    </div>
+  );
 
   if (playerState) return (
     <CustomPlayerPage 
@@ -589,13 +634,14 @@ export default function App() {
       onEpisodeChange={handleEpisodeChange}
       audioSettings={audioSettings}
       setAudioSettings={handleAudioSettingsUpdate}
+      locale={currentLocale}
+      onTagClick={handleTagClick}
     />
   );
 
   return (
-    <div className="bg-[#0f172a] h-screen text-slate-200 font-sans flex flex-col overflow-hidden selection:bg-blue-600 selection:text-white">
+    <div className="bg-[#0f172a] h-screen text-slate-200 font-sans flex flex-col overflow-hidden selection:bg-blue-600 selection:text-white text-left">
       
-      {/* Papan Informasi Apple Ecosystem */}
       {showAppleBanner && (
         <div className="flex-none bg-amber-500/15 border-b border-amber-500/20 px-4 py-2 flex items-center justify-between gap-3 animate-in slide-in-from-top duration-500">
           <div className="flex items-center gap-3 justify-center flex-1">
@@ -610,7 +656,6 @@ export default function App() {
         </div>
       )}
 
-      {/* Header */}
       <nav className="flex-none h-16 bg-[#0f172a]/80 backdrop-blur-xl border-b border-white/5 flex items-center z-40 px-4 sm:px-8">
         <div className="container mx-auto flex justify-between items-center">
           <button onClick={() => setView('home')} className="flex items-center gap-2 group transition-all active:scale-95 text-left">
@@ -619,12 +664,15 @@ export default function App() {
           </button>
           
           <div className="flex items-center gap-2">
-            <div className="hidden md:flex items-center gap-1 bg-white/5 p-1 rounded-full border border-white/10">
+            <div className="hidden md:flex items-center gap-1 bg-white/5 p-1 rounded-full border border-white/10 mr-1">
               {[ {id:'home', icon:Home}, {id:'rank', icon:Trophy}, {id:'filter', icon:Filter} ].map(m => (
                 <button key={m.id} onClick={() => setView(m.id)} className={`p-2 rounded-full transition-all ${view === m.id ? 'bg-blue-600 text-white shadow-lg' : 'text-slate-400 hover:text-white'}`}><m.icon size={16} /></button>
               ))}
             </div>
-            <button onClick={() => setSearchModalOpen(true)} className="p-2 text-slate-400 hover:text-white transition-colors"><Search size={20} /></button>
+            
+            <LanguageSelector />
+
+            <button onClick={() => setSearchModalOpen(true)} className="p-2 text-slate-400 hover:text-white transition-colors active:scale-90"><Search size={20} /></button>
             <div className="h-6 w-[1px] bg-white/10 mx-1"></div>
             
             <div className="relative">
@@ -642,7 +690,7 @@ export default function App() {
       </nav>
 
       <main className="flex-1 overflow-y-auto pt-6 pb-20 px-4 sm:px-8 no-scrollbar text-left">
-        <div className="container mx-auto max-w-7xl">
+        <div className="container mx-auto max-w-7xl text-left">
           {view === 'home' && (
             <div className="animate-in fade-in duration-700">
                {homeData.popular[0] && (
@@ -657,11 +705,11 @@ export default function App() {
                          <img src={homeData.popular[0].coverWap || homeData.popular[0].cover} className="w-full h-full object-cover" alt="" />
                        </div>
                      </div>
-                     <div className="flex-1 text-center md:text-left">
+                     <div className="flex-1 text-center md:text-left text-left text-left">
                        <div className="inline-flex items-center gap-2 px-3 py-1 bg-blue-600 text-white text-[8px] font-black rounded-full mb-5 uppercase tracking-widest"><Flame size={12} fill="white" /> Rekomendasi Hari Ini</div>
                        <h1 className="text-3xl sm:text-6xl font-black text-white mb-6 leading-tight tracking-tighter">{homeData.popular[0].bookName || homeData.popular[0].title}</h1>
                        <div className="flex flex-wrap items-center justify-center md:justify-start gap-4">
-                        <button onClick={() => { setSelectedBookId(homeData.popular[0].bookId || homeData.popular[0].id); setView('detail'); }} className="bg-white text-black hover:bg-blue-600 hover:text-white px-8 py-3.5 rounded-xl font-black text-[10px] uppercase tracking-widest transition-all shadow-xl flex items-center gap-2 shadow-white/10">NONTON SEKARANG <Play size={16} fill="currentColor"/></button>
+                        <button onClick={() => { setSelectedBookId(homeData.popular[0].bookId || homeData.popular[0].id); setView('detail'); }} className="bg-white text-black hover:bg-blue-600 hover:text-white px-8 py-3.5 rounded-xl font-black text-[10px] uppercase tracking-widest transition-all shadow-xl flex items-center gap-2 shadow-white/10">MULAI TONTON <Play size={16} fill="currentColor"/></button>
                         <button onClick={() => handleToggleWatchlist(homeData.popular[0])} className="bg-white/10 hover:bg-white/20 text-white px-6 py-3.5 rounded-xl font-black text-[10px] uppercase tracking-widest transition-all backdrop-blur-md border border-white/10 flex items-center gap-2">
                            {watchlist.some(i => String(i.bookId || i.id) === String(homeData.popular[0].bookId || homeData.popular[0].id)) ? <BookmarkCheck size={18} className="text-blue-400" /> : <Bookmark size={18} />} SIMPAN
                         </button>
@@ -698,17 +746,17 @@ export default function App() {
           )}
 
           {view === 'rank' && (
-            <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
-               <div className="flex justify-center gap-3 mb-10 overflow-x-auto no-scrollbar py-1">
+            <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 text-left">
+               <div className="flex justify-center gap-3 mb-10 overflow-x-auto no-scrollbar py-1 text-left">
                  {[ { id: 'popular', label: 'Populer' }, { id: 'trending', label: 'Trending' }, { id: 'latest', label: 'Terbaru' } ].map(t => (
-                    <button key={t.id} onClick={() => { setRankTab(t.id); setRankPage(1); }} className={`px-8 py-2.5 rounded-xl font-black text-[10px] uppercase tracking-widest border transition-all ${rankTab === t.id ? 'bg-blue-600 border-blue-600 text-white shadow-lg shadow-blue-600/20' : 'bg-white/5 border-white/10 text-slate-400 hover:border-white/20'}`}>{t.label}</button>
+                    <button key={t.id} onClick={() => { setRankTab(t.id); setRankPage(1); }} className={`px-8 py-2.5 rounded-xl font-black text-[10px] uppercase tracking-widest border transition-all ${rankTab === t.id ? 'bg-blue-600 border-blue-600 text-white shadow-lg' : 'bg-white/5 border-white/10 text-slate-400 hover:border-white/20'}`}>{t.label}</button>
                  ))}
                </div>
                <div className="grid grid-cols-2 xs:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-6">
                   {rankData.map((item, idx) => <DramaCard key={idx} item={item} rank={idx+1} onClick={(it) => { setSelectedBookId(it.bookId || it.id); setView('detail'); }} />)}
                </div>
-               <div className="mt-12 flex justify-center">
-                  <button onClick={() => setRankPage(p => p + 1)} disabled={loading} className="px-10 py-3.5 bg-blue-600 hover:bg-blue-500 text-white rounded-2xl font-black text-[10px] uppercase tracking-[0.2em] shadow-xl flex items-center gap-3 disabled:opacity-50 transition-all">
+               <div className="mt-12 flex justify-center text-left text-left">
+                  <button onClick={() => setRankPage(p => p + 1)} disabled={loading} className="px-10 py-3.5 bg-blue-600 hover:bg-blue-500 text-white rounded-2xl font-black text-[10px] uppercase tracking-[0.2em] shadow-xl flex items-center gap-3 disabled:opacity-50 transition-all text-left text-left text-left">
                     {loading ? <Loader2 size={16} className="animate-spin" /> : <Plus size={16} />} MUAT LEBIH BANYAK
                   </button>
                </div>
@@ -716,12 +764,12 @@ export default function App() {
           )}
 
           {view === 'filter' && (
-            <div className="animate-in fade-in duration-500">
-               <div className="bg-slate-900/50 p-8 rounded-3xl border border-white/5 mb-10 grid grid-cols-1 md:grid-cols-3 gap-8 backdrop-blur-sm">
+            <div className="animate-in fade-in duration-500 text-left">
+               <div className="bg-slate-900/50 p-8 rounded-3xl border border-white/5 mb-10 grid grid-cols-1 md:grid-cols-3 gap-8 backdrop-blur-sm text-left">
                   {STATIC_FILTERS.map(f => (
                     <div key={f.key}>
                       <h4 className="text-[8px] font-black text-slate-500 uppercase tracking-widest mb-4 flex items-center gap-2 text-left"><div className="w-1 h-1 bg-blue-500 rounded-full"></div> {f.title}</h4>
-                      <div className="flex flex-wrap gap-2">
+                      <div className="flex flex-wrap gap-2 text-left">
                         {f.options.map(o => (
                           <button key={o.value} onClick={() => setActiveFilters(p => ({...p, [f.key]: p[f.key] === o.value ? '' : o.value}))} className={`px-4 py-2 rounded-xl text-[9px] font-bold uppercase tracking-wider border transition-all ${activeFilters[f.key] === o.value ? 'bg-blue-600 border-blue-600 text-white shadow-lg' : 'bg-white/5 border-white/10 text-slate-400 hover:text-white hover:bg-white/10'}`}>{o.display}</button>
                         ))}
@@ -736,30 +784,17 @@ export default function App() {
             </div>
           )}
 
-          {/* VIEW MANDIRI: Hasil Saringan Tag/Genre */}
-          {view === 'tag-results' && (
-            <div className="animate-in fade-in duration-700">
-               <button onClick={() => setView('detail')} className="flex items-center gap-2 text-slate-500 font-bold hover:text-white transition-colors text-[10px] uppercase tracking-widest mb-8"><ChevronLeft size={18}/> Kembali ke Drama</button>
-               <Section icon={Tag} title={`Genre: ${activeTag}`}>
-                 <div className="grid grid-cols-2 xs:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-6">
-                   {dramasInTag.map((item, idx) => <DramaCard key={idx} item={item} onClick={(it) => { setSelectedBookId(it.bookId || it.id); setView('detail'); }} />)}
-                 </div>
-               </Section>
-               {dramasInTag.length === 0 && <EmptyState icon={Tag} title="Belum Ada Drama" message={`Drama dengan genre ${activeTag} belum tersedia di daftar koleksi.`} />}
-            </div>
-          )}
-
           {view === 'detail' && (
             <DramaDetailPage 
               bookId={selectedBookId} onBack={() => setView(previousView)} 
               user={user} watchlist={watchlist} history={watchHistory} onToggleWatchlist={handleToggleWatchlist}
-              onTagClick={handleTagClick}
+              onTagClick={handleTagClick} locale={currentLocale}
               onPlayEpisode={(ep, b, c) => { setPlayerState({ book: b, chapters: c, ep }); updateHistory(b, ep); }} 
             />
           )}
 
           {view === 'watchlist' && (
-            <div className="animate-in fade-in duration-700">
+            <div className="animate-in fade-in duration-700 text-left">
               <Section icon={Bookmark} title="Koleksi Favorit Saya">
                 {watchlist.length > 0 ? (
                   <div className="grid grid-cols-2 xs:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-6">
@@ -771,7 +806,7 @@ export default function App() {
           )}
 
           {view === 'history' && (
-            <div className="animate-in fade-in duration-700">
+            <div className="animate-in fade-in duration-700 text-left">
               <Section icon={History} title="Sudah Ditonton">
                 {watchHistory.length > 0 ? (
                   <div className="grid grid-cols-2 xs:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-6">
@@ -783,7 +818,7 @@ export default function App() {
           )}
 
           {view === 'search-results' && (
-            <div className="animate-in fade-in duration-700">
+            <div className="animate-in fade-in duration-700 text-left">
                <Section title={`Hasil Pencarian: ${searchQuery}`} icon={Search} onSeeAll={() => setView('home')}>
                  <div className="grid grid-cols-2 xs:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-6">
                    {searchData.map((item, idx) => <DramaCard key={idx} item={item} onClick={(it) => { setSelectedBookId(it.bookId || it.id); setPreviousView('search-results'); setView('detail'); }} />)}
@@ -794,26 +829,25 @@ export default function App() {
         </div>
       </main>
 
-      {/* Navigasi Mobile */}
-      <div className="md:hidden fixed bottom-0 left-0 right-0 bg-[#0f172a]/95 backdrop-blur-xl border-t border-white/5 px-6 py-4 flex justify-between items-center z-50">
-        {[ {id:'home', icon:Home, label:'Beranda'}, {id:'rank', icon:Trophy, label:'Top'}, {id:'filter', icon:Filter, label:'Saring'}, {id:'watchlist', icon:Bookmark, label:'Pilihan'} ].map(m => (
-          <button key={m.id} onClick={() => setView(m.id)} className={`flex flex-col items-center gap-1 transition-all active:scale-90 ${view === m.id ? 'text-blue-500' : 'text-slate-500'}`}><m.icon size={20} /><span className="text-[8px] font-black uppercase tracking-widest">{m.label}</span></button>
+      <div className="md:hidden fixed bottom-0 left-0 right-0 bg-[#0f172a]/95 backdrop-blur-xl border-t border-white/5 px-6 py-4 flex justify-between items-center z-50 text-left text-left">
+        {[ {id:'home', icon:Home, label:'Home'}, {id:'rank', icon:Trophy, label:'Top'}, {id:'filter', icon:Filter, label:'Saring'}, {id:'watchlist', icon:Bookmark, label:'Favorit'} ].map(m => (
+          <button key={m.id} onClick={() => setView(m.id)} className={`flex flex-col items-center gap-1 transition-all active:scale-90 ${view === m.id ? 'text-blue-500' : 'text-slate-500'} text-left text-left text-left`}><m.icon size={20} className="text-left" /><span className="text-[8px] font-black uppercase tracking-widest text-left text-left">{m.label}</span></button>
         ))}
       </div>
 
       {searchModalOpen && (
-        <div className="fixed inset-0 z-[100] flex items-start justify-center pt-32 px-4 animate-in fade-in duration-300">
-          <div className="absolute inset-0 bg-[#0f172a]/95 backdrop-blur-md" onClick={() => setSearchModalOpen(false)}></div>
-          <div className="relative w-full max-w-2xl animate-in slide-in-from-top-8 duration-500">
-             <div className="relative group text-left">
-                <Search className="absolute left-6 top-1/2 -translate-y-1/2 text-slate-500" size={24} />
+        <div className="fixed inset-0 z-[100] flex items-start justify-center pt-32 px-4 animate-in fade-in duration-300 text-left">
+          <div className="absolute inset-0 bg-[#0f172a]/95 backdrop-blur-md text-left" onClick={() => setSearchModalOpen(false)}></div>
+          <div className="relative w-full max-w-2xl animate-in slide-in-from-top-8 duration-500 text-left">
+             <div className="relative group text-left text-left">
+                <Search className="absolute left-6 top-1/2 -translate-y-1/2 text-slate-500 text-left text-left" size={24} />
                 <input autoFocus type="text" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} onKeyDown={(e) => {
                   if (e.key === 'Enter' && searchQuery.trim()) {
-                    window.DramaboxCore.searchBooks(CONFIG.API_BASE, 'in', searchQuery, 1, 30).then(res => {
+                    window.DramaboxCore.searchBooks(CONFIG.API_BASE, currentLocale, searchQuery, 1, 30).then(res => {
                       setSearchData(res.items || []); setView('search-results'); setSearchModalOpen(false);
                     });
                   }
-                }} placeholder="Cari drama favorit..." className="w-full bg-slate-900 border border-white/10 rounded-3xl pl-16 pr-8 py-5 text-lg font-bold text-white outline-none focus:border-blue-600 transition-all shadow-2xl" />
+                }} placeholder="Cari drama favorit..." className="w-full bg-slate-900 border border-white/10 rounded-3xl pl-16 pr-8 py-5 text-lg font-bold text-white outline-none focus:border-blue-600 transition-all shadow-2xl text-left text-left text-left text-left" />
              </div>
           </div>
         </div>
@@ -827,7 +861,7 @@ export default function App() {
 /**
  * --- DETAIL PAGE COMPONENT ---
  */
-const DramaDetailPage = ({ bookId, onBack, user, watchlist, history, onToggleWatchlist, onPlayEpisode, onTagClick }) => {
+const DramaDetailPage = ({ bookId, onBack, user, watchlist, history, onToggleWatchlist, onPlayEpisode, onTagClick, locale }) => {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
 
@@ -835,70 +869,68 @@ const DramaDetailPage = ({ bookId, onBack, user, watchlist, history, onToggleWat
     const fetch = async () => {
       if (!window.DramaboxCore) return;
       try {
-        const res = await window.DramaboxCore.loadDetailWithRecommend({ apiBase: CONFIG.API_BASE, localeApi: 'in', bookId, webficBase: 'https://www.webfic.com' });
+        const res = await window.DramaboxCore.loadDetailWithRecommend({ apiBase: CONFIG.API_BASE, localeApi: locale, bookId, webficBase: 'https://www.webfic.com' });
         setData(res);
       } catch (e) { console.error("Detail error:", e); } finally { setLoading(false); }
     };
     fetch();
-  }, [bookId]);
+  }, [bookId, locale]);
 
   const isBookmarked = useMemo(() => watchlist.some(i => String(i.bookId || i.id) === String(bookId)), [watchlist, bookId]);
   const lastWatched = useMemo(() => history.find(i => String(i.bookId) === String(bookId))?.lastEpisode, [history, bookId]);
 
-  if (loading) return <div className="flex flex-col items-center justify-center p-20 gap-4 text-center"><Loader2 className="animate-spin text-blue-500" size={40} /><p className="text-[10px] font-black text-slate-600 uppercase tracking-[0.3em]">Memuat Drama...</p></div>;
+  if (loading) return <div className="flex flex-col items-center justify-center p-20 gap-4 text-center text-left text-left text-left"><Loader2 className="animate-spin text-blue-500 text-left text-left text-left" size={40} /><p className="text-[10px] font-black text-slate-600 uppercase tracking-[0.3em] text-left text-left text-left">Memuat Drama...</p></div>;
 
   return (
-    <div className="animate-in fade-in duration-700 text-left">
-      <button onClick={onBack} className="flex items-center gap-2 text-slate-500 font-bold hover:text-white transition-colors text-[10px] uppercase tracking-widest mb-8"><ChevronLeft size={18}/> Kembali</button>
+    <div className="animate-in fade-in duration-700 text-left text-left text-left">
+      <button onClick={onBack} className="flex items-center gap-2 text-slate-500 font-bold hover:text-white transition-colors text-[10px] uppercase tracking-widest mb-8 text-left text-left text-left text-left"><ChevronLeft size={18} className="text-left text-left text-left"/> Kembali</button>
 
-      <div className="flex flex-col lg:flex-row gap-10 bg-slate-900/40 rounded-[2.5rem] p-6 sm:p-10 border border-white/5 backdrop-blur-xl shadow-2xl">
-        <div className="w-full lg:w-[320px] shrink-0">
-          <div className="relative aspect-[2/3] rounded-3xl overflow-hidden shadow-2xl border border-white/10">
+      <div className="flex flex-col lg:flex-row gap-10 bg-slate-900/40 rounded-[2.5rem] p-6 sm:p-10 border border-white/5 backdrop-blur-xl shadow-2xl text-left text-left text-left text-left">
+        <div className="w-full lg:w-[320px] shrink-0 text-left text-left text-left text-left">
+          <div className="relative aspect-[2/3] rounded-3xl overflow-hidden shadow-2xl border border-white/10 text-left text-left text-left text-left text-left">
             <img src={data.book.cover} className="w-full h-full object-cover" alt="" />
-            <div className="absolute top-4 left-4 flex gap-2">
-               <span className="bg-blue-600 text-white text-[8px] font-black px-2 py-1 rounded-lg shadow-lg uppercase tracking-wider">{data.book.chapterCount} EPS</span>
+            <div className="absolute top-4 left-4 flex gap-2 text-left text-left text-left text-left text-left">
+               <span className="bg-blue-600 text-white text-[8px] font-black px-2 py-1 rounded-lg shadow-lg uppercase tracking-wider text-left text-left text-left text-left text-left text-left">{data.book.chapterCount} EPS</span>
             </div>
           </div>
         </div>
 
-        <div className="flex-1 flex flex-col justify-center text-left">
-          <h2 className="text-3xl sm:text-5xl font-black text-white mb-4 leading-tight tracking-tighter">{data.book.bookName}</h2>
+        <div className="flex-1 flex flex-col justify-center text-left text-left text-left text-left text-left">
+          <h2 className="text-3xl sm:text-5xl font-black text-white mb-4 leading-tight tracking-tighter text-left text-left text-left text-left text-left text-left">{data.book.bookName}</h2>
           
-          <div className="mb-6 flex flex-wrap gap-2">
+          <div className="mb-6 flex flex-wrap gap-2 text-left text-left text-left text-left text-left text-left">
              {data.book.typeTwoNames?.map((tag, idx) => (
                <button 
                 key={idx} 
                 onClick={() => onTagClick(tag)}
-                className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600/10 border border-blue-500/20 text-blue-400 text-[9px] font-black rounded-xl uppercase tracking-wider hover:bg-blue-600 hover:text-white transition-all active:scale-95"
+                className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600/10 border border-blue-500/20 text-blue-400 text-[9px] font-black rounded-xl uppercase tracking-wider hover:bg-blue-600 hover:text-white transition-all active:scale-95 text-left text-left text-left text-left text-left"
                >
-                 <Tag size={10} /> {tag}
+                 <Tag size={10} className="text-left text-left text-left text-left text-left text-left"/> {tag}
                </button>
              ))}
           </div>
 
-          <div className="flex flex-wrap gap-3 mb-8">
-            <button onClick={() => onPlayEpisode(lastWatched || 1, data.book, data.chapters)} className="bg-blue-600 hover:bg-blue-500 text-white px-8 py-3.5 rounded-2xl font-black text-[10px] uppercase tracking-widest shadow-xl shadow-blue-600/30 transition-all flex items-center gap-2 group active:scale-95">
-              <Play size={18} fill="currentColor" /> {lastWatched ? `LANJUT EPS ${lastWatched}` : 'TONTON SEKARANG'}
-            </button>
-            <button onClick={() => onToggleWatchlist(data.book)} className={`px-6 py-3.5 rounded-2xl font-black text-[10px] uppercase tracking-widest transition-all border flex items-center gap-2 active:scale-95 ${isBookmarked ? 'bg-blue-600/10 border-blue-500/30 text-blue-400' : 'bg-white/5 border-white/10 text-white hover:bg-white/10'}`}>
-              {isBookmarked ? <BookmarkCheck size={18} /> : <Bookmark size={18} />} {isBookmarked ? 'FAVORIT' : 'SIMPAN'}
+          <div className="flex flex-wrap gap-3 mb-8 text-left text-left text-left text-left text-left text-left">
+            <button onClick={() => onPlayEpisode(lastWatched || 1, data.book, data.chapters)} className="bg-blue-600 hover:bg-blue-500 text-white px-8 py-3.5 rounded-2xl font-black text-[10px] uppercase tracking-widest shadow-xl shadow-blue-600/30 transition-all flex items-center gap-2 group active:scale-95 text-left text-left text-left text-left text-left text-left text-left text-left"><Play size={18} fill="currentColor" className="text-left text-left text-left text-left text-left text-left text-left text-left"/> {lastWatched ? `LANJUT EPS ${lastWatched}` : 'TONTON SEKARANG'}</button>
+            <button onClick={() => onToggleWatchlist(data.book)} className={`px-6 py-3.5 rounded-2xl font-black text-[10px] uppercase tracking-widest transition-all border flex items-center gap-2 active:scale-95 ${isBookmarked ? 'bg-blue-600/10 border-blue-500/30 text-blue-400' : 'bg-white/5 border-white/10 text-white hover:bg-white/10'} text-left text-left text-left text-left text-left text-left`}>
+              {isBookmarked ? <BookmarkCheck size={18} className="text-left text-left text-left text-left text-left text-left" /> : <Bookmark size={18} className="text-left text-left text-left text-left text-left text-left text-left" />} {isBookmarked ? 'FAVORIT' : 'SIMPAN'}
             </button>
           </div>
 
-          <div className="mb-10 text-left">
-            <h4 className="text-[9px] font-black text-slate-500 uppercase tracking-[0.3em] mb-3">SINOPSIS</h4>
-            <div className="p-5 bg-white/5 rounded-2xl border border-white/5 text-slate-400 text-xs leading-relaxed italic line-clamp-4 hover:line-clamp-none transition-all duration-300 text-left">
+          <div className="mb-10 text-left text-left text-left text-left text-left text-left text-left">
+            <h4 className="text-[9px] font-black text-slate-500 uppercase tracking-[0.3em] mb-3 text-left text-left text-left text-left text-left text-left">SINOPSIS</h4>
+            <div className="p-5 bg-white/5 rounded-2xl border border-white/5 text-slate-400 text-xs leading-relaxed italic line-clamp-4 hover:line-clamp-none transition-all duration-300 text-left text-left text-left text-left text-left text-left text-left">
                {cleanIntro(data.book.introduction)}
             </div>
           </div>
 
-          <div>
-             <h4 className="text-[9px] font-black text-slate-500 uppercase tracking-[0.3em] mb-4 text-slate-400">DAFTAR EPISODE</h4>
-             <div className="grid grid-cols-4 xs:grid-cols-6 sm:grid-cols-8 lg:grid-cols-12 gap-2 max-h-[160px] overflow-y-auto pr-3 no-scrollbar pb-2">
+          <div className="text-left text-left text-left text-left text-left text-left text-left text-left">
+             <h4 className="text-[9px] font-black text-slate-500 uppercase tracking-[0.3em] mb-4 text-slate-400 text-left text-left text-left text-left text-left text-left">DAFTAR EPISODE</h4>
+             <div className="grid grid-cols-4 xs:grid-cols-6 sm:grid-cols-8 lg:grid-cols-12 gap-2 max-h-[160px] overflow-y-auto pr-3 no-scrollbar pb-2 text-left text-left text-left text-left text-left text-left">
               {data.chapters?.map((ch, i) => {
                 const num = ch.num || (ch.index + 1);
                 return (
-                  <button key={i} onClick={() => onPlayEpisode(num, data.book, data.chapters)} className={`aspect-square rounded-xl text-[10px] font-black flex items-center justify-center transition-all border ${num === lastWatched ? 'bg-blue-600 border-blue-600 text-white shadow-lg' : 'bg-slate-800 border-white/5 text-slate-500 hover:text-white'}`}>
+                  <button key={i} onClick={() => onPlayEpisode(num, data.book, data.chapters)} className={`aspect-square rounded-xl text-[10px] font-black flex items-center justify-center transition-all border ${num === lastWatched ? 'bg-blue-600 border-blue-600 text-white shadow-lg' : 'bg-slate-800 border-white/5 text-slate-500 hover:text-white'} text-left text-left text-left text-left text-left text-left`}>
                     {num}
                   </button>
                 );
@@ -912,9 +944,13 @@ const DramaDetailPage = ({ bookId, onBack, user, watchlist, history, onToggleWat
 };
 
 /**
- * --- PREMIUM PLAYER MODULE ---
+ * --- PREMIUM PLAYER PAGE (REFINED UI) ---
  */
-const CustomPlayerPage = ({ book, initialEp, onBack, onEpisodeChange, audioSettings, setAudioSettings }) => {
+const CustomPlayerPage = ({ 
+  book, initialEp, onBack, onEpisodeChange, 
+  audioSettings, setAudioSettings, locale, 
+  onTagClick 
+}) => {
   const [currentEp, setCurrentEp] = useState(initialEp);
   const [videoUrl, setVideoUrl] = useState('');
   const [loading, setLoading] = useState(true);
@@ -923,21 +959,35 @@ const CustomPlayerPage = ({ book, initialEp, onBack, onEpisodeChange, audioSetti
   const [duration, setDuration] = useState(0);
   const [showControls, setShowControls] = useState(true);
   const [volume, setVolume] = useState(audioSettings.volume);
+  const [localAutoNext, setLocalAutoNext] = useState(audioSettings.autoNext);
+  
+  const [details, setDetails] = useState(null);
 
   const videoRef = useRef(null);
   const hlsRef = useRef(null);
   const timerRef = useRef(null);
   const lastUrlRef = useRef('');
-  const currentEpRef = useRef(initialEp);
+  const containerRef = useRef(null);
+
+  useEffect(() => {
+    const fetchDetails = async () => {
+      if (!window.DramaboxCore) return;
+      try {
+        const res = await window.DramaboxCore.loadDetailWithRecommend({ 
+          apiBase: CONFIG.API_BASE, localeApi: locale, bookId: book.bookId || book.id, 
+          webficBase: 'https://www.webfic.com' 
+        });
+        setDetails(res);
+      } catch (e) { console.error("Player detail error:", e); }
+    };
+    fetchDetails();
+  }, [book.bookId, book.id, locale]);
 
   const loadVideo = useCallback(async (ep) => {
     setLoading(true);
     try {
       const res = await fetchWithRetry(() => window.DramaboxCore.loadViaBatch({ 
-        apiBase: CONFIG.API_BASE, 
-        localeApi: 'in', 
-        bookId: book.bookId || book.id, 
-        index: ep 
+        apiBase: CONFIG.API_BASE, localeApi: locale, bookId: book.bookId || book.id, index: ep 
       }));
       const list = res?.data?.chapterList || res?.chapters || [];
       const chapter = list.find(c => String(c.num) === String(ep)) || list[0];
@@ -946,38 +996,27 @@ const CustomPlayerPage = ({ book, initialEp, onBack, onEpisodeChange, audioSetti
       if (url && url !== lastUrlRef.current) { 
         lastUrlRef.current = url;
         setVideoUrl(url); 
-        currentEpRef.current = ep;
         if (onEpisodeChange) onEpisodeChange(ep); 
-      } else {
-        setLoading(false);
-      }
+      } else { setLoading(false); }
     } catch (e) { 
       console.error("Player error:", e); 
       if (e.message.includes('500')) onBack();
     }
-  }, [book.bookId, book.id, onBack, onEpisodeChange]);
+  }, [book.bookId, book.id, onBack, onEpisodeChange, locale]);
 
-  useEffect(() => { 
-    if (currentEp !== currentEpRef.current || !videoUrl) {
-      loadVideo(currentEp); 
-    }
-  }, [currentEp, loadVideo, videoUrl]);
+  useEffect(() => { loadVideo(currentEp); }, [currentEp, loadVideo]);
 
   useEffect(() => {
     const video = videoRef.current;
     if (!video || !videoUrl) return;
-    
-    if (hlsRef.current) {
-      hlsRef.current.destroy();
-      hlsRef.current = null;
-    }
+    if (hlsRef.current) { hlsRef.current.destroy(); hlsRef.current = null; }
 
     const applyInitialSettings = () => {
       if(video) {
         video.playbackRate = audioSettings.playbackRate;
         video.volume = volume;
         setLoading(false);
-        video.play().catch(() => {});
+        if (audioSettings.autoPlay) video.play().catch(() => {});
       }
     };
 
@@ -985,14 +1024,7 @@ const CustomPlayerPage = ({ book, initialEp, onBack, onEpisodeChange, audioSetti
       // @ts-ignore
       if (window.Hls && window.Hls.isSupported()) {
         // @ts-ignore
-        const hls = new window.Hls({
-          enableWorker: true,
-          lowLatencyMode: true,
-          maxBufferLength: 60,
-          maxMaxBufferLength: 120,
-          backBufferLength: 60
-        }); 
-
+        const hls = new window.Hls({ enableWorker: true, lowLatencyMode: true, maxBufferLength: 60 }); 
         hls.on(window.Hls.Events.ERROR, (event, data) => {
           if (data.fatal) {
             switch(data.type) {
@@ -1002,7 +1034,6 @@ const CustomPlayerPage = ({ book, initialEp, onBack, onEpisodeChange, audioSetti
             }
           }
         });
-
         hls.loadSource(videoUrl); 
         hls.attachMedia(video);
         hls.on(window.Hls.Events.MANIFEST_PARSED, applyInitialSettings); 
@@ -1010,79 +1041,204 @@ const CustomPlayerPage = ({ book, initialEp, onBack, onEpisodeChange, audioSetti
       } else { video.src = videoUrl; video.oncanplay = applyInitialSettings; }
     } else { video.src = videoUrl; video.oncanplay = applyInitialSettings; }
     
-    return () => {
-       if (hlsRef.current) hlsRef.current.destroy();
-    };
-  }, [videoUrl]); 
+    return () => { if (hlsRef.current) hlsRef.current.destroy(); };
+  }, [videoUrl, audioSettings.autoPlay]); 
 
   useEffect(() => {
     const video = videoRef.current;
-    if (video) {
-      video.playbackRate = audioSettings.playbackRate;
-      video.volume = volume;
-    }
+    if (video) { video.playbackRate = audioSettings.playbackRate; video.volume = volume; }
   }, [audioSettings.playbackRate, volume]);
 
   const togglePlay = () => isPlaying ? videoRef.current.pause() : videoRef.current.play();
+  
+  const toggleFullScreen = () => {
+    if (!document.fullscreenElement) {
+      containerRef.current.requestFullscreen().catch(err => console.error(err));
+    } else {
+      document.exitFullscreen();
+    }
+  };
+
+  const handleNext = () => {
+    const total = details?.book?.chapterCount || 0;
+    if (currentEp < total) setCurrentEp(prev => prev + 1);
+  };
+
+  const handlePrev = () => {
+    if (currentEp > 1) setCurrentEp(prev => prev - 1);
+  };
 
   return (
-    <div className="fixed inset-0 z-[1000] bg-black flex flex-col items-center justify-center group text-left" onMouseMove={() => { setShowControls(true); clearTimeout(timerRef.current); timerRef.current = setTimeout(() => setShowControls(false), 3000); }}>
-      <div className={`absolute top-0 left-0 right-0 p-6 flex items-center justify-between bg-gradient-to-b from-black/95 to-transparent z-50 transition-opacity duration-500 ${showControls ? 'opacity-100' : 'opacity-0'}`}>
-        <button onClick={onBack} className="text-white p-2 rounded-full hover:bg-white/10 transition-all"><ChevronLeft size={24}/></button>
-        <div className="text-center flex-1 mx-4 text-left">
-          <h2 className="text-white text-xs font-black uppercase tracking-widest truncate max-w-[250px]">{book.bookName || book.title}</h2>
-          <p className="text-blue-500 text-[9px] font-black uppercase tracking-[0.2em]">Episode {currentEp}</p>
+    <div className="bg-[#0b1120] min-h-screen text-slate-200 text-left">
+      <div className="container mx-auto px-4 py-4">
+        <div className="flex items-center gap-2 text-[10px] font-bold text-slate-500 uppercase tracking-widest overflow-x-auto no-scrollbar whitespace-nowrap">
+          <button onClick={onBack} className="hover:text-white transition-colors">Home</button>
+          <ChevronRight size={12} />
+          <span className="text-slate-600">A Nobody</span>
+          <ChevronRight size={12} />
+          <span className="text-white truncate">{book.bookName || book.title}</span>
         </div>
-        <button className="text-white p-2 transition-transform active:scale-90"><Share2 size={20}/></button>
       </div>
 
-      <div className="relative w-full h-full flex items-center justify-center text-left" onClick={togglePlay}>
-        <video ref={videoRef} className="w-full h-full object-contain cursor-pointer" playsInline 
-          onPlay={() => setIsPlaying(true)} 
-          onPause={() => setIsPlaying(false)} 
-          onTimeUpdate={() => setCurrentTime(videoRef.current?.currentTime || 0)} 
-          onLoadedMetadata={() => setDuration(videoRef.current?.duration || 0)} 
-          onEnded={() => audioSettings.autoNext && setCurrentEp(e => e + 1)} 
-          onWaiting={() => setLoading(true)} 
-          onPlaying={() => setLoading(false)} 
-        />
-        {loading && <div className="absolute inset-0 flex items-center justify-center bg-black/30 z-10 text-left"><Loader2 className="animate-spin text-blue-500" size={48} /></div>}
-        {!isPlaying && !loading && (
-          <div className="absolute inset-0 flex items-center justify-center pointer-events-none text-left">
-             <div className="p-8 rounded-full bg-blue-600/20 backdrop-blur-xl border border-blue-500/30 shadow-2xl animate-in zoom-in duration-300"><Play size={48} fill="white" className="text-white ml-2"/></div>
-          </div>
-        )}
-      </div>
+      <div className="container mx-auto px-4 pb-20">
+        <div className="flex flex-col lg:flex-row gap-8">
+          
+          <div className="flex-1">
+            <div 
+              ref={containerRef}
+              className="relative aspect-video bg-black rounded-3xl overflow-hidden shadow-2xl group"
+              onMouseMove={() => { setShowControls(true); clearTimeout(timerRef.current); timerRef.current = setTimeout(() => setShowControls(false), 3000); }}
+            >
+              <video 
+                ref={videoRef} 
+                className="w-full h-full object-contain cursor-pointer" 
+                playsInline 
+                onPlay={() => setIsPlaying(true)} 
+                onPause={() => setIsPlaying(false)} 
+                onTimeUpdate={() => setCurrentTime(videoRef.current?.currentTime || 0)} 
+                onLoadedMetadata={() => setDuration(videoRef.current?.duration || 0)} 
+                onEnded={() => localAutoNext && handleNext()} 
+                onWaiting={() => setLoading(true)} 
+                onPlaying={() => setLoading(false)}
+                onClick={togglePlay}
+              />
 
-      <div className={`absolute bottom-0 left-0 right-0 p-8 bg-gradient-to-t from-black/95 via-black/40 to-transparent z-50 transition-all duration-500 ${showControls ? 'translate-y-0 opacity-100' : 'translate-y-10 opacity-0'}`}>
-        <div className="max-w-5xl mx-auto flex flex-col gap-6 text-left">
-          <div className="flex flex-col gap-2 text-left">
-             <input type="range" min="0" max={duration || 0} step="0.1" value={currentTime} onChange={(e) => {
-               if (videoRef.current) videoRef.current.currentTime = parseFloat(e.target.value);
-             }} className="w-full accent-blue-600 h-1.5 bg-white/10 rounded-full appearance-none cursor-pointer hover:scale-y-125 transition-all" />
-             <div className="flex justify-between text-[10px] font-mono font-bold text-white/40 tracking-tighter"><span>{formatTime(currentTime)}</span><span>{formatTime(duration)}</span></div>
-          </div>
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-8 text-left">
-              <button disabled={currentEp <= 1} onClick={() => setCurrentEp(e => e - 1)} className="text-white/40 hover:text-white transition-colors disabled:opacity-10"><SkipBack size={28} fill="currentColor"/></button>
-              <button onClick={togglePlay} className="text-white transform active:scale-90 transition-transform">{isPlaying ? <Pause size={42} fill="white" /> : <Play size={42} fill="white" />}</button>
-              <button onClick={() => setCurrentEp(e => e + 1)} className="text-white/40 hover:text-white transition-colors"><SkipForward size={28} fill="currentColor"/></button>
+              {loading && <div className="absolute inset-0 flex items-center justify-center bg-black/40 backdrop-blur-sm z-10"><Loader2 className="animate-spin text-blue-500" size={48} /></div>}
+              
+              <div className={`absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-black/40 flex flex-col justify-between p-6 transition-opacity duration-500 ${showControls ? 'opacity-100' : 'opacity-0'}`}>
+                <div className="flex justify-between items-center">
+                  <button onClick={onBack} className="p-2 bg-white/10 backdrop-blur-md rounded-full hover:bg-white/20 transition-all"><ChevronLeft size={20}/></button>
+                  <div className="text-center">
+                    <h2 className="text-[10px] font-black uppercase tracking-widest text-white">{book.bookName || book.title}</h2>
+                    <p className="text-[9px] font-bold text-blue-400 uppercase tracking-[0.2em]">Eps {currentEp}</p>
+                  </div>
+                  <button onClick={toggleFullScreen} className="p-2 bg-white/10 backdrop-blur-md rounded-full hover:bg-white/20 transition-all"><Maximize size={20}/></button>
+                </div>
+
+                <div className="flex flex-col gap-4">
+                  <div className="flex flex-col gap-1">
+                    <input type="range" min="0" max={duration || 0} step="0.1" value={currentTime} onChange={(e) => { if (videoRef.current) videoRef.current.currentTime = parseFloat(e.target.value); }} className="w-full h-1 accent-blue-600 bg-white/20 rounded-full appearance-none cursor-pointer" />
+                    <div className="flex justify-between text-[8px] font-mono font-bold text-white/50 tracking-tighter"><span>{formatTime(currentTime)}</span><span>{formatTime(duration)}</span></div>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-6">
+                      <button onClick={handlePrev} disabled={currentEp <= 1} className="text-white hover:text-blue-400 disabled:opacity-20"><SkipBack size={24} fill="currentColor"/></button>
+                      <button onClick={togglePlay} className="text-white transform active:scale-90 transition-transform">{isPlaying ? <Pause size={36} fill="white" /> : <Play size={36} fill="white" />}</button>
+                      <button onClick={handleNext} disabled={currentEp >= (details?.book?.chapterCount || 0)} className="text-white hover:text-blue-400 disabled:opacity-20"><SkipForward size={24} fill="currentColor"/></button>
+                    </div>
+                    <div className="flex items-center gap-4">
+                      <div className="flex items-center gap-2 px-3 py-1.5 bg-white/10 backdrop-blur-md rounded-xl border border-white/5">
+                        <button onClick={() => setVolume(v => v === 0 ? 1 : 0)}>
+                           {volume === 0 ? <VolumeX size={16} className="text-white/60"/> : <Volume2 size={16} className="text-white/60"/>}
+                        </button>
+                        <input type="range" min="0" max="1" step="0.05" value={volume} onChange={(e) => setVolume(parseFloat(e.target.value))} className="w-16 h-0.5 accent-white appearance-none bg-white/20 rounded-full" />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
             </div>
-            <div className="flex items-center gap-6">
-               <div className="hidden sm:flex items-center gap-3 group/vol bg-white/5 p-2 rounded-xl border border-white/5 transition-all hover:bg-white/10">
-                  <button onClick={() => setVolume(v => v === 0 ? 1 : 0)} className="text-white/70 hover:text-white transition-colors">{volume === 0 ? <VolumeX size={20}/> : <Volume2 size={20}/>}</button>
-                  <div className="w-0 group-hover/vol:w-24 overflow-hidden transition-all duration-300 flex items-center"><input type="range" min="0" max="1" step="0.05" value={volume} onChange={(e) => setVolume(parseFloat(e.target.value))} className="w-24 accent-white h-1 rounded-full appearance-none cursor-pointer" /></div>
+
+            {/* Quick Actions (Modern Toggles) */}
+            <div className="mt-8 grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="p-5 bg-slate-900/60 rounded-3xl border border-white/5 flex items-center justify-between transition-all hover:bg-slate-900/80">
+                <div className="flex items-center gap-4">
+                  <div className="w-10 h-10 rounded-2xl bg-blue-600/10 flex items-center justify-center text-blue-500">
+                    <RotateCcw size={20} />
+                  </div>
+                  <div>
+                    <h4 className="text-[10px] font-black uppercase text-white tracking-widest">Auto Next</h4>
+                    <p className="text-[9px] font-bold text-slate-500 uppercase tracking-wider">Lanjut Otomatis</p>
+                  </div>
+                </div>
+                <button 
+                  onClick={() => setLocalAutoNext(!localAutoNext)}
+                  className={`w-12 h-6 rounded-full relative transition-all ${localAutoNext ? 'bg-blue-600' : 'bg-slate-700'}`}
+                >
+                  <div className={`absolute top-1 w-4 h-4 rounded-full bg-white transition-all ${localAutoNext ? 'left-7' : 'left-1'}`}></div>
+                </button>
+              </div>
+
+              <div className="p-5 bg-slate-900/60 rounded-3xl border border-white/5 flex items-center justify-between transition-all hover:bg-slate-900/80">
+                <div className="flex items-center gap-4">
+                  <div className="w-10 h-10 rounded-2xl bg-blue-600/10 flex items-center justify-center text-blue-500">
+                    <Settings size={20} />
+                  </div>
+                  <div>
+                    <h4 className="text-[10px] font-black uppercase text-white tracking-widest">Speed</h4>
+                    <p className="text-[9px] font-bold text-slate-500 uppercase tracking-wider">{audioSettings.playbackRate}x Tempo</p>
+                  </div>
+                </div>
+                <button 
+                  onClick={() => {
+                    const rates = [1, 1.25, 1.5, 2];
+                    const next = rates[(rates.indexOf(audioSettings.playbackRate) + 1) % rates.length];
+                    setAudioSettings({...audioSettings, playbackRate: next});
+                  }}
+                  className="px-4 py-1.5 bg-white/5 border border-white/10 rounded-xl text-[10px] font-black text-white hover:bg-white/10 transition-all"
+                >
+                  Ganti
+                </button>
+              </div>
+            </div>
+
+            <div className="mt-12 text-left">
+              <div className="flex flex-wrap gap-2 mb-6">
+                 {details?.book?.typeTwoNames?.map((tag, idx) => (
+                   <button key={idx} onClick={() => onTagClick(tag)} className="flex items-center gap-1.5 px-3 py-1 bg-white/5 border border-white/10 text-slate-400 text-[9px] font-black rounded-full hover:bg-blue-600 hover:text-white transition-all uppercase">
+                     <Tag size={10} /> {tag}
+                   </button>
+                 ))}
+              </div>
+              <div className="p-8 bg-slate-900/40 border border-white/5 rounded-[2.5rem] text-sm text-slate-400 leading-relaxed italic">
+                 {details?.book?.introduction ? cleanIntro(details.book.introduction) : "Memuat sinopsis..."}
+              </div>
+            </div>
+
+            {/* Mobile Ep Grid */}
+            <div className="mt-16 lg:hidden">
+               <div className="flex items-center justify-between mb-8">
+                 <h3 className="text-[10px] font-black uppercase tracking-[0.3em] text-white">Daftar Episode</h3>
+                 <span className="text-[9px] font-black text-slate-600 bg-white/5 px-3 py-1 rounded-full">{details?.book?.chapterCount} EPS</span>
                </div>
-               <button onClick={() => {
-                 const rates = [1, 1.25, 1.5, 2];
-                 const currentIdx = rates.indexOf(audioSettings.playbackRate);
-                 const nextRate = rates[(currentIdx + 1) % rates.length];
-                 setAudioSettings(prev => ({...prev, playbackRate: nextRate}));
-               }} className="px-4 py-2 bg-blue-600 text-white rounded-xl font-black text-[10px] tracking-widest shadow-xl shadow-blue-600/30 active:scale-95 transition-all">
-                 {audioSettings.playbackRate}X SPEED
-               </button>
+               <div className="grid grid-cols-5 gap-3 max-h-[350px] overflow-y-auto no-scrollbar">
+                  {details?.chapters?.map((ch, i) => {
+                    const num = ch.num || (i + 1);
+                    return (
+                      <button key={i} onClick={() => setCurrentEp(num)} className={`aspect-square rounded-2xl text-[11px] font-black transition-all border ${num === currentEp ? 'bg-blue-600 border-blue-600 text-white shadow-xl shadow-blue-600/30' : 'bg-slate-900 border-white/5 text-slate-500'}`}>{num}</button>
+                    );
+                  })}
+               </div>
             </div>
           </div>
+
+          {/* Desktop Sidebar */}
+          <div className="hidden lg:block w-[340px] shrink-0 text-left">
+             <div className="sticky top-24 bg-slate-900/60 backdrop-blur-2xl border border-white/10 rounded-[3rem] p-10 max-h-[85vh] flex flex-col">
+                <div className="flex items-center gap-4 mb-10">
+                   <div className="w-12 h-12 bg-blue-600 rounded-[1.25rem] shadow-xl shadow-blue-600/20 flex items-center justify-center text-white"><List size={22}/></div>
+                   <h3 className="text-xs font-black uppercase tracking-[0.2em] text-white">Episode</h3>
+                </div>
+                <div className="flex-1 overflow-y-auto no-scrollbar grid grid-cols-4 gap-3 pr-2">
+                   {details?.chapters?.map((ch, i) => {
+                     const num = ch.num || (i + 1);
+                     return (
+                       <button 
+                        key={i} 
+                        onClick={() => setCurrentEp(num)} 
+                        className={`aspect-square rounded-2xl text-[11px] font-black transition-all border ${num === currentEp ? 'bg-blue-600 border-blue-600 text-white shadow-xl shadow-blue-600/30 scale-110' : 'bg-slate-800/50 border-white/5 text-slate-500 hover:text-white hover:bg-white/5'}`}
+                       >
+                         {num}
+                       </button>
+                     );
+                   })}
+                </div>
+                <div className="mt-10 pt-6 border-t border-white/5 text-center">
+                   <p className="text-[9px] font-bold text-slate-600 uppercase tracking-widest italic">Pilih episode untuk memutar</p>
+                </div>
+             </div>
+          </div>
+
         </div>
       </div>
     </div>
