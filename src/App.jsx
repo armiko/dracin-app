@@ -3,137 +3,32 @@ import {
   Play, X, Search, Home, Clock, Flame, 
   ChevronRight, SkipBack, SkipForward, AlertTriangle, 
   Loader2, Trophy, Star, Filter, Plus,
-  Pause, Volume2, VolumeX, Share2, ChevronLeft
+  Pause, Volume2, VolumeX, Share2, ChevronLeft,
+  Volume1, Gamepad2, CheckCircle2, ExternalLink
 } from 'lucide-react';
+import { initializeApp } from 'firebase/app';
+import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from 'firebase/auth';
+import { getFirestore, doc, setDoc, getDoc, collection } from 'firebase/firestore';
 
 /**
- * --- KONFIGURASI API & KONSTANTA ---
+ * --- KONFIGURASI ---
  */
 const CONFIG = {
-  // Updated SCRIPT_URL to use jsDelivr CDN for better MIME type support and reliability
   SCRIPT_URL: "https://cdn.jsdelivr.net/gh/armiko/dracin-app@169efe4fc99586d445cbf8780629c5ac210ca929/js/dramabox-core.js",
+  HLS_URL: "https://cdn.jsdelivr.net/npm/hls.js@latest",
   API_BASE: "https://drachin.dicky.app",
   LOCALE_API: "in",
-  LOCALE_URL: "id",
-  FEED_IDS: {
-    POPULAR: 1,
-    LATEST: 2,
-    TRENDING: 3
-  },
+  FEED_IDS: { POPULAR: 1, LATEST: 2, TRENDING: 3 },
   PER_PAGE: 24
 };
 
-/**
- * --- API HELPER FUNCTIONS & EXTERNAL SCRIPT LOADER ---
- */
+// Firebase Setup
+const firebaseConfig = JSON.parse(__firebase_config);
+const app = initializeApp(firebaseConfig);
+const auth = getAuth(app);
+const db = getFirestore(app);
+const appId = typeof __app_id !== 'undefined' ? __app_id : 'nontondracin-compact';
 
-// Hook untuk load external script
-const useExternalScript = (url) => {
-  const [state, setState] = useState({ loaded: false, error: false });
-  
-  useEffect(() => {
-    if (window.DramaboxCore) {
-      setState({ loaded: true, error: false });
-      return;
-    }
-    
-    let script = document.querySelector(`script[src="${url}"]`);
-    let checkCount = 0;
-    const maxChecks = 30;
-    
-    const onScriptLoad = () => {
-      setTimeout(() => {
-        if (window.DramaboxCore) {
-          console.log('DramaboxCore loaded successfully');
-          setState({ loaded: true, error: false });
-        } else {
-          console.warn('Script loaded but DramaboxCore not found');
-          setState({ loaded: true, error: true });
-        }
-      }, 1000);
-    };
-    
-    const onScriptError = (e) => {
-      console.error('Script loading failed:', e);
-      setState({ loaded: true, error: true });
-    };
-    
-    if (!script) {
-      script = document.createElement("script");
-      script.src = url;
-      script.async = true;
-      script.crossOrigin = "anonymous";
-      document.body.appendChild(script);
-      console.log('Loading script from:', url);
-    }
-    
-    script.addEventListener("load", onScriptLoad);
-    script.addEventListener("error", onScriptError);
-    
-    const interval = setInterval(() => {
-      checkCount++;
-      if (window.DramaboxCore) {
-        console.log('DramaboxCore detected');
-        setState({ loaded: true, error: false });
-        clearInterval(interval);
-      } else if (checkCount >= maxChecks) {
-        console.error('DramaboxCore not available after max checks');
-        setState({ loaded: true, error: true });
-        clearInterval(interval);
-      }
-    }, 500);
-    
-    return () => {
-      script.removeEventListener("load", onScriptLoad);
-      script.removeEventListener("error", onScriptError);
-      clearInterval(interval);
-    };
-  }, [url]);
-  
-  return state;
-};
-
-// Fallback API jika DramaboxCore gagal load
-const API = {
-  getDeviceId: () => {
-    let deviceId = localStorage.getItem('device_id');
-    if (!deviceId) {
-      deviceId = 'web_' + Math.random().toString(36).substring(2, 15) + Date.now().toString(36);
-      localStorage.setItem('device_id', deviceId);
-    }
-    return deviceId;
-  },
-
-  fetchWithTimeout: async (url, options = {}, timeout = 10000) => {
-    const controller = new AbortController();
-    const id = setTimeout(() => controller.abort(), timeout);
-    
-    try {
-      const response = await fetch(url, {
-        ...options,
-        signal: controller.signal,
-        headers: {
-          'Content-Type': 'application/json',
-          ...options.headers
-        }
-      });
-      clearTimeout(id);
-      
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-      
-      return await response.json();
-    } catch (error) {
-      clearTimeout(id);
-      throw error;
-    }
-  }
-};
-
-/**
- * --- DATA FILTER STATIS ---
- */
 const STATIC_FILTERS = [
   {
     title: "Tipe Suara",
@@ -156,16 +51,8 @@ const STATIC_FILTERS = [
       { display: "CEO", value: "ceo" },
       { display: "Keluarga", value: "keluarga" },
       { display: "Kekuatan Khusus", value: "kekuatan khusus" },
-      { display: "Pembalikan Identitas", value: "pembalikan identitas" },
-      { display: "Perselingkuhan", value: "perselingkuhan" },
-      { display: "Terlahir Kembali", value: "terlahir kembali" },
       { display: "Sejarah", value: "sejarah" },
-      { display: "Tokoh Legendaris", value: "tokoh legendaris" },
-      { display: "Cinta Rahasia", value: "cinta rahasia" },
-      { display: "Intrik Keluarga", value: "intrik keluarga" },
-      { display: "Cinta Setelah Menikah", value: "cinta setelah menikah" },
-      { display: "Takdir Cinta", value: "takdir cinta" },
-      { display: "Kesempatan Kedua", value: "kesempatan kedua" }
+      { display: "Takdir Cinta", value: "takdir cinta" }
     ]
   },
   {
@@ -178,240 +65,146 @@ const STATIC_FILTERS = [
   }
 ];
 
-// --- HELPER: Utilitas ---
-const cleanIntro = (html) => {
-  if (!html) return '';
-  return String(html)
-    .replace(/<br\s*\/?>/gi, ' ')
-    .replace(/<\/?p[^>]*>/gi, ' ')
-    .replace(/&nbsp;/gi, ' ')
-    .replace(/\s+/g, ' ')
-    .trim();
+/**
+ * --- UTILS ---
+ */
+const useExternalScript = (url) => {
+  const [state, setState] = useState({ loaded: false, error: false });
+  useEffect(() => {
+    let script = document.querySelector(`script[src="${url}"]`);
+    const handleLoad = () => setState({ loaded: true, error: false });
+    const handleError = () => setState({ loaded: false, error: true });
+    if (!script) {
+      script = document.createElement("script");
+      script.src = url; script.async = true;
+      document.body.appendChild(script);
+    } else if (window.DramaboxCore || window.Hls) {
+      handleLoad(); return;
+    }
+    script.addEventListener("load", handleLoad);
+    script.addEventListener("error", handleError);
+    return () => {
+      script.removeEventListener("load", handleLoad);
+      script.removeEventListener("error", handleError);
+    };
+  }, [url]);
+  return state;
 };
 
-const extractVideoUrlFromChapter = (chapter) => {
-  if (!chapter) return '';
-  let src = chapter.raw || chapter;
-  
-  if (typeof src.m3u8Url === 'string' && src.m3u8Url) return src.m3u8Url;
-  if (typeof src.mp4 === 'string' && src.mp4) return src.mp4;
-  
-  const cdnList = src.cdnList || [];
-  let candidates = [];
-  const extractPath = (entry) => {
-    if (!entry) return '';
-    if (typeof entry === 'string') return entry;
-    return entry.videoPath || entry.path || entry.url || '';
-  };
+const cleanIntro = (h) => h ? String(h).replace(/<[^>]*>/g, ' ').replace(/&nbsp;/g, ' ').trim() : '';
 
-  cdnList.forEach((cdn) => {
-    (cdn.videoPathList || []).forEach((v) => {
-      const path = extractPath(v);
-      if (path) {
-        candidates.push({
-          url: path,
-          quality: v.quality || 0,
-          isDefault: v.isDefault || 0,
-          isVip: v.isVipEquity || 0,
-          isCdnDefault: cdn.isDefault || 0,
-          domain: cdn.cdnDomain || ''
-        });
-      }
-    });
-  });
-
-  if (candidates.length > 0) {
-    candidates.sort((a, b) => {
-      if (a.isVip !== b.isVip) return a.isVip - b.isVip;
-      if (a.isDefault !== b.isDefault) return b.isDefault - a.isDefault;
-      if (a.isCdnDefault !== b.isCdnDefault) return b.isCdnDefault - a.isCdnDefault;
-      return b.quality - a.quality;
-    });
-    const best = candidates[0];
-    let finalUrl = best.url;
-    if (finalUrl && !/^https?:\/\//i.test(finalUrl) && best.domain) {
-      const base = best.domain.startsWith('http') ? best.domain : 'https://' + best.domain;
-      finalUrl = base.replace(/\/+$/, '') + '/' + finalUrl.replace(/^\/+/, '');
-    }
-    return finalUrl;
+const extractVideoUrl = (c) => {
+  if (!c) return '';
+  let s = c.raw || c;
+  if (s.m3u8Url) return s.m3u8Url;
+  if (s.mp4) return s.mp4;
+  const cdn = s.cdnList?.[0];
+  if (cdn) {
+    const v = cdn.videoPathList?.[0];
+    const path = v?.videoPath || v?.path || '';
+    if (path && !path.startsWith('http')) return (cdn.cdnDomain.startsWith('http') ? cdn.cdnDomain : 'https://'+cdn.cdnDomain).replace(/\/+$/, '') + '/' + path.replace(/^\/+/, '');
+    return path;
   }
   return '';
 };
 
-// --- KOMPONEN UI ---
+// Helper format waktu (detik -> mm:ss)
+const formatTime = (seconds) => {
+  if (isNaN(seconds)) return "00:00";
+  const mins = Math.floor(seconds / 60);
+  const secs = Math.floor(seconds % 60);
+  return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+};
 
-const DramaCard = ({ item, onClick, rank }) => {
-  const cover = String(item.coverWap || item.coverUrl || item.cover || 'https://via.placeholder.com/300x450');
-  const title = String(item.bookName || item.title || 'Untitled');
-  const ep = String(item.chapterCount || item.episodeCount || '?');
-  const score = item.score || item.rating || 9.8;
-  
+/**
+ * --- UI COMPONENTS ---
+ */
+
+const SanPoiPopup = ({ onClose }) => {
+  const [dontShowToday, setDontShowToday] = useState(false);
   return (
-    <div className="group relative cursor-pointer" onClick={() => onClick(item)}>
-      <div className="relative aspect-[2/3] rounded-xl overflow-hidden mb-2 bg-gray-800 shadow-md transition-all duration-300 group-hover:shadow-blue-500/20 group-hover:shadow-xl">
-        <img src={cover} alt={title} className="w-full h-full object-cover transform group-hover:scale-110 transition-transform duration-500" loading="lazy" />
-        <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-center justify-center backdrop-blur-[2px]">
-          <div className="w-10 h-10 sm:w-12 sm:h-12 bg-white/20 backdrop-blur-md rounded-full flex items-center justify-center border border-white/50">
-            <Play size={18} fill="white" className="text-white ml-1" />
+    <div className="fixed inset-0 z-[2000] flex items-center justify-center p-4 animate-in fade-in duration-300">
+      <div className="absolute inset-0 bg-[#0f172a]/90 backdrop-blur-md" onClick={() => onClose(dontShowToday)}></div>
+      <div className="relative w-full max-w-[300px] bg-slate-900 border border-white/10 rounded-[1.2rem] overflow-hidden shadow-2xl animate-in zoom-in-95 duration-300">
+        <div className="bg-gradient-to-br from-blue-600 to-indigo-700 p-4 flex flex-col items-center">
+          <button onClick={() => onClose(dontShowToday)} className="absolute top-2.5 right-2.5 p-1 bg-black/20 hover:bg-black/40 rounded-full text-white/80 transition-colors"><X size={14}/></button>
+          <div className="w-12 h-12 bg-white rounded-[0.8rem] flex items-center justify-center shadow-xl mb-2 transform rotate-3">
+            <Gamepad2 size={24} className="text-blue-600" />
           </div>
+          <h2 className="text-base font-black text-white tracking-tight">SanPoi Store</h2>
+          <p className="text-blue-100 text-[8px] font-bold uppercase tracking-[0.2em]">Top Up Termurah</p>
         </div>
-        {rank && (
-          <div className={`absolute top-0 left-0 px-2 sm:px-3 py-1 rounded-br-xl text-[10px] sm:text-xs font-bold text-white shadow-lg ${
-            rank === 1 ? 'bg-gradient-to-r from-yellow-500 to-amber-600' :
-            rank === 2 ? 'bg-gradient-to-r from-gray-400 to-gray-500' : 
-            rank === 3 ? 'bg-gradient-to-r from-orange-600 to-orange-700' :
-            'bg-black/60'
-          }`}>#{rank}</div>
-        )}
-        <div className="absolute top-2 right-2 bg-black/60 backdrop-blur-md text-white text-[8px] sm:text-[10px] font-bold px-1.5 sm:px-2 py-0.5 sm:py-1 rounded-md border border-white/10">{ep} EPS</div>
-        <div className="absolute bottom-0 left-0 right-0 p-2 bg-gradient-to-t from-black/90 to-transparent pt-6">
-          <div className="flex items-center gap-1 text-[8px] sm:text-[10px] text-yellow-400 font-bold"><Star size={10} fill="currentColor"/> {score}</div>
+        <div className="p-4">
+          <div className="space-y-1.5 mb-4">
+            {["Termurah se-Indonesia", "Proses Cepat", "100% Aman"].map((t, i) => (
+              <div key={i} className="flex items-center gap-2 text-slate-300 text-[10px] font-semibold bg-white/5 p-2 rounded-lg border border-white/5">
+                <CheckCircle2 size={12} className="text-blue-400" /> {t}
+              </div>
+            ))}
+          </div>
+          <a href="https://sanpoi.com" target="_blank" rel="noopener noreferrer" className="block w-full bg-blue-600 hover:bg-blue-500 text-white py-2.5 rounded-lg font-black text-[10px] text-center shadow-lg transition-all active:scale-95 flex items-center justify-center gap-1.5 uppercase">TOP UP SEKARANG <ExternalLink size={12}/></a>
+          <label className="mt-3 flex items-center justify-center gap-1.5 cursor-pointer group">
+            <input type="checkbox" checked={dontShowToday} onChange={(e) => setDontShowToday(e.target.checked)} className="w-3 h-3 rounded border-white/20 bg-transparent text-blue-600 focus:ring-0" />
+            <span className="text-[8px] font-bold text-slate-500 group-hover:text-slate-300 uppercase tracking-wider">Jangan tampilkan hari ini</span>
+          </label>
         </div>
       </div>
-      <h3 className="text-gray-200 font-semibold text-[10px] sm:text-sm leading-tight group-hover:text-blue-400 transition-colors line-clamp-2">{title}</h3>
     </div>
   );
 };
 
-const DramaDetailPage = ({ bookId, onPlayEpisode, onTagClick, onBack }) => {
-  const [loading, setLoading] = useState(true);
+const DramaCard = ({ item, onClick, rank }) => {
+  const title = item.bookName || item.title || 'Drama';
+  const cover = item.coverWap || item.coverUrl || item.cover || 'https://via.placeholder.com/300x450';
+  return (
+    <div className="group cursor-pointer" onClick={() => onClick(item)}>
+      <div className="relative aspect-[2/3] rounded-xl overflow-hidden bg-slate-800 shadow-md mb-2 border border-white/5">
+        <img src={cover} alt={title} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700" loading="lazy" />
+        <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+          <div className="bg-white/20 backdrop-blur-md p-3 rounded-full border border-white/30 transform translate-y-3 group-hover:translate-y-0 transition-transform duration-500">
+            <Play size={18} fill="white" className="text-white" />
+          </div>
+        </div>
+        {rank && <div className="absolute top-0 left-0 bg-blue-600 text-white font-black text-[9px] px-2 py-0.5 rounded-br-lg shadow-lg">#{rank}</div>}
+        <div className="absolute bottom-1.5 right-1.5 bg-black/60 backdrop-blur-md text-white text-[7px] font-black px-1.5 py-0.5 rounded border border-white/10 uppercase">{item.chapterCount || '?'} EPS</div>
+      </div>
+      <h3 className="text-[10px] font-bold text-slate-200 line-clamp-2 leading-snug group-hover:text-blue-400 transition-colors px-0.5">{title}</h3>
+    </div>
+  );
+};
+
+const DramaDetailPage = ({ bookId, onBack, onPlayEpisode }) => {
   const [data, setData] = useState(null);
-  
   useEffect(() => {
-    if (!bookId) return;
-    
-    const fetchDetail = async () => {
-      setLoading(true);
-      try {
-        const core = window.DramaboxCore;
-        if (!core) {
-          console.warn('DramaboxCore not available');
-          setTimeout(fetchDetail, 1000);
-          return;
-        }
-        
-        const result = await core.loadDetailWithRecommend({
-          apiBase: CONFIG.API_BASE,
-          localeApi: CONFIG.LOCALE_API,
-          bookId: bookId,
-          webficBase: 'https://www.webfic.com',
-        });
-        
-        setData(result);
-      } catch (err) {
-        console.error('Detail fetch error:', err);
-      } finally {
-        setLoading(false);
-      }
+    const fetch = async () => {
+      const res = await window.DramaboxCore.loadDetailWithRecommend({ apiBase: CONFIG.API_BASE, localeApi: 'in', bookId, webficBase: 'https://www.webfic.com' });
+      setData(res);
     };
-    
-    fetchDetail();
+    if (window.DramaboxCore) fetch();
   }, [bookId]);
 
-  if (loading) {
-    return (
-      <div className="h-full flex flex-col items-center justify-center animate-pulse p-10">
-        <Loader2 className="animate-spin text-blue-500 mb-4" size={48} />
-        <p className="text-slate-400 font-bold text-xs uppercase tracking-widest text-center">Memuat Detail Drama...</p>
-      </div>
-    );
-  }
-
-  if (!data) {
-    return (
-      <div className="h-full flex flex-col items-center justify-center p-10">
-        <AlertTriangle className="text-red-500 mb-4" size={48} />
-        <p className="text-slate-400 font-bold text-sm text-center">Data tidak ditemukan</p>
-        <button onClick={onBack} className="mt-4 px-6 py-2 bg-blue-600 text-white rounded-xl font-bold">Kembali</button>
-      </div>
-    );
-  }
-
-  let bookTags = [];
-  if (data.book) {
-    if (Array.isArray(data.book.typeTwoNames)) bookTags = bookTags.concat(data.book.typeTwoNames);
-    if (Array.isArray(data.book.tags)) bookTags = bookTags.concat(data.book.tags);
-  }
+  if (!data) return <div className="flex flex-col items-center justify-center p-12 gap-3"><Loader2 className="animate-spin text-blue-500" size={32} /><p className="text-[8px] font-black text-slate-500 uppercase tracking-widest">Sinkronisasi Data...</p></div>;
 
   return (
-    <div className="h-full flex flex-col animate-in fade-in duration-500 overflow-hidden">
-      <div className="flex-none mb-4 flex items-center gap-3">
-        <button 
-          onClick={onBack}
-          className="w-10 h-10 bg-white/5 rounded-xl flex items-center justify-center text-slate-400 hover:text-white hover:bg-blue-600 transition-all shrink-0"
-        >
-          <ChevronLeft size={24} />
-        </button>
-        <div className="min-w-0">
-          <h1 className="text-lg sm:text-xl font-bold text-white truncate">Detail Drama</h1>
-          <p className="text-slate-400 text-[10px] sm:text-xs">Informasi lengkap dan daftar episode.</p>
-        </div>
-      </div>
-
-      <div className="flex-1 overflow-y-auto no-scrollbar pb-10">
-        <div className="bg-[#1e293b] rounded-2xl sm:rounded-3xl overflow-hidden shadow-2xl border border-white/5">
-          <div className="flex flex-col md:flex-row">
-            <div className="w-full md:w-1/3 lg:w-[300px] relative bg-black/20 shrink-0">
-              <img 
-                src={data.book?.cover || data.book?.image} 
-                alt="Poster" 
-                className="w-full h-full object-cover aspect-[2/3] md:aspect-auto" 
-              />
-              <div className="absolute inset-0 bg-gradient-to-t from-[#1e293b] via-transparent to-transparent md:hidden"></div>
-            </div>
-            
-            <div className="w-full md:w-2/3 p-5 sm:p-8 flex flex-col">
-              <div className="flex items-center gap-3 mb-3">
-                <span className="px-2 py-0.5 bg-blue-600/20 text-blue-400 text-[9px] font-black rounded uppercase tracking-wider border border-blue-500/20">
-                  {data.book?.chapterCount || data.chapters?.length} Episode
-                </span>
-                <div className="flex items-center gap-1 text-yellow-400 font-bold text-xs">
-                  <Star size={12} fill="currentColor" /> {data.book?.score || 9.8}
-                </div>
-              </div>
-
-              <h2 className="text-xl sm:text-3xl font-bold text-white mb-3 leading-tight">{data.book?.bookName || data.book?.title}</h2>
-              
-              <div className="bg-black/10 rounded-xl p-4 mb-6">
-                <h3 className="text-white/60 font-bold text-[10px] uppercase tracking-[0.1em] mb-2">Sinopsis</h3>
-                <p className="text-slate-300 text-xs sm:text-sm leading-relaxed italic line-clamp-4 md:line-clamp-none">
-                  {cleanIntro(data.book?.introduction || data.book?.desc)}
-                </p>
-              </div>
-
-              {bookTags.length > 0 && (
-                <div className="flex flex-wrap gap-1.5 mb-8">
-                  {bookTags.map((tag, idx) => (
-                    <button 
-                      key={idx} 
-                      onClick={() => onTagClick(tag)}
-                      className="px-2.5 py-1 bg-white/5 border border-white/10 rounded-lg text-[9px] font-bold text-slate-400 uppercase tracking-widest hover:bg-blue-600 hover:text-white hover:border-transparent transition-all"
-                    >
-                      {tag}
-                    </button>
-                  ))}
-                </div>
-              )}
-
-              <div className="mt-auto">
-                <h3 className="text-xs sm:text-sm font-bold text-white mb-3 flex items-center gap-2">
-                  <Plus size={16} className="text-blue-500" /> Daftar Episode
-                </h3>
-                <div className="bg-black/20 rounded-xl p-3 border border-white/5">
-                  <div className="grid grid-cols-4 xs:grid-cols-5 sm:grid-cols-6 md:grid-cols-8 lg:grid-cols-10 gap-2 max-h-64 overflow-y-auto">
-                    {data.chapters?.map((ch) => (
-                      <button 
-                        key={ch.index} 
-                        onClick={() => onPlayEpisode(ch.num || (ch.index + 1), data.book, data.chapters)} 
-                        className="bg-slate-700 hover:bg-blue-600 text-white py-2 rounded-lg text-[10px] sm:text-xs font-bold transition-all active:scale-95 shadow-sm"
-                      >
-                        {String(ch.num || (ch.index + 1))}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            </div>
+    <div className="animate-in fade-in duration-500">
+      <button onClick={onBack} className="flex items-center gap-1.5 text-slate-400 font-bold mb-6 hover:text-white transition-colors text-[10px]"><ChevronLeft size={16}/> KEMBALI</button>
+      <div className="bg-slate-900/60 rounded-[1.5rem] overflow-hidden border border-white/5 flex flex-col md:flex-row shadow-2xl backdrop-blur-sm">
+        <div className="w-full md:w-[280px] shrink-0"><img src={data.book?.cover} className="w-full h-full object-cover" alt="Cover" /></div>
+        <div className="p-6 sm:p-10 flex-1">
+          <div className="flex items-center gap-2 mb-3">
+             <span className="bg-blue-600/20 text-blue-400 text-[8px] font-black px-1.5 py-0.5 rounded border border-blue-500/20 uppercase tracking-wider">{data.book?.chapterCount} EPISODE</span>
+             <div className="flex items-center gap-1 text-yellow-500 font-bold text-[10px]"><Star size={12} fill="currentColor"/> {data.book?.score || 9.8}</div>
+          </div>
+          <h2 className="text-2xl sm:text-4xl font-black text-white mb-4 leading-tight tracking-tight">{data.book?.bookName}</h2>
+          <div className="bg-white/5 p-4 rounded-xl border border-white/5 mb-6">
+            <h4 className="text-[8px] font-black text-slate-500 uppercase tracking-widest mb-1">Sinopsis</h4>
+            <p className="text-slate-300 text-xs leading-relaxed italic">{cleanIntro(data.book?.introduction)}</p>
+          </div>
+          <h4 className="text-[8px] font-black text-slate-500 uppercase tracking-widest mb-3">Pilih Episode</h4>
+          <div className="grid grid-cols-5 xs:grid-cols-8 sm:grid-cols-10 lg:grid-cols-12 gap-1.5 max-h-[200px] overflow-y-auto pr-2 no-scrollbar">
+            {data.chapters?.map((ch, i) => (
+              <button key={i} onClick={() => onPlayEpisode(ch.num || (i+1), data.book, data.chapters)} className="bg-slate-800 hover:bg-blue-600 text-white font-bold py-2 rounded-lg transition-all active:scale-95 text-[10px] border border-white/5">{ch.num || (i+1)}</button>
+            ))}
           </div>
         </div>
       </div>
@@ -430,786 +223,330 @@ const CustomPlayerPage = ({ book, chapters, initialEp, onBack, audioSettings, se
   const [showControls, setShowControls] = useState(true);
   
   const videoRef = useRef(null);
-  const controlsTimeoutRef = useRef(null);
+  const hlsRef = useRef(null);
   const requestRef = useRef(0);
 
-  const formatTime = (seconds) => {
-    if (isNaN(seconds)) return "00:00";
-    const mins = Math.floor(seconds / 60);
-    const secs = Math.floor(seconds % 60);
-    return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
-  };
-
-  const handleMouseMove = () => {
-    setShowControls(true);
-    if (controlsTimeoutRef.current) clearTimeout(controlsTimeoutRef.current);
-    if (isPlaying) {
-      controlsTimeoutRef.current = setTimeout(() => setShowControls(false), 3000);
-    }
-  };
-
   const loadEpisode = useCallback(async (epNum) => {
-    setLoading(true);
-    setError(false);
-    setVideoUrl('');
-    setIsPlaying(false);
-    setShowControls(true);
-    
+    setLoading(true); setError(false); setVideoUrl(''); setIsPlaying(false);
     const requestId = ++requestRef.current;
-    
     try {
       const core = window.DramaboxCore;
-      if (!core) throw new Error("API Core belum siap");
-      
-      const batchRes = await core.loadViaBatch({
-        apiBase: CONFIG.API_BASE,
-        localeApi: CONFIG.LOCALE_API,
-        bookId: book.bookId || book.id,
-        index: epNum,
-      });
-      
+      const res = await core.loadViaBatch({ apiBase: CONFIG.API_BASE, localeApi: 'in', bookId: book.bookId || book.id, index: epNum });
       if (requestId !== requestRef.current) return;
-      
-      const list = batchRes.data?.chapterList || batchRes.chapters || [];
+      const list = res.data?.chapterList || res.chapters || [];
       const batchCh = list.find(item => String(item.num) === String(epNum) || item.index === (epNum - 1)) || list[0];
-      
-      if (!batchCh) throw new Error("Data episode tidak ditemukan");
-      
-      const url = extractVideoUrlFromChapter(batchCh);
-      
-      if (url) {
-        setVideoUrl(url);
-      } else {
-        throw new Error("URL Video tidak tersedia");
-      }
-    } catch (e) {
-      console.error('Load episode error:', e);
-      if (requestId === requestRef.current) setError(true);
-    } finally {
-      if (requestId === requestRef.current) setLoading(false);
-    }
+      const url = extractVideoUrl(batchCh);
+      if (url) setVideoUrl(url); else throw new Error();
+    } catch (e) { if (requestId === requestRef.current) setError(true); } finally { if (requestId === requestRef.current) setLoading(false); }
   }, [book]);
 
   useEffect(() => {
-    loadEpisode(currentEp);
-  }, [currentEp, loadEpisode]);
+    if (!videoRef.current || !videoUrl) return;
+    const video = videoRef.current;
+    if (hlsRef.current) hlsRef.current.destroy();
+    if (videoUrl.includes('.m3u8') && window.Hls && window.Hls.isSupported()) {
+      const hls = new window.Hls(); hls.loadSource(videoUrl); hls.attachMedia(video);
+      hls.on(window.Hls.Events.MANIFEST_PARSED, () => video.play().catch(() => {}));
+      hlsRef.current = hls;
+    } else { video.src = videoUrl; video.play().catch(() => {}); }
+    return () => hlsRef.current && hlsRef.current.destroy();
+  }, [videoUrl]);
 
-  useEffect(() => {
-    if (videoRef.current && videoUrl) {
-      videoRef.current.volume = audioSettings.volume;
-      videoRef.current.muted = audioSettings.isMuted;
-      videoRef.current.playbackRate = audioSettings.playbackRate;
-    }
-  }, [videoUrl, audioSettings]);
+  useEffect(() => { loadEpisode(currentEp); }, [currentEp, loadEpisode]);
 
-  const togglePlay = () => {
-    if (!videoRef.current) return;
-    
-    if (isPlaying) {
-      videoRef.current.pause();
-    } else {
-      const playPromise = videoRef.current.play();
-      if (playPromise !== undefined) {
-        playPromise.then(() => {
-          setIsPlaying(true);
-        }).catch(error => {
-          console.error("Play failed:", error);
-          setIsPlaying(false);
-        });
-      }
-    }
-    handleMouseMove();
+  const getVolumeIcon = () => {
+    if (audioSettings.isMuted || audioSettings.volume === 0) return <VolumeX size={18} />;
+    return audioSettings.volume < 0.5 ? <Volume1 size={18} /> : <Volume2 size={18} />;
   };
 
-  const handleNext = () => {
-    if (currentEp < (chapters?.length || 999)) {
-      setCurrentEp(prev => prev + 1);
-    }
-  };
-
-  const handlePrev = () => {
-    if (currentEp > 1) {
-      setCurrentEp(prev => prev - 1);
-    }
-  };
-
-  const togglePlaybackRate = () => {
-    const nextRate = audioSettings.playbackRate === 1 ? 1.5 : audioSettings.playbackRate === 1.5 ? 2 : 1;
-    setAudioSettings(prev => ({ ...prev, playbackRate: nextRate }));
-  };
-
-  const handleVolumeChange = (e) => {
-    const val = parseFloat(e.target.value);
-    setAudioSettings(prev => ({ ...prev, volume: val, isMuted: val === 0 }));
-  };
-
-  const handleSeek = (e) => {
-    const time = parseFloat(e.target.value);
-    setCurrentTime(time);
-    if (videoRef.current) videoRef.current.currentTime = time;
-  };
-
-  const handleShare = async () => {
-    const shareData = {
-      title: book.bookName,
-      text: `Nonton drama ${book.bookName} episode ${currentEp}`,
-      url: window.location.href
-    };
-    
-    if (navigator.share) {
-      try {
-        await navigator.share(shareData);
-      } catch (e) {
-        console.log('Share cancelled');
-      }
-    } else {
-      try {
-        await navigator.clipboard.writeText(window.location.href);
-        // Fallback simplified console log
-        console.log('Link copied to clipboard!');
-      } catch (e) {
-        console.error('Copy failed:', e);
-      }
-    }
-  };
+  const volumeVal = audioSettings.isMuted ? 0 : audioSettings.volume;
+  const volumePercent = volumeVal * 100;
 
   return (
-    <div 
-      className="fixed inset-0 z-[1000] bg-black flex flex-col items-center justify-center overflow-hidden"
-      onMouseMove={handleMouseMove}
-      onTouchStart={handleMouseMove}
-    >
-      {/* TOP BAR */}
-      <div className={`absolute top-0 left-0 right-0 p-4 sm:p-6 z-50 flex items-center justify-between bg-gradient-to-b from-black/80 to-transparent transition-opacity duration-500 ${showControls ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}>
-        <button onClick={onBack} className="text-white/80 p-2 hover:bg-white/10 rounded-full transition-all">
-          <ChevronLeft size={28} />
-        </button>
-        <div className="text-center flex-1 min-w-0 px-4">
-          <h2 className="text-white font-bold text-sm sm:text-base truncate">{book.bookName}</h2>
-          <p className="text-blue-400 text-[10px] font-black uppercase tracking-widest">Episode {currentEp}</p>
+    <div className="fixed inset-0 z-[1000] bg-black flex flex-col items-center justify-center overflow-hidden" onMouseMove={() => { setShowControls(true); setTimeout(() => setShowControls(false), 5000); }}>
+      <div className={`absolute top-0 left-0 right-0 p-6 z-50 flex items-center justify-between bg-gradient-to-b from-black/90 via-black/40 to-transparent transition-opacity duration-500 ${showControls ? 'opacity-100' : 'opacity-0'}`}>
+        <button onClick={onBack} className="text-white hover:bg-white/10 p-2 rounded-full transition-all"><ChevronLeft size={24} /></button>
+        <div className="text-center flex-1 max-w-xl">
+          <h2 className="text-white font-black text-sm truncate uppercase tracking-tight">{book.bookName}</h2>
+          <p className="text-blue-400 text-[8px] font-black uppercase tracking-[0.2em]">Episode {currentEp}</p>
         </div>
-        <button onClick={handleShare} className="text-white/80 p-2 hover:bg-white/10 rounded-full transition-all">
-          <Share2 size={20} />
-        </button>
+        <button className="text-white p-2 rounded-full"><Share2 size={18} /></button>
       </div>
 
-      {/* VIDEO CONTAINER */}
-      <div className="relative w-full h-full flex items-center justify-center bg-black overflow-hidden" onClick={togglePlay}>
-        {loading ? (
-          <div className="flex flex-col items-center gap-3">
-            <Loader2 className="animate-spin text-blue-500" size={48} />
-            <p className="text-white/40 text-[10px] font-black uppercase tracking-[0.3em]">Loading...</p>
-          </div>
-        ) : error ? (
-          <div className="text-center p-6 flex flex-col items-center bg-white/5 backdrop-blur-md rounded-3xl border border-white/10">
-            <AlertTriangle className="text-red-500 mb-4" size={40} />
-            <p className="text-white mb-6 text-xs font-bold uppercase tracking-wider">Video Gagal Dimuat</p>
-            <button onClick={() => loadEpisode(currentEp)} className="px-8 py-3 bg-blue-600 text-white rounded-full font-black text-xs tracking-[0.2em] shadow-lg shadow-blue-600/30 active:scale-95 transition">COBA LAGI</button>
-          </div>
-        ) : (
-          <>
-            <video 
-              ref={videoRef}
-              src={videoUrl}
-              className="w-full h-full object-contain cursor-pointer"
-              onPlay={() => setIsPlaying(true)}
-              onPause={() => setIsPlaying(false)}
-              onTimeUpdate={() => setCurrentTime(videoRef.current?.currentTime || 0)}
-              onLoadedMetadata={() => {
-                if (videoRef.current) {
-                  setDuration(videoRef.current.duration);
-                  videoRef.current.volume = audioSettings.volume;
-                  videoRef.current.playbackRate = audioSettings.playbackRate;
-                  videoRef.current.muted = audioSettings.isMuted;
-                }
-              }}
-              onEnded={() => audioSettings.autoNext && handleNext()}
-              playsInline
-              webkit-playsinline="true"
-              x-webkit-airplay="allow"
-              preload="metadata"
-              controlsList="nodownload"
-            />
-            
-            {!isPlaying && (
-              <div className="absolute inset-0 flex items-center justify-center pointer-events-none bg-black/20">
-                <div className="bg-white/10 p-6 rounded-full backdrop-blur-sm border border-white/20 scale-125 transition-transform duration-300">
-                  <Play size={40} fill="white" className="text-white ml-1" />
-                </div>
-              </div>
-            )}
-          </>
-        )}
+      <div className="relative w-full h-full flex items-center justify-center bg-black" onClick={() => (isPlaying ? videoRef.current.pause() : videoRef.current.play())}>
+        {loading ? <Loader2 className="animate-spin text-blue-500" size={48} /> : error ? <div className="text-white text-[10px] font-black bg-red-600/40 px-8 py-4 rounded-2xl border border-red-500/20 uppercase tracking-widest">Video Gagal Dimuat</div> : 
+          <video ref={videoRef} className="w-full h-full object-contain cursor-pointer" onPlay={() => setIsPlaying(true)} onPause={() => setIsPlaying(false)} onTimeUpdate={() => setCurrentTime(videoRef.current?.currentTime || 0)} onLoadedMetadata={() => setDuration(videoRef.current?.duration || 0)} onEnded={() => setCurrentEp(e => e + 1)} playsInline />
+        }
+        {!isPlaying && !loading && <div className="absolute inset-0 flex items-center justify-center pointer-events-none bg-black/30"><div className="bg-white/10 p-8 rounded-full backdrop-blur-md border border-white/20"><Play size={40} fill="white" className="text-white ml-1.5" /></div></div>}
       </div>
 
-      {/* BOTTOM CONTROLS */}
-      <div className={`absolute bottom-0 left-0 right-0 p-4 sm:p-8 z-50 transition-all duration-500 transform ${showControls ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4 pointer-events-none'}`}>
-        <div className="max-w-4xl mx-auto flex flex-col gap-4">
-          
-          {/* Timeline */}
-          <div className="flex flex-col gap-2">
-            <div className="relative group/timeline h-6 flex items-center">
-              <input 
-                type="range" min="0" max={duration || 0} step="0.1" 
-                value={currentTime} 
-                onChange={handleSeek}
-                className="w-full h-1 bg-white/20 rounded-full appearance-none cursor-pointer accent-blue-600 hover:h-1.5 transition-all"
-              />
-            </div>
-            <div className="flex justify-between text-[10px] font-mono font-bold text-white/50 tracking-tighter">
+      <div className={`absolute bottom-0 left-0 right-0 p-6 z-50 transition-all duration-500 ${showControls ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-8 pointer-events-none'}`}>
+        <div className="max-w-4xl mx-auto flex flex-col gap-3">
+          {/* Progress Bar & Durasi */}
+          <div className="flex flex-col gap-1.5">
+            <input type="range" min="0" max={duration || 0} step="0.1" value={currentTime} onChange={(e) => { videoRef.current.currentTime = e.target.value; }} className="w-full h-1 accent-blue-600 bg-white/20 rounded-full appearance-none cursor-pointer hover:h-1.5 transition-all" />
+            <div className="flex justify-between items-center px-1 text-[9px] font-mono font-bold text-white/50 tracking-tighter">
               <span>{formatTime(currentTime)}</span>
               <span>{formatTime(duration)}</span>
             </div>
           </div>
 
-          {/* Controls */}
-          <div className="flex items-center justify-between bg-black/40 backdrop-blur-xl border border-white/10 p-3 sm:p-4 rounded-2xl sm:rounded-3xl">
-            <div className="flex items-center gap-4 sm:gap-8">
-              <button 
-                disabled={currentEp <= 1}
-                onClick={(e) => { e.stopPropagation(); handlePrev(); }}
-                className="text-white/60 hover:text-white transition disabled:opacity-20"
-              >
-                <SkipBack size={24} fill="currentColor" />
-              </button>
-              
-              <button onClick={(e) => { e.stopPropagation(); togglePlay(); }} className="text-white transition-transform active:scale-90">
-                {isPlaying ? <Pause size={36} fill="white" /> : <Play size={36} fill="white" />}
-              </button>
-              
-              <button 
-                disabled={currentEp >= (chapters?.length || 999)}
-                onClick={(e) => { e.stopPropagation(); handleNext(); }}
-                className="text-white/60 hover:text-white transition disabled:opacity-20"
-              >
-                <SkipForward size={24} fill="currentColor" />
-              </button>
+          <div className="flex items-center justify-between bg-slate-900/60 backdrop-blur-2xl p-4 rounded-[1.5rem] border border-white/10 shadow-2xl">
+            <div className="flex items-center gap-6">
+              <button disabled={currentEp <= 1} onClick={(e) => { e.stopPropagation(); setCurrentEp(e => e - 1); }} className="text-white/40 hover:text-white disabled:opacity-10"><SkipBack size={24} fill="currentColor" /></button>
+              <button onClick={(e) => { e.stopPropagation(); isPlaying ? videoRef.current.pause() : videoRef.current.play(); }} className="text-white transform active:scale-90 transition-transform">{isPlaying ? <Pause size={40} fill="white" /> : <Play size={40} fill="white" />}</button>
+              <button onClick={(e) => { e.stopPropagation(); setCurrentEp(e => e + 1); }} className="text-white/40 hover:text-white"><SkipForward size={24} fill="currentColor" /></button>
             </div>
+            <div className="flex items-center gap-6">
+               {/* UI Slider Volume yang Diperbaiki */}
+               <div className="hidden sm:flex items-center gap-2 group/vol bg-white/5 px-3 py-1.5 rounded-xl border border-white/5 hover:bg-white/10 transition-all">
+                  <button onClick={(e) => { e.stopPropagation(); setAudioSettings(s => ({...s, isMuted: !s.isMuted}))}} className="text-white/70 hover:text-white transition-colors">
+                    {getVolumeIcon()}
+                  </button>
+                  <div className="w-0 group-hover/vol:w-28 overflow-hidden transition-all duration-300 ease-out flex items-center">
+                    <input 
+                      type="range" min="0" max="1" step="0.01" 
+                      value={volumeVal} 
+                      onChange={(e) => {
+                        const val = parseFloat(e.target.value);
+                        setAudioSettings(s => ({...s, volume: val, isMuted: val === 0}));
+                      }} 
+                      style={{
+                        background: `linear-gradient(to right, #3b82f6 ${volumePercent}%, rgba(255,255,255,0.1) ${volumePercent}%)`
+                      }} 
+                      className="volume-premium w-28 h-1 appearance-none rounded-full cursor-pointer outline-none" 
+                    />
+                  </div>
+               </div>
+               
+               {/* Toggle Mute Mobile */}
+               <button onClick={(e) => { e.stopPropagation(); setAudioSettings(s => ({...s, isMuted: !s.isMuted}))}} className="sm:hidden text-white/70">
+                 {getVolumeIcon()}
+               </button>
 
-            <div className="flex items-center gap-3 sm:gap-6">
-              <div className="hidden sm:flex items-center gap-2 group/volume bg-white/5 px-3 py-1.5 rounded-xl border border-white/5">
-                <button onClick={(e) => { e.stopPropagation(); setAudioSettings(prev => ({ ...prev, isMuted: !prev.isMuted })); }} className="text-white/70 hover:text-white">
-                  {audioSettings.isMuted || audioSettings.volume === 0 ? <VolumeX size={18} /> : <Volume2 size={18} />}
-                </button>
-                <input 
-                  type="range" min="0" max="1" step="0.01"
-                  value={audioSettings.isMuted ? 0 : audioSettings.volume}
-                  onChange={(e) => { e.stopPropagation(); handleVolumeChange(e); }}
-                  className="w-20 h-1 accent-blue-500 bg-white/20 rounded-full cursor-pointer"
-                />
-              </div>
-
-              <button className="sm:hidden text-white/70" onClick={(e) => { e.stopPropagation(); setAudioSettings(prev => ({ ...prev, isMuted: !prev.isMuted })); }}>
-                 {audioSettings.isMuted || audioSettings.volume === 0 ? <VolumeX size={20} /> : <Volume2 size={20} />}
-              </button>
-
-              <button 
-                onClick={(e) => { e.stopPropagation(); togglePlaybackRate(); }}
-                className="px-3 py-1.5 bg-blue-600/20 border border-blue-500/30 rounded-xl text-[10px] font-black text-blue-400 hover:bg-blue-600 hover:text-white transition-all"
-              >
-                {audioSettings.playbackRate}X
-              </button>
-              
-              <div className="hidden xs:flex items-center gap-2">
-                <label className="flex items-center gap-2 cursor-pointer opacity-60 hover:opacity-100 transition">
-                  <input 
-                    type="checkbox" checked={audioSettings.autoNext} 
-                    onChange={(e) => { e.stopPropagation(); setAudioSettings(prev => ({ ...prev, autoNext: e.target.checked })); }} 
-                    className="w-3 h-3 accent-blue-600 rounded-sm bg-black border-white/20"
-                  />
-                  <span className="text-[9px] font-bold text-white uppercase tracking-tighter">Auto</span>
-                </label>
-              </div>
+               <button onClick={(e) => { e.stopPropagation(); setAudioSettings(s => ({...s, playbackRate: s.playbackRate === 1 ? 1.5 : s.playbackRate === 1.5 ? 2 : 1}))}} className="px-3 py-1.5 bg-blue-600 text-white rounded-lg text-[9px] font-black tracking-widest uppercase shadow-lg shadow-blue-600/20 active:scale-95 transition-all">
+                 {audioSettings.playbackRate}X SPEED
+               </button>
             </div>
           </div>
         </div>
       </div>
+      <style>{`
+        .volume-premium::-webkit-slider-thumb { -webkit-appearance: none; width: 10px; height: 10px; background: white; border-radius: 50%; border: 2px solid #3b82f6; cursor: pointer; opacity: 0; transition: 0.2s; }
+        .group\\/vol:hover .volume-premium::-webkit-slider-thumb { opacity: 1; }
+        .volume-premium::-moz-range-thumb { width: 10px; height: 10px; background: white; border-radius: 50%; border: 2px solid #3b82f6; cursor: pointer; opacity: 0; border: none; }
+      `}</style>
     </div>
   );
 };
 
+/**
+ * --- MAIN APP ---
+ */
 export default function App() {
-  const { loaded: scriptLoaded, error: scriptError } = useExternalScript(CONFIG.SCRIPT_URL);
+  const { loaded: scriptLoaded } = useExternalScript(CONFIG.SCRIPT_URL);
+  const { loaded: hlsLoaded } = useExternalScript(CONFIG.HLS_URL);
   
   const [view, setView] = useState('home'); 
   const [previousView, setPreviousView] = useState('home');
   const [homeData, setHomeData] = useState({ popular: [], latest: [] });
   const [rankData, setRankData] = useState([]);
-  const [searchData, setSearchData] = useState([]);
-  const [allDramaData, setAllDramaData] = useState([]);
   const [filterData, setFilterData] = useState([]);
+  const [allDramaData, setAllDramaData] = useState([]);
   
-  const [rankPage, setRankPage] = useState(1);
-  const [searchPage, setSearchPage] = useState(1);
-  const [hasMoreRank, setHasMoreRank] = useState(true);
-  const [hasMoreSearch, setHasMoreSearch] = useState(true);
-
-  const [activeFilters, setActiveFilters] = useState({
-    voice: '',
-    category: '',
-    sort: 'popular'
-  });
-
-  const [audioSettings, setAudioSettings] = useState({
-    volume: 1,
-    isMuted: false,
-    playbackRate: 1,
-    autoNext: true
-  });
-
-  const [searchQuery, setSearchQuery] = useState('');
-  const [rankTab, setRankTab] = useState('trending');
-  const [loading, setLoading] = useState(false);
-  const [loadingMore, setLoadingMore] = useState(false);
-  const [loadingHome, setLoadingHome] = useState(true);
+  const [user, setUser] = useState(null);
+  const [showAd, setShowAd] = useState(false);
+  const [loadingRank, setLoadingRank] = useState(false);
   const [searchModalOpen, setSearchModalOpen] = useState(false);
-
   const [selectedBookId, setSelectedBookId] = useState(null);
   const [playerState, setPlayerState] = useState({ book: {}, chapters: [], ep: 1 });
+  const [rankTab, setRankTab] = useState('popular');
+  const [activeFilters, setActiveFilters] = useState({ voice: '', category: '', sort: 'popular' });
+  const [audioSettings, setAudioSettings] = useState({ volume: 1, isMuted: false, playbackRate: 1, autoNext: true });
 
-  const getToken = useCallback(async () => {
-    const core = window.DramaboxCore;
-    if (!core) return null;
-    try {
-      const device = await core.getDevice();
-      return await core.getToken(CONFIG.API_BASE, CONFIG.LOCALE_API, device, false);
-    } catch (e) {
-      console.error("Token Error:", e);
-      return null;
-    }
+  // Auth
+  useEffect(() => {
+    const initAuth = async () => {
+      if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) await signInWithCustomToken(auth, __initial_auth_token);
+      else await signInAnonymously(auth);
+    };
+    initAuth();
+    return onAuthStateChanged(auth, setUser);
   }, []);
 
-  const fetchAllData = useCallback(async () => {
-    const core = window.DramaboxCore;
-    if (!core) return;
-    try {
-      const device = await core.getDevice();
-      const tokenInfo = await getToken();
-      if (!tokenInfo) return;
-      
-      const [popular, latest] = await Promise.all([
-        core.doClassify(CONFIG.API_BASE, CONFIG.LOCALE_API, device, tokenInfo.token, CONFIG.FEED_IDS.POPULAR, 50),
-        core.doClassify(CONFIG.API_BASE, CONFIG.LOCALE_API, device, tokenInfo.token, CONFIG.FEED_IDS.LATEST, 50)
-      ]);
-      
-      const combined = [...(popular || []), ...(latest || [])];
-      const unique = combined.filter((item, index, self) => 
-        index === self.findIndex(t => (t.bookId || t.id) === (item.bookId || item.id))
-      );
-      
-      setAllDramaData(unique);
-    } catch (e) {
-      console.error('fetchAllData error:', e);
-    }
-  }, [getToken]);
+  // Ad Logic
+  useEffect(() => {
+    if (!user) return;
+    const checkAd = async () => {
+      const snap = await getDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'settings', 'ad_pref'));
+      let show = true;
+      if (snap.exists()) {
+        const d = snap.data();
+        const diff = Date.now() - (d.ts || 0);
+        if (d.p ? diff < 86400000 : diff < 3600000) show = false;
+      }
+      if (show) setTimeout(() => setShowAd(true), 3000);
+    };
+    checkAd();
+  }, [user]);
 
-  const applyFilters = useCallback(() => {
+  const handleCloseAd = async (p) => {
+    setShowAd(false);
+    if (user) await setDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'settings', 'ad_pref'), { ts: Date.now(), p });
+  };
+
+  // API Logic
+  const fetchHome = useCallback(async () => {
+    try {
+      const core = window.DramaboxCore;
+      const device = await core.getDevice();
+      const token = (await core.getToken(CONFIG.API_BASE, 'in', device, false)).token;
+      const [pop, lat] = await Promise.all([
+        core.doClassify(CONFIG.API_BASE, 'in', device, token, CONFIG.FEED_IDS.POPULAR, 18),
+        core.doClassify(CONFIG.API_BASE, 'in', device, token, CONFIG.FEED_IDS.LATEST, 12)
+      ]);
+      setHomeData({ popular: pop || [], latest: lat || [] });
+      
+      const combined = [...(pop || []), ...(lat || [])];
+      const unique = combined.filter((item, index, self) => index === self.findIndex(t => (t.bookId || t.id) === (item.bookId || item.id)));
+      setAllDramaData(unique);
+    } catch (e) {}
+  }, []);
+
+  const fetchRank = useCallback(async (tab) => {
+    setLoadingRank(true);
+    try {
+      const core = window.DramaboxCore;
+      const device = await core.getDevice();
+      const token = (await core.getToken(CONFIG.API_BASE, 'in', device, false)).token;
+      const fid = tab === 'popular' ? CONFIG.FEED_IDS.POPULAR : tab === 'latest' ? CONFIG.FEED_IDS.LATEST : CONFIG.FEED_IDS.TRENDING;
+      const res = await core.doClassify(CONFIG.API_BASE, 'in', device, token, fid, 30);
+      setRankData(res || []);
+    } catch (e) {} finally { setLoadingRank(false); }
+  }, []);
+
+  useEffect(() => { if (scriptLoaded) fetchHome(); }, [scriptLoaded, fetchHome]);
+  useEffect(() => { if (view === 'rank') fetchRank(rankTab); }, [view, rankTab, fetchRank]);
+
+  // Filter Logic
+  useEffect(() => {
     let filtered = [...allDramaData];
-    
-    if (activeFilters.voice === '1') {
-      filtered = filtered.filter(item => 
-        (item.bookName || item.title || '').toLowerCase().includes('(sulih suara)')
-      );
-    } else if (activeFilters.voice === '2') {
-      filtered = filtered.filter(item => 
-        !(item.bookName || item.title || '').toLowerCase().includes('(sulih suara)')
-      );
-    }
-    
-    if (activeFilters.category) {
-      filtered = filtered.filter(item => {
-        const tags = [
-          ...(Array.isArray(item.typeTwoNames) ? item.typeTwoNames : []),
-          ...(Array.isArray(item.tags) ? item.tags : [])
-        ].map(t => String(t).toLowerCase());
-        
-        return tags.some(tag => tag.includes(activeFilters.category.toLowerCase()));
-      });
-    }
-    
-    if (activeFilters.sort === 'popular') {
-      filtered.sort((a, b) => (b.score || 0) - (a.score || 0));
-    } else if (activeFilters.sort === 'latest') {
-      filtered.sort((a, b) => (b.bookId || b.id || 0) - (a.bookId || a.id || 0));
-    }
-    
+    if (activeFilters.voice === '1') filtered = filtered.filter(i => (i.bookName || i.title || '').toLowerCase().includes('(sulih suara)'));
+    else if (activeFilters.voice === '2') filtered = filtered.filter(i => !(i.bookName || i.title || '').toLowerCase().includes('(sulih suara)'));
+    if (activeFilters.category) filtered = filtered.filter(i => {
+      const tags = [...(i.typeTwoNames || []), ...(i.tags || [])].map(t => String(t).toLowerCase());
+      return tags.some(tag => tag.includes(activeFilters.category.toLowerCase()));
+    });
+    if (activeFilters.sort === 'popular') filtered.sort((a, b) => (b.score || 0) - (a.score || 0));
+    else if (activeFilters.sort === 'latest') filtered.sort((a, b) => (b.bookId || b.id || 0) - (a.bookId || a.id || 0));
     setFilterData(filtered);
   }, [allDramaData, activeFilters]);
 
-  const fetchHome = useCallback(async () => {
-    const core = window.DramaboxCore;
-    if (!core) {
-      console.warn('DramaboxCore not available for fetchHome');
-      setLoadingHome(false);
-      return;
-    }
-    
-    setLoadingHome(true);
-    
-    try {
-      const device = await core.getDevice();
-      const tokenInfo = await getToken();
-      if (!tokenInfo) {
-        console.error('No token available');
-        throw new Error("No token");
-      }
-      
-      const [pop, lat] = await Promise.all([
-        core.doClassify(CONFIG.API_BASE, CONFIG.LOCALE_API, device, tokenInfo.token, CONFIG.FEED_IDS.POPULAR, 18).catch(err => {
-          console.error('Popular fetch error:', err);
-          return [];
-        }),
-        core.doClassify(CONFIG.API_BASE, CONFIG.LOCALE_API, device, tokenInfo.token, CONFIG.FEED_IDS.LATEST, 12).catch(err => {
-          console.error('Latest fetch error:', err);
-          return [];
-        })
-      ]);
-      
-      setHomeData({ popular: pop || [], latest: lat || [] });
-    } catch (e) {
-      console.error("Home fetch error:", e);
-      setHomeData({ popular: [], latest: [] });
-    } finally {
-      setLoadingHome(false);
-    }
-  }, [getToken]);
-
-  const fetchRank = useCallback(async (type, pageNum = 1) => {
-    const core = window.DramaboxCore;
-    if (!core) return;
-    
-    if (pageNum === 1) {
-      setLoading(true);
-      setRankData([]);
-    } else {
-      setLoadingMore(true);
-    }
-
-    try {
-      const device = await core.getDevice();
-      const tokenInfo = await getToken();
-      if (!tokenInfo) return;
-      
-      const fid = type === 'popular' ? CONFIG.FEED_IDS.POPULAR : 
-                  type === 'latest' ? CONFIG.FEED_IDS.LATEST : 
-                  CONFIG.FEED_IDS.TRENDING;
-      
-      const res = await core.doClassify(CONFIG.API_BASE, CONFIG.LOCALE_API, device, tokenInfo.token, fid, pageNum * CONFIG.PER_PAGE);
-      
-      setHasMoreRank(res && res.length >= pageNum * CONFIG.PER_PAGE);
-      setRankData(res || []);
-    } catch (e) {
-      console.error('fetchRank error:', e);
-    } finally { 
-      setLoading(false); 
-      setLoadingMore(false);
-    }
-  }, [getToken]);
-
-  const fetchSearch = useCallback(async (keyword, pageNum = 1) => {
-    const core = window.DramaboxCore;
-    if (!core || !keyword) return;
-    
-    if (pageNum === 1) {
-      setLoading(true);
-      setSearchData([]);
-    } else {
-      setLoadingMore(true);
-    }
-
-    try {
-      const res = await core.searchBooks(CONFIG.API_BASE, CONFIG.LOCALE_API, keyword, pageNum, CONFIG.PER_PAGE);
-      const newItems = res.items || [];
-      
-      setSearchData(prev => pageNum === 1 ? newItems : [...prev, ...newItems]);
-      setHasMoreSearch(newItems.length >= CONFIG.PER_PAGE);
-    } catch (e) {
-      console.error('fetchSearch error:', e);
-    } finally { 
-      setLoading(false); 
-      setLoadingMore(false);
-    }
-  }, []);
-
-  const handleLoadMoreRank = () => {
-    const nextPage = rankPage + 1;
-    setRankPage(nextPage);
-    fetchRank(rankTab, nextPage);
-  };
-
-  const handleLoadMoreSearch = () => {
-    const nextPage = searchPage + 1;
-    setSearchPage(nextPage);
-    fetchSearch(searchQuery, nextPage);
-  };
-
-  const openDetail = (item) => { 
-    setSelectedBookId(item.bookId || item.id); 
-    setPreviousView(view);
-    setView('detail'); 
-  };
-  
-  const onPlayEpisode = (epNum, book, chapters) => { 
-    setPlayerState({ book, chapters, ep: epNum }); 
-    setPreviousView(view);
-    setView('player'); 
-  };
-
-  const handleTagClick = (tagName) => {
-    const catFilter = STATIC_FILTERS.find(f => f.key === 'category');
-    const option = catFilter.options.find(o => o.display.toLowerCase() === tagName.toLowerCase());
-    
-    if (option && option.value !== '') {
-      setActiveFilters({ voice: '', category: option.value, sort: 'popular' });
-      setView('filter');
-    } else {
-      setView('search');
-      setSearchQuery(tagName);
-      setSearchPage(1);
-      fetchSearch(tagName, 1);
-    }
-  };
-
-  useEffect(() => {
-    if (scriptLoaded && !scriptError) {
-      fetchHome();
-      fetchAllData();
-    } else if (scriptError) {
-      setLoadingHome(false);
-    }
-  }, [scriptLoaded, scriptError, fetchHome, fetchAllData]);
-  
-  useEffect(() => { 
-    if (view === 'rank') {
-      setRankPage(1);
-      fetchRank(rankTab, 1);
-    }
-  }, [view, rankTab, fetchRank]);
-
-  useEffect(() => {
-    if (view === 'filter' && allDramaData.length > 0) {
-      applyFilters();
-    }
-  }, [view, activeFilters, allDramaData, applyFilters]);
-
-  const handleSearchSubmit = (e) => { 
-    if (e.key === 'Enter') { 
-      const q = searchQuery.trim(); 
-      if (q) { 
-        setView('search'); 
-        setSearchPage(1);
-        fetchSearch(q, 1); 
-        setSearchModalOpen(false); 
-      } 
-    } 
-  };
-  
-  const toggleFilter = (key, val) => {
-    setActiveFilters(prev => ({ ...prev, [key]: prev[key] === val ? '' : val }));
-  };
-
-  const navigateToListView = (type) => {
-    setView('rank');
-    setRankTab(type);
-  };
-
-  const renderGrid = (items, isLoading, isRankView = false) => {
-    if (isLoading && (!items || items.length === 0)) {
-      return (
-        <div className="grid grid-cols-2 xs:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3 sm:gap-4 md:gap-5">
-          {[...Array(12)].map((_, i) => <div key={i} className="aspect-[2/3] bg-slate-800 rounded-xl animate-pulse" />)}
-        </div>
-      );
-    }
-    
-    if (!items || items.length === 0) {
-      return <div className="text-slate-500 text-center py-10 italic">Tidak ada konten ditemukan.</div>;
-    }
-    
-    return (
-      <div className="grid grid-cols-2 xs:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3 sm:gap-4 md:gap-5">
-        {items.map((item, idx) => (
-          <DramaCard 
-            key={idx} 
-            item={item} 
-            onClick={openDetail} 
-            rank={isRankView ? idx + 1 : null} 
-          />
-        ))}
-      </div>
-    );
-  };
-
-  if (view === 'player') {
-    return (
-      <CustomPlayerPage 
-        {...playerState} 
-        initialEp={playerState.ep} 
-        onBack={() => setView('detail')} 
-        audioSettings={audioSettings}
-        setAudioSettings={setAudioSettings}
-      />
-    );
-  }
+  if (view === 'player') return <CustomPlayerPage {...playerState} initialEp={playerState.ep} onBack={() => setView('detail')} audioSettings={audioSettings} setAudioSettings={setAudioSettings} />;
 
   return (
     <div className="bg-[#0f172a] h-screen text-slate-200 font-sans flex flex-col overflow-hidden">
       {/* NAVBAR */}
-      <nav className="flex-none h-16 bg-[#0f172a]/95 backdrop-blur-md border-b border-white/5 flex items-center z-40 px-4">
-        <div className="container mx-auto flex justify-between items-center max-w-7xl">
-          <button onClick={() => setView('home')} className="flex items-center gap-2 group shrink-0">
-            <div className="w-8 h-8 bg-gradient-to-br from-blue-600 to-indigo-500 rounded-lg flex items-center justify-center text-white font-bold shadow-lg">D</div>
-            <span className="text-lg font-bold tracking-tight text-white hidden xs:block">Nonton<span className="text-blue-400">Dracin</span></span>
+      <nav className="flex-none h-16 bg-[#0f172a]/80 backdrop-blur-xl border-b border-white/5 flex items-center z-40 px-4 sm:px-8">
+        <div className="container mx-auto flex justify-between items-center">
+          <button onClick={() => setView('home')} className="flex items-center gap-2 group">
+            <div className="w-8 h-8 bg-gradient-to-br from-blue-600 to-indigo-500 rounded-lg flex items-center justify-center text-white font-black shadow-lg">D</div>
+            <span className="text-base font-black text-white hidden xs:block">Nonton<span className="text-blue-500">Dracin</span></span>
           </button>
-          <div className="flex items-center gap-1 bg-white/5 p-1 rounded-full border border-white/5 overflow-hidden">
-            {[ 
-              { id: 'home', label: 'Beranda', icon: Home }, 
-              { id: 'rank', label: 'Peringkat', icon: Trophy } 
-            ].map((menuItem) => {
-              const Icon = menuItem.icon;
-              return (
-                <button key={menuItem.id} onClick={() => setView(menuItem.id)} className={`px-3 sm:px-4 py-1.5 rounded-full text-[10px] sm:text-xs font-bold flex items-center gap-2 transition-all ${view === menuItem.id ? 'bg-blue-600 text-white shadow-md' : 'text-slate-400 hover:text-white'}`}>
-                  <Icon size={14} /> <span className="hidden sm:inline">{menuItem.label}</span>
-                </button>
-              );
-            })}
-            <button onClick={() => setView('filter')} className={`px-3 sm:px-4 py-1.5 rounded-full text-[10px] sm:text-xs font-bold flex items-center gap-2 transition-all ${view === 'filter' ? 'bg-blue-600 text-white shadow-md' : 'text-slate-400 hover:text-white'}`}>
-              <Filter size={14} /> <span className="hidden xs:inline">Filter</span>
-            </button>
-            <button onClick={() => setSearchModalOpen(true)} className={`p-2 rounded-full transition-all ${view === 'search' ? 'bg-blue-600 text-white' : 'text-slate-400 hover:text-white'}`}>
-              <Search size={16} />
-            </button>
+          <div className="flex items-center gap-1.5 bg-white/5 p-1 rounded-full border border-white/10">
+            {[ { id: 'home', label: 'Home', icon: Home }, { id: 'rank', label: 'Ranking', icon: Trophy }, { id: 'filter', label: 'Filter', icon: Filter } ].map((m) => (
+              <button key={m.id} onClick={() => setView(m.id)} className={`px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-wider flex items-center gap-1.5 transition-all ${view === m.id ? 'bg-blue-600 text-white shadow-lg' : 'text-slate-400 hover:text-white'}`}>
+                <m.icon size={12} /> <span className="hidden sm:inline">{m.label}</span>
+              </button>
+            ))}
+            <button onClick={() => setSearchModalOpen(true)} className="p-2 rounded-full text-slate-400 hover:text-white"><Search size={16} /></button>
           </div>
         </div>
       </nav>
 
-      {/* CONTENT AREA */}
-      <main className="flex-1 overflow-y-auto no-scrollbar pt-4 pb-12 px-4 sm:px-6">
+      {/* CONTENT */}
+      <main className="flex-1 overflow-y-auto pt-4 pb-16 px-4 sm:px-8 no-scrollbar">
         <div className="container mx-auto max-w-7xl">
-          {scriptError && (
-            <div className="bg-red-500/10 border border-red-500/20 p-4 rounded-xl mb-6 flex items-center gap-3 text-red-400">
-              <AlertTriangle size={20} />
-              <div>
-                <p className="text-xs font-bold">Gagal memuat sistem inti</p>
-                <p className="text-[10px] opacity-70">Script dari GitHub tidak dapat dimuat. Refresh halaman atau cek koneksi.</p>
-              </div>
-            </div>
-          )}
-
           {view === 'home' && (
-            <div className="animate-in fade-in duration-500">
+            <div className="animate-in fade-in duration-700">
                {homeData.popular[0] && (
-                 <div className="mb-8 relative rounded-2xl sm:rounded-3xl overflow-hidden min-h-[250px] sm:min-h-[350px] flex items-center bg-[#1e293b] shadow-2xl shrink-0">
+                 <div className="mb-8 relative rounded-[2rem] overflow-hidden min-h-[300px] flex items-center bg-slate-900 border border-white/5 shadow-2xl">
                    <div className="absolute inset-0">
-                     <img src={homeData.popular[0].coverWap || homeData.popular[0].cover} className="w-full h-full object-cover opacity-30 blur-[2px] sm:opacity-40" alt="Hero BG"/>
-                     <div className="absolute inset-0 bg-gradient-to-t from-[#0f172a] via-[#0f172a]/40 to-[#0f172a]/90"></div>
+                     <img src={homeData.popular[0].coverWap || homeData.popular[0].cover} className="w-full h-full object-cover opacity-30 blur-sm scale-105" alt="Hero" />
+                     <div className="absolute inset-0 bg-gradient-to-t from-[#0f172a] via-transparent to-transparent"></div>
                    </div>
-                   <div className="relative z-10 flex flex-col md:flex-row items-center gap-6 p-6 sm:p-10 w-full">
-                     <div className="hidden md:block w-1/3 max-w-[220px]">
-                       <div className="aspect-[2/3] rounded-2xl overflow-hidden shadow-2xl transform hover:scale-105 transition duration-500 cursor-pointer" onClick={() => openDetail(homeData.popular[0])}>
-                         <img src={homeData.popular[0].coverWap || homeData.popular[0].cover} className="w-full h-full object-cover" alt="Hero Poster" />
+                   <div className="relative z-10 flex flex-col md:flex-row items-center gap-6 p-8 sm:p-12 w-full">
+                     <div className="hidden lg:block w-[180px] shrink-0">
+                       <div className="aspect-[2/3] rounded-2xl overflow-hidden shadow-2xl" onClick={() => { setSelectedBookId(homeData.popular[0].bookId || homeData.popular[0].id); setView('detail'); }}>
+                         <img src={homeData.popular[0].coverWap || homeData.popular[0].cover} className="w-full h-full object-cover cursor-pointer" alt="Poster" />
                        </div>
                      </div>
-                     <div className="w-full md:w-2/3 text-center md:text-left">
-                       <div className="inline-flex items-center gap-1.5 px-3 py-1 bg-red-600/90 text-white text-[10px] font-bold rounded-full mb-3 shadow-lg shadow-red-600/20"><Flame size={12} fill="white" /> #1 POPULER</div>
-                       <h1 className="text-xl sm:text-4xl font-bold text-white mb-3 leading-tight">{String(homeData.popular[0].bookName || homeData.popular[0].title)}</h1>
-                       <p className="text-gray-300 mb-6 max-w-2xl mx-auto md:mx-0 line-clamp-3 text-xs sm:text-sm">{cleanIntro(homeData.popular[0].introduction || homeData.popular[0].desc)}</p>
-                       <button onClick={() => openDetail(homeData.popular[0])} className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2.5 rounded-xl font-bold transition shadow-lg active:scale-95 flex items-center justify-center gap-2 mx-auto md:mx-0"><Play size={18} fill="white" /> Lihat Detail</button>
+                     <div className="flex-1 text-center md:text-left">
+                       <div className="inline-flex items-center gap-2 px-3 py-1 bg-blue-600 text-white text-[8px] font-black rounded-full mb-4 uppercase tracking-widest"><Flame size={12} fill="white" /> Populer</div>
+                       <h1 className="text-3xl sm:text-5xl font-black text-white mb-4 leading-tight tracking-tighter">{homeData.popular[0].bookName || homeData.popular[0].title}</h1>
+                       <button onClick={() => { setSelectedBookId(homeData.popular[0].bookId || homeData.popular[0].id); setView('detail'); }} className="bg-white text-black hover:bg-blue-600 hover:text-white px-8 py-3 rounded-xl font-black text-[10px] uppercase tracking-widest transition-all shadow-xl flex items-center justify-center gap-2 mx-auto md:mx-0">LIHAT DETAIL <Play size={16} fill="currentColor"/></button>
                      </div>
                    </div>
                  </div>
                )}
-              
-              <div className="mb-10">
-                <div className="flex items-center justify-between mb-4 border-l-4 border-red-500 pl-3">
-                  <h2 className="text-base sm:text-lg font-bold text-white">Drama Populer</h2>
-                  <button onClick={() => navigateToListView('popular')} className="text-blue-400 hover:text-white text-[10px] sm:text-xs font-bold flex items-center gap-1">Lihat Semua <ChevronRight size={14} /></button>
+              <Section title="Drama Populer" icon={<Flame size={16} className="text-orange-500"/>} onSeeAll={() => { setView('rank'); setRankTab('popular'); }}>
+                <div className="grid grid-cols-2 xs:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4 sm:gap-6">
+                  {homeData.popular.slice(1, 7).map((item, idx) => <DramaCard key={idx} item={item} onClick={(it) => { setSelectedBookId(it.bookId || it.id); setPreviousView('home'); setView('detail'); }} />)}
                 </div>
-                {renderGrid(homeData.popular.slice(1), loadingHome)}
-              </div>
-
-              <div className="mb-10">
-                <div className="flex items-center justify-between mb-4 border-l-4 border-blue-500 pl-3">
-                  <h2 className="text-base sm:text-lg font-bold text-white">Update Terbaru</h2>
-                  <button onClick={() => navigateToListView('latest')} className="text-blue-400 hover:text-white text-[10px] sm:text-xs font-bold flex items-center gap-1">Lihat Semua <ChevronRight size={14} /></button>
+              </Section>
+              <Section title="Update Terbaru" icon={<Clock size={16} className="text-blue-400"/>} onSeeAll={() => { setView('rank'); setRankTab('latest'); }}>
+                <div className="grid grid-cols-2 xs:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4 sm:gap-6">
+                  {homeData.latest.slice(0, 6).map((item, idx) => <DramaCard key={idx} item={item} onClick={(it) => { setSelectedBookId(it.bookId || it.id); setPreviousView('home'); setView('detail'); }} />)}
                 </div>
-                {renderGrid(homeData.latest, loadingHome)}
-              </div>
+              </Section>
             </div>
           )}
 
           {view === 'rank' && (
-            <div className="h-full flex flex-col animate-in slide-in-from-bottom-4 duration-500">
-              <h1 className="text-xl sm:text-2xl font-bold text-white mb-6 text-center">Papan Peringkat</h1>
-              <div className="flex justify-start sm:justify-center mb-8 overflow-x-auto gap-2 pb-2 no-scrollbar">
-                {[ { id: 'trending', label: 'Trending', icon: Flame }, { id: 'popular', label: 'Populer', icon: Trophy }, { id: 'latest', label: 'Terbaru', icon: Clock } ].map((tab) => (
-                  <button key={tab.id} onClick={() => setRankTab(tab.id)} className={`px-4 sm:px-6 py-2 rounded-xl text-xs sm:text-sm font-bold flex items-center gap-2 transition-all whitespace-nowrap ${rankTab === tab.id ? 'bg-blue-600 text-white shadow-blue-600/20 shadow-lg' : 'text-slate-400 hover:text-slate-200 bg-slate-800/50'}`}><tab.icon size={14} /> {tab.label}</button>
-                ))}
-              </div>
-              {renderGrid(rankData, loading, true)}
-              {hasMoreRank && rankData.length > 0 && (
-                <div className="mt-8 flex justify-center">
-                  <button onClick={handleLoadMoreRank} disabled={loadingMore} className="px-6 py-2.5 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-800 text-white rounded-xl font-bold transition flex items-center gap-2 shadow-xl active:scale-95">
-                    {loadingMore ? <Loader2 size={16} className="animate-spin" /> : <Plus size={16} />} Memuat Lebih Banyak
-                  </button>
-                </div>
-              )}
+            <div className="animate-in fade-in duration-500">
+               <div className="flex justify-center gap-3 mb-8 overflow-x-auto no-scrollbar py-1">
+                  {[ { id: 'popular', label: 'Populer' }, { id: 'latest', label: 'Terbaru' }, { id: 'trending', label: 'Trending' } ].map(t => (
+                    <button key={t.id} onClick={() => setRankTab(t.id)} className={`px-6 py-2 rounded-xl font-black text-[10px] uppercase tracking-widest border transition-all ${rankTab === t.id ? 'bg-blue-600 border-blue-600 text-white shadow-lg' : 'bg-white/5 border-white/10 text-slate-400 hover:border-white/20'}`}>{t.label}</button>
+                  ))}
+               </div>
+               {loadingRank ? <div className="flex justify-center p-12"><Loader2 className="animate-spin text-blue-500" size={32}/></div> : 
+                 <div className="grid grid-cols-2 xs:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-5">
+                    {rankData.map((item, idx) => <DramaCard key={idx} item={item} rank={idx+1} onClick={(it) => { setSelectedBookId(it.bookId || it.id); setPreviousView('rank'); setView('detail'); }} />)}
+                 </div>
+               }
             </div>
           )}
 
           {view === 'filter' && (
-            <div className="animate-in fade-in duration-500 h-full flex flex-col">
-              <div className="mb-6 flex items-center gap-4">
-                <div className="w-10 h-10 bg-blue-600/20 rounded-xl flex items-center justify-center text-blue-500"><Filter size={20} /></div>
-                <h1 className="text-lg sm:text-xl font-bold text-white">Eksplorasi Drama</h1>
-              </div>
-              <div className="bg-slate-900/40 border border-white/5 rounded-2xl p-5 mb-8 backdrop-blur-md">
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                  {STATIC_FILTERS.map((group) => (
-                    <div key={group.key}>
-                      <p className="text-[9px] font-bold text-slate-500 uppercase tracking-widest mb-3">{group.title}</p>
+            <div className="animate-in fade-in duration-500">
+               <div className="bg-slate-900/50 p-6 rounded-2xl border border-white/5 mb-8 grid grid-cols-1 md:grid-cols-3 gap-6">
+                  {STATIC_FILTERS.map(f => (
+                    <div key={f.key}>
+                      <h4 className="text-[8px] font-black text-slate-500 uppercase tracking-widest mb-3">{f.title}</h4>
                       <div className="flex flex-wrap gap-1.5">
-                        {group.options.map((opt) => (
-                          <button key={opt.value} onClick={() => toggleFilter(group.key, opt.value)} className={`px-2.5 py-1 rounded-lg text-[10px] font-semibold transition-all border ${activeFilters[group.key] === opt.value ? 'bg-blue-600 border-transparent text-white' : 'bg-white/5 border-white/5 text-slate-400 hover:border-white/10'}`}>{opt.display}</button>
+                        {f.options.map(o => (
+                          <button key={o.value} onClick={() => setActiveFilters(prev => ({...prev, [f.key]: prev[f.key] === o.value ? '' : o.value}))} className={`px-3 py-1.5 rounded-lg text-[9px] font-bold uppercase tracking-wider border transition-all ${activeFilters[f.key] === o.value ? 'bg-blue-600 border-blue-600 text-white' : 'bg-white/5 border-white/10 text-slate-400 hover:border-white/20'}`}>{o.display}</button>
                         ))}
                       </div>
                     </div>
                   ))}
-                </div>
-              </div>
-              {allDramaData.length === 0 ? <div className="flex justify-center py-10"><Loader2 className="animate-spin text-blue-500" size={32} /></div> : renderGrid(filterData, false)}
-            </div>
-          )}
-
-          {view === 'search' && (
-            <div className="h-full animate-in fade-in">
-              <h1 className="text-lg sm:text-xl font-bold text-white mb-6">Hasil Pencarian: <span className="text-blue-400 italic">"{searchQuery}"</span></h1>
-              {renderGrid(searchData, loading)}
-              {hasMoreSearch && searchData.length > 0 && (
-                <div className="mt-8 flex justify-center">
-                  <button onClick={handleLoadMoreSearch} disabled={loadingMore} className="px-6 py-2.5 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-800 text-white rounded-xl font-bold transition flex items-center gap-2 active:scale-95 shadow-lg">
-                    {loadingMore ? <Loader2 size={16} className="animate-spin" /> : <Plus size={16} />} Muat Lebih Banyak
-                  </button>
-                </div>
-              )}
+               </div>
+               <div className="grid grid-cols-2 xs:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-5">
+                  {filterData.map((item, idx) => <DramaCard key={idx} item={item} onClick={(it) => { setSelectedBookId(it.bookId || it.id); setPreviousView('filter'); setView('detail'); }} />)}
+               </div>
             </div>
           )}
 
           {view === 'detail' && (
-            <DramaDetailPage 
-              bookId={selectedBookId} 
-              onBack={() => setView(previousView)} 
-              onPlayEpisode={onPlayEpisode}
-              onTagClick={handleTagClick}
-            />
+            <DramaDetailPage bookId={selectedBookId} onBack={() => setView(previousView)} onPlayEpisode={(ep, b, c) => { setPlayerState({ book: b, chapters: c, ep }); setPreviousView('detail'); setView('player'); }} />
           )}
         </div>
       </main>
 
       {/* FOOTER */}
-      <footer className="flex-none bg-[#0f172a] border-t border-white/5 py-4 px-4 overflow-hidden">
+      <footer className="flex-none bg-[#0f172a] border-t border-white/5 py-6 px-4 overflow-hidden">
         <div className="container mx-auto max-w-4xl flex flex-col items-center gap-2 text-center">
-          <p className="text-[10px] text-slate-500 font-bold">
+          <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest">
             © 2026 <a href="https://sanpoi.com" target="_blank" rel="noopener noreferrer" className="text-blue-400 hover:underline transition-all">SanPoi</a> | Made with AI
           </p>
           <p className="text-[9px] text-slate-600 leading-tight max-w-2xl italic hidden sm:block">
@@ -1221,32 +558,39 @@ export default function App() {
         </div>
       </footer>
 
-      {/* SEARCH OVERLAY */}
+      {/* OVERLAYS */}
+      {showAd && <SanPoiPopup onClose={handleCloseAd} />}
       {searchModalOpen && (
-        <div className="fixed inset-0 z-[100] flex items-start justify-center pt-20 px-4">
-          <div className="absolute inset-0 bg-black/70 backdrop-blur-md animate-in fade-in duration-300" onClick={() => setSearchModalOpen(false)}></div>
-          <div className="relative w-full max-w-xl bg-slate-900 border border-white/10 rounded-2xl shadow-2xl p-4 animate-in slide-in-from-top-4 duration-300">
-            <div className="relative">
-              <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500" size={18} />
-              <input 
-                autoFocus 
-                type="text" 
-                value={searchQuery} 
-                onChange={(e) => setSearchQuery(e.target.value)} 
-                placeholder="Cari drama favorit..." 
-                className="bg-slate-800 text-white w-full pl-11 pr-4 py-3 rounded-xl border border-white/5 outline-none focus:border-blue-500 transition-all font-bold text-sm" 
-                onKeyDown={handleSearchSubmit} 
-              />
-            </div>
+        <div className="fixed inset-0 z-[100] flex items-start justify-center pt-32 px-4">
+          <div className="absolute inset-0 bg-[#0f172a]/95 backdrop-blur-2xl" onClick={() => setSearchModalOpen(false)}></div>
+          <div className="relative w-full max-w-2xl animate-in slide-in-from-top-8 duration-500">
+             <div className="relative group">
+                <Search className="absolute left-6 top-1/2 -translate-y-1/2 text-slate-500 group-focus-within:text-blue-500 transition-colors" size={24} />
+                <input autoFocus type="text" placeholder="Cari drama favorit..." className="w-full bg-slate-900 border border-white/10 rounded-[1.5rem] pl-16 pr-8 py-6 text-xl font-bold text-white outline-none focus:border-blue-600 transition-all shadow-2xl" />
+             </div>
           </div>
-        </div>
-      )}
-      
-      {loading && (view === 'home' || view === 'rank' || view === 'search') && (
-        <div className="fixed bottom-16 right-6 sm:bottom-20 sm:right-8 bg-blue-600 p-3 sm:p-4 rounded-2xl shadow-2xl flex items-center gap-3 animate-bounce z-40 border border-white/10">
-          <Loader2 className="animate-spin text-white" size={18}/><span className="text-[10px] font-black uppercase tracking-widest text-white">Sinkronisasi...</span>
         </div>
       )}
     </div>
   );
 }
+
+const Section = ({ title, icon, onSeeAll, children }) => (
+  <section className="mb-12">
+    <div className="flex items-center justify-between mb-6">
+      <div className="flex items-center gap-2">
+        <div className="p-1.5 bg-slate-900 rounded-lg border border-white/5 shadow-inner">{icon}</div>
+        <h2 className="text-lg font-black text-white uppercase tracking-tight">{title}</h2>
+      </div>
+      {onSeeAll && (
+        <button 
+          onClick={onSeeAll} 
+          className="flex items-center gap-1 text-[10px] font-black text-blue-500 hover:text-white uppercase tracking-widest transition-all bg-white/5 px-3 py-1 rounded-full border border-white/5"
+        >
+          Lihat Semua <ChevronRight size={12}/>
+        </button>
+      )}
+    </div>
+    {children}
+  </section>
+);
