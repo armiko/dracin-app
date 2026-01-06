@@ -10,13 +10,14 @@ import {
 
 /**
  * --- ARAHAN KONFIGURASI GOOGLE OAUTH ---
- * Silakan tambahkan URI berikut di Google Cloud Console -> Credentials -> OAuth 2.0 Client IDs:
- * * Authorized JavaScript origins:
- * 1. https://nontondracin-f5065.firebaseapp.com
- * 2. https://your-vercel-domain.vercel.app
- * * Authorized redirect URIs:
- * 1. https://nontondracin-f5065.firebaseapp.com/__/auth/handler
- * 2. https://nontondracin-f5065.web.app/__/auth/handler
+ * Galat CONFIGURATION_NOT_FOUND biasanya berarti Google Sign-In belum diaktifkan.
+ * Sila pastikan:
+ * 1. Di Firebase Console -> Authentication -> Sign-in method -> Tambah 'Google' dan aktifkan.
+ * 2. Pastikan domain vercel/lokal sudah masuk ke 'Authorized domains'.
+ * 3. Masukkan URI berikut di Google Cloud Console -> Credentials:
+ * Authorized redirect URIs:
+ * - https://nontondracin-f5065.firebaseapp.com/__/auth/handler
+ * - https://nontondracin-f5065.web.app/__/auth/handler
  */
 
 /**
@@ -25,10 +26,9 @@ import {
 const CONFIG = {
   SCRIPT_URL: "https://cdn.jsdelivr.net/gh/armiko/dracin-app@169efe4fc99586d445cbf8780629c5ac210ca929/js/dramabox-core.js",
   HLS_URL: "https://cdn.jsdelivr.net/npm/hls.js@latest",
-  // Firebase Compat Scripts versi 12.7.0 sesuai permintaan
-  FIREBASE_APP: "https://www.gstatic.com/firebasejs/11.1.0/firebase-app-compat.js",
-  FIREBASE_AUTH: "https://www.gstatic.com/firebasejs/11.1.0/firebase-auth-compat.js",
-  FIREBASE_FIRESTORE: "https://www.gstatic.com/firebasejs/11.1.0/firebase-firestore-compat.js",
+  FIREBASE_APP: "https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js",
+  FIREBASE_AUTH: "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js",
+  FIREBASE_FIRESTORE: "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js",
   API_BASE: "https://drachin.dicky.app",
   LOCALE_API: "in",
   FEED_IDS: { POPULAR: 1, LATEST: 2, TRENDING: 3 },
@@ -36,7 +36,6 @@ const CONFIG = {
   GOOGLE_CLIENT_ID: "1045477518682-vvh8vnmbaib90h6ruoi6i02jmk9nffg5.apps.googleusercontent.com"
 };
 
-// Data Firebase baru dari permintaan user
 const FIREBASE_CONFIG_OVERRIDE = {
   apiKey: "AIzaSyDm5JBMP_NZTpiM-EmgvXNwRCLNtdROy8s",
   authDomain: "nontondracin-f5065.firebaseapp.com",
@@ -311,8 +310,8 @@ const CustomPlayerPage = ({ book, chapters, initialEp, onBack, audioSettings, se
 
   return (
     <div className="fixed inset-0 z-[1000] bg-black flex flex-col items-center justify-center overflow-hidden" onMouseMove={() => { setShowControls(true); setTimeout(() => setShowControls(false), 5000); }}>
-      <div className={`absolute top-0 left-0 right-0 p-8 z-50 flex items-center justify-between bg-gradient-to-b from-black/90 via-black/40 to-transparent transition-opacity duration-500 ${showControls ? 'opacity-100' : 'opacity-0'}`}>
-        <button onClick={onBack} className="text-white hover:bg-white/10 p-3 rounded-full transition-all"><ChevronLeft size={28} /></button>
+      <div className={`absolute top-0 left-0 right-0 p-6 z-50 flex items-center justify-between bg-gradient-to-b from-black/90 via-black/40 to-transparent transition-opacity duration-500 ${showControls ? 'opacity-100' : 'opacity-0'}`}>
+        <button onClick={onBack} className="text-white hover:bg-white/10 p-2 rounded-full transition-all"><ChevronLeft size={28} /></button>
         <div className="text-center flex-1 max-w-xl">
           <h2 className="text-white font-black text-sm truncate uppercase tracking-tight">{book.bookName}</h2>
           <p className="text-blue-400 text-[10px] font-black uppercase tracking-[0.2em]">Episode {currentEp}</p>
@@ -341,7 +340,7 @@ const CustomPlayerPage = ({ book, chapters, initialEp, onBack, audioSettings, se
             <div className="flex items-center gap-8">
                <div className="hidden sm:flex items-center gap-2 group/volume bg-white/5 px-4 py-2 rounded-2xl hover:bg-white/10 transition-all">
                   <button onClick={(e) => { e.stopPropagation(); setAudioSettings(s => ({...s, isMuted: !s.isMuted}))}} className="text-white/70">{getVolumeIcon()}</button>
-                  <div className="w-0 group-hover/volume:w-32 overflow-hidden transition-all duration-500 ease-out">
+                  <div className="w-0 group-hover/volume:w-32 overflow-hidden transition-all duration-300 ease-out">
                     <input type="range" min="0" max="1" step="0.01" value={audioSettings.isMuted ? 0 : audioSettings.volume} onChange={(e) => setAudioSettings(s => ({...s, volume: parseFloat(e.target.value), isMuted: parseFloat(e.target.value) === 0}))} style={{background: `linear-gradient(to right, #3b82f6 ${audioSettings.volume*100}%, rgba(255,255,255,0.2) ${audioSettings.volume*100}%)`}} className="volume-premium w-32 h-1 appearance-none rounded-full cursor-pointer" />
                   </div>
                </div>
@@ -403,21 +402,23 @@ export default function App() {
     try {
       const fb = window.firebase;
       const provider = new fb.auth.GoogleAuthProvider();
+      // MEMASTIKAN LOGIN GOOGLE MENGGUNAKAN KONFIGURASI YANG BENAR
       await fb.auth().signInWithPopup(provider);
     } catch (e) {
-      console.error("Gagal login:", e);
+      console.error("Login error:", e);
       const errStr = String(e);
-      // Deteksi galat spesifik environment di pratonton sistem
       const isEnvError = e.code === 'auth/operation-not-supported-in-this-environment' || 
                          errStr.includes('location.protocol') || 
                          errStr.includes('operation-not-supported');
       
       if (isEnvError) {
-        setAuthError("Login Google tidak didukung di lingkungan pratinjau ini (iframe/blob). Fitur ini akan berfungsi normal setelah aplikasi Anda di-deploy ke domain HTTPS asli seperti Vercel.");
+        setAuthError("Login Google memerlukan protokol HTTPS asli (seperti domain Vercel Anda). Fitur ini tidak dapat berjalan di dalam jendela pratonton sistem.");
+      } else if (e.code === 'auth/configuration-not-found') {
+        setAuthError("Galat: Google belum diaktifkan sebagai Sign-in Provider di Firebase Console Anda.");
       } else if (e.code === 'auth/popup-closed-by-user') {
         setAuthError("Login dibatalkan oleh pengguna.");
       } else {
-        setAuthError("Gagal masuk dengan Google. Silakan coba lagi.");
+        setAuthError("Gagal masuk dengan Google. Pastikan konfigurasi OAuth di Konsol Firebase sudah benar.");
       }
     }
   };
@@ -426,7 +427,7 @@ export default function App() {
     if (!fbReady || !window.firebase) return;
     try {
       await window.firebase.auth().signOut();
-    } catch (e) { console.error("Gagal keluar:", e); }
+    } catch (e) { console.error("Logout failed:", e); }
   };
 
   const handleCloseAd = async (isPersistent) => {
@@ -434,13 +435,12 @@ export default function App() {
     if (user && fbReady && window.firebase && window.firebase.apps.length) {
       try {
         const fb = window.firebase;
-        const configRaw = JSON.stringify(FIREBASE_CONFIG_OVERRIDE);
         const appIdStr = FIREBASE_CONFIG_OVERRIDE.projectId;
         await fb.firestore().doc(`artifacts/${appIdStr}/users/${user.uid}/settings/ad_pref`).set({ 
           ts: Date.now(), 
           p: isPersistent 
         });
-      } catch(e) { console.error("Gagal simpan preferensi iklan:", e); }
+      } catch(e) { console.error("Save ad pref error:", e); }
     }
   };
 
@@ -453,7 +453,7 @@ export default function App() {
         setSearchData(res.items || []);
         setView('search-results');
         setSearchModalOpen(false);
-      } catch (e) { console.error("Gagal mencari:", e); } finally { setLoadingData(false); }
+      } catch (e) { console.error("Search error:", e); } finally { setLoadingData(false); }
     }
   };
 
@@ -474,7 +474,7 @@ export default function App() {
       setHomeData(result);
       const combined = [...(pop || []), ...(lat || [])];
       setAllDramaData(combined.filter((item, index, self) => index === self.findIndex(t => (t.bookId || t.id) === (item.bookId || item.id))));
-    } catch (e) { console.error("Gagal memuat beranda:", e); }
+    } catch (e) { console.error("Home fetch error:", e); }
   }, []);
 
   const fetchRank = useCallback(async (tab, page = 1) => {
@@ -490,7 +490,7 @@ export default function App() {
       const res = await core.doClassify(CONFIG.API_BASE, 'in', device, token, fid, count);
       setRankData(res || []);
       setHasMoreRank((res || []).length >= count);
-    } catch (e) { console.error("Gagal memuat peringkat:", e); } finally { setLoadingData(false); }
+    } catch (e) { console.error("Rank fetch error:", e); } finally { setLoadingData(false); }
   }, []);
 
   const handleLoadMoreRank = () => {
@@ -566,11 +566,11 @@ export default function App() {
       <nav className="flex-none h-16 bg-[#0f172a]/80 backdrop-blur-xl border-b border-white/5 flex items-center z-40 px-4 sm:px-8">
         <div className="container mx-auto flex justify-between items-center">
           <button onClick={() => setView('home')} className="flex items-center gap-2 group">
-            <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center text-white font-black shadow-lg">D</div>
+            <div className="w-8 h-8 bg-gradient-to-br from-blue-600 to-indigo-500 rounded-lg flex items-center justify-center text-white font-black shadow-lg">D</div>
             <span className="text-base font-black text-white hidden xs:block">NontonDracin</span>
           </button>
           <div className="flex items-center gap-1.5 bg-white/5 p-1 rounded-full border border-white/10">
-            {[ { id: 'home', label: 'Beranda', icon: Home }, { id: 'rank', label: 'Ranking', icon: Trophy }, { id: 'filter', label: 'Filter', icon: Filter } ].map((m) => (
+            {[ { id: 'home', label: 'Home', icon: Home }, { id: 'rank', label: 'Ranking', icon: Trophy }, { id: 'filter', label: 'Filter', icon: Filter } ].map((m) => (
               <button key={m.id} onClick={() => setView(m.id)} className={`px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-wider flex items-center gap-1.5 transition-all ${view === m.id ? 'bg-blue-600 text-white shadow-lg' : 'text-slate-400 hover:text-white'}`}>
                 <m.icon size={12} /> <span className="hidden sm:inline">{m.label}</span>
               </button>
@@ -581,16 +581,16 @@ export default function App() {
             {user && !user.isAnonymous ? (
               <div className="flex items-center gap-2 pl-1 pr-2">
                 <img src={user.photoURL} alt="User" className="w-6 h-6 rounded-full border border-white/20 shadow-lg" />
-                <button onClick={handleLogout} className="p-1.5 text-slate-400 hover:text-red-400 transition-colors" title="Keluar"><LogOut size={14} /></button>
+                <button onClick={handleLogout} className="p-1.5 text-slate-400 hover:text-red-400 transition-colors" title="Logout"><LogOut size={14} /></button>
               </div>
             ) : (
-              <button onClick={handleGoogleLogin} className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/5 hover:bg-blue-600 text-slate-300 hover:text-white transition-all text-[10px] font-black uppercase tracking-wider"><LogIn size={12} /> <span className="hidden sm:inline">Masuk</span></button>
+              <button onClick={handleGoogleLogin} className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/5 hover:bg-blue-600 text-slate-300 hover:text-white transition-all text-[10px] font-black uppercase tracking-wider"><LogIn size={12} /> <span className="hidden sm:inline">Login</span></button>
             )}
           </div>
         </div>
       </nav>
 
-      {/* BILAH RALAT */}
+      {/* ERROR BAR */}
       {authError && (
         <div className="bg-orange-600/20 border-b border-orange-500/20 px-6 py-2 flex items-center justify-between animate-in slide-in-from-top-full duration-300">
            <div className="flex items-center gap-2 text-orange-400 text-[9px] font-bold uppercase tracking-widest text-left">
@@ -600,7 +600,7 @@ export default function App() {
         </div>
       )}
 
-      {/* KONTEN UTAMA */}
+      {/* MAIN CONTENT */}
       <main className="flex-1 overflow-y-auto pt-4 pb-16 px-4 sm:px-8 no-scrollbar">
         <div className="container mx-auto max-w-7xl">
           {view === 'home' && (
