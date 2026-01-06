@@ -6,28 +6,22 @@ import {
   Pause, Volume2, VolumeX, Share2, ChevronLeft,
   Volume1, Gamepad2, CheckCircle2, ExternalLink
 } from 'lucide-react';
-import { initializeApp } from 'firebase/app';
-import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from 'firebase/auth';
-import { getFirestore, doc, setDoc, getDoc, collection } from 'firebase/firestore';
 
 /**
- * --- KONFIGURASI ---
+ * --- KONFIGURASI API ---
  */
 const CONFIG = {
   SCRIPT_URL: "https://cdn.jsdelivr.net/gh/armiko/dracin-app@169efe4fc99586d445cbf8780629c5ac210ca929/js/dramabox-core.js",
   HLS_URL: "https://cdn.jsdelivr.net/npm/hls.js@latest",
+  // Firebase Compat Scripts untuk stabilitas di lingkungan pratinjau
+  FIREBASE_APP: "https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js",
+  FIREBASE_AUTH: "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js",
+  FIREBASE_FIRESTORE: "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js",
   API_BASE: "https://drachin.dicky.app",
   LOCALE_API: "in",
   FEED_IDS: { POPULAR: 1, LATEST: 2, TRENDING: 3 },
   PER_PAGE: 24
 };
-
-// Firebase Setup
-const firebaseConfig = JSON.parse(__firebase_config);
-const app = initializeApp(firebaseConfig);
-const auth = getAuth(app);
-const db = getFirestore(app);
-const appId = typeof __app_id !== 'undefined' ? __app_id : 'nontondracin-compact';
 
 const STATIC_FILTERS = [
   {
@@ -66,6 +60,39 @@ const STATIC_FILTERS = [
 ];
 
 /**
+ * --- HELPER COMPONENTS (Didefinisikan di awal untuk menghindari ReferenceError) ---
+ */
+
+const Section = ({ title, Icon, onSeeAll, children }) => (
+  <section className="mb-12">
+    <div className="flex items-center justify-between mb-6">
+      <div className="flex items-center gap-2">
+        <div className="p-1.5 bg-slate-900 rounded-lg border border-white/5 shadow-inner">
+          <Icon size={16} className={title.includes('Populer') ? 'text-orange-500' : 'text-blue-400'} />
+        </div>
+        <h2 className="text-lg font-black text-white uppercase tracking-tight">{title}</h2>
+      </div>
+      {onSeeAll && (
+        <button 
+          onClick={onSeeAll} 
+          className="flex items-center gap-1 text-[10px] font-black text-blue-500 hover:text-white uppercase tracking-widest transition-all bg-white/5 px-3 py-1 rounded-full border border-white/5"
+        >
+          Lihat Semua <ChevronRight size={12}/>
+        </button>
+      )}
+    </div>
+    {children}
+  </section>
+);
+
+const Skeleton = () => (
+  <div className="flex flex-col gap-2 animate-pulse">
+    <div className="aspect-[2/3] bg-slate-800 rounded-xl"></div>
+    <div className="h-2 bg-slate-800 rounded-full w-2/3"></div>
+  </div>
+);
+
+/**
  * --- UTILS ---
  */
 const useExternalScript = (url) => {
@@ -76,9 +103,10 @@ const useExternalScript = (url) => {
     const handleError = () => setState({ loaded: false, error: true });
     if (!script) {
       script = document.createElement("script");
-      script.src = url; script.async = true;
+      script.src = url; 
+      script.async = false;
       document.body.appendChild(script);
-    } else if (window.DramaboxCore || window.Hls) {
+    } else if (window.DramaboxCore || window.Hls || (url.includes('firebase') && window.firebase)) {
       handleLoad(); return;
     }
     script.addEventListener("load", handleLoad);
@@ -108,7 +136,6 @@ const extractVideoUrl = (c) => {
   return '';
 };
 
-// Helper format waktu (detik -> mm:ss)
 const formatTime = (seconds) => {
   if (isNaN(seconds)) return "00:00";
   const mins = Math.floor(seconds / 60);
@@ -117,9 +144,8 @@ const formatTime = (seconds) => {
 };
 
 /**
- * --- UI COMPONENTS ---
+ * --- KOMPONEN POPUP IKLAN ---
  */
-
 const SanPoiPopup = ({ onClose }) => {
   const [dontShowToday, setDontShowToday] = useState(false);
   return (
@@ -177,10 +203,11 @@ const DramaDetailPage = ({ bookId, onBack, onPlayEpisode }) => {
   const [data, setData] = useState(null);
   useEffect(() => {
     const fetch = async () => {
+      if (!window.DramaboxCore) return;
       const res = await window.DramaboxCore.loadDetailWithRecommend({ apiBase: CONFIG.API_BASE, localeApi: 'in', bookId, webficBase: 'https://www.webfic.com' });
       setData(res);
     };
-    if (window.DramaboxCore) fetch();
+    fetch();
   }, [bookId]);
 
   if (!data) return <div className="flex flex-col items-center justify-center p-12 gap-3"><Loader2 className="animate-spin text-blue-500" size={32} /><p className="text-[8px] font-black text-slate-500 uppercase tracking-widest">Sinkronisasi Data...</p></div>;
@@ -230,8 +257,8 @@ const CustomPlayerPage = ({ book, chapters, initialEp, onBack, audioSettings, se
     setLoading(true); setError(false); setVideoUrl(''); setIsPlaying(false);
     const requestId = ++requestRef.current;
     try {
-      const core = window.DramaboxCore;
-      const res = await core.loadViaBatch({ apiBase: CONFIG.API_BASE, localeApi: 'in', bookId: book.bookId || book.id, index: epNum });
+      if (!window.DramaboxCore) return;
+      const res = await window.DramaboxCore.loadViaBatch({ apiBase: CONFIG.API_BASE, localeApi: 'in', bookId: book.bookId || book.id, index: epNum });
       if (requestId !== requestRef.current) return;
       const list = res.data?.chapterList || res.chapters || [];
       const batchCh = list.find(item => String(item.num) === String(epNum) || item.index === (epNum - 1)) || list[0];
@@ -282,7 +309,6 @@ const CustomPlayerPage = ({ book, chapters, initialEp, onBack, audioSettings, se
 
       <div className={`absolute bottom-0 left-0 right-0 p-6 z-50 transition-all duration-500 ${showControls ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-8 pointer-events-none'}`}>
         <div className="max-w-4xl mx-auto flex flex-col gap-3">
-          {/* Progress Bar & Durasi */}
           <div className="flex flex-col gap-1.5">
             <input type="range" min="0" max={duration || 0} step="0.1" value={currentTime} onChange={(e) => { videoRef.current.currentTime = e.target.value; }} className="w-full h-1 accent-blue-600 bg-white/20 rounded-full appearance-none cursor-pointer hover:h-1.5 transition-all" />
             <div className="flex justify-between items-center px-1 text-[9px] font-mono font-bold text-white/50 tracking-tighter">
@@ -298,7 +324,6 @@ const CustomPlayerPage = ({ book, chapters, initialEp, onBack, audioSettings, se
               <button onClick={(e) => { e.stopPropagation(); setCurrentEp(e => e + 1); }} className="text-white/40 hover:text-white"><SkipForward size={24} fill="currentColor" /></button>
             </div>
             <div className="flex items-center gap-6">
-               {/* UI Slider Volume yang Diperbaiki */}
                <div className="hidden sm:flex items-center gap-2 group/vol bg-white/5 px-3 py-1.5 rounded-xl border border-white/5 hover:bg-white/10 transition-all">
                   <button onClick={(e) => { e.stopPropagation(); setAudioSettings(s => ({...s, isMuted: !s.isMuted}))}} className="text-white/70 hover:text-white transition-colors">
                     {getVolumeIcon()}
@@ -318,12 +343,9 @@ const CustomPlayerPage = ({ book, chapters, initialEp, onBack, audioSettings, se
                     />
                   </div>
                </div>
-               
-               {/* Toggle Mute Mobile */}
                <button onClick={(e) => { e.stopPropagation(); setAudioSettings(s => ({...s, isMuted: !s.isMuted}))}} className="sm:hidden text-white/70">
                  {getVolumeIcon()}
                </button>
-
                <button onClick={(e) => { e.stopPropagation(); setAudioSettings(s => ({...s, playbackRate: s.playbackRate === 1 ? 1.5 : s.playbackRate === 1.5 ? 2 : 1}))}} className="px-3 py-1.5 bg-blue-600 text-white rounded-lg text-[9px] font-black tracking-widest uppercase shadow-lg shadow-blue-600/20 active:scale-95 transition-all">
                  {audioSettings.playbackRate}X SPEED
                </button>
@@ -346,6 +368,9 @@ const CustomPlayerPage = ({ book, chapters, initialEp, onBack, audioSettings, se
 export default function App() {
   const { loaded: scriptLoaded } = useExternalScript(CONFIG.SCRIPT_URL);
   const { loaded: hlsLoaded } = useExternalScript(CONFIG.HLS_URL);
+  const { loaded: fbApp } = useExternalScript(CONFIG.FIREBASE_APP);
+  const { loaded: fbAuth } = useExternalScript(CONFIG.FIREBASE_AUTH);
+  const { loaded: fbStore } = useExternalScript(CONFIG.FIREBASE_FIRESTORE);
   
   const [view, setView] = useState('home'); 
   const [previousView, setPreviousView] = useState('home');
@@ -364,49 +389,84 @@ export default function App() {
   const [activeFilters, setActiveFilters] = useState({ voice: '', category: '', sort: 'popular' });
   const [audioSettings, setAudioSettings] = useState({ volume: 1, isMuted: false, playbackRate: 1, autoNext: true });
 
-  // Auth
+  const fbReady = fbApp && fbAuth && fbStore;
+
+  // Mendapatkan config firebase dengan aman
+  const getFirebaseConfig = () => {
+    try {
+      return JSON.parse(typeof __firebase_config !== 'undefined' ? __firebase_config : '{}');
+    } catch (e) {
+      return {};
+    }
+  };
+
+  // Auth Initialization (Rule 3)
   useEffect(() => {
+    if (!fbReady || !window.firebase) return;
+    const fb = window.firebase;
+    const fConfig = getFirebaseConfig();
+    
+    if (!fb.apps.length) {
+      try { fb.initializeApp(fConfig); } catch(e) {}
+    }
+    
     const initAuth = async () => {
-      if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) await signInWithCustomToken(auth, __initial_auth_token);
-      else await signInAnonymously(auth);
+      try {
+        if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+          await fb.auth().signInWithCustomToken(__initial_auth_token);
+        } else {
+          await fb.auth().signInAnonymously();
+        }
+      } catch (e) { console.error("Auth failed:", e); }
     };
+
     initAuth();
-    return onAuthStateChanged(auth, setUser);
-  }, []);
+    return fb.auth().onAuthStateChanged(setUser);
+  }, [fbReady]);
 
   // Ad Logic
   useEffect(() => {
-    if (!user) return;
+    if (!user || !fbReady || !window.firebase) return;
+    const fb = window.firebase;
     const checkAd = async () => {
-      const snap = await getDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'settings', 'ad_pref'));
-      let show = true;
-      if (snap.exists()) {
-        const d = snap.data();
-        const diff = Date.now() - (d.ts || 0);
-        if (d.p ? diff < 86400000 : diff < 3600000) show = false;
-      }
-      if (show) setTimeout(() => setShowAd(true), 3000);
+      try {
+        const adRef = fb.firestore().doc(`artifacts/${appId}/users/${user.uid}/settings/ad_pref`);
+        const snap = await adRef.get();
+        let show = true;
+        if (snap.exists) {
+          const d = snap.data();
+          const diff = Date.now() - (d.ts || 0);
+          if (d.p ? diff < 86400000 : diff < 3600000) show = false;
+        }
+        if (show) setTimeout(() => setShowAd(true), 3000);
+      } catch(e) {}
     };
     checkAd();
-  }, [user]);
+  }, [user, fbReady]);
 
   const handleCloseAd = async (p) => {
     setShowAd(false);
-    if (user) await setDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'settings', 'ad_pref'), { ts: Date.now(), p });
+    if (user && fbReady && window.firebase) {
+      try {
+        const fb = window.firebase;
+        await fb.firestore().doc(`artifacts/${appId}/users/${user.uid}/settings/ad_pref`).set({ ts: Date.now(), p });
+      } catch(e) {}
+    }
   };
 
   // API Logic
   const fetchHome = useCallback(async () => {
+    if (!window.DramaboxCore) return;
     try {
       const core = window.DramaboxCore;
       const device = await core.getDevice();
-      const token = (await core.getToken(CONFIG.API_BASE, 'in', device, false)).token;
+      const tokenResult = await core.getToken(CONFIG.API_BASE, 'in', device, false);
+      const token = tokenResult.token;
       const [pop, lat] = await Promise.all([
         core.doClassify(CONFIG.API_BASE, 'in', device, token, CONFIG.FEED_IDS.POPULAR, 18),
         core.doClassify(CONFIG.API_BASE, 'in', device, token, CONFIG.FEED_IDS.LATEST, 12)
       ]);
       setHomeData({ popular: pop || [], latest: lat || [] });
-      
       const combined = [...(pop || []), ...(lat || [])];
       const unique = combined.filter((item, index, self) => index === self.findIndex(t => (t.bookId || t.id) === (item.bookId || item.id)));
       setAllDramaData(unique);
@@ -414,11 +474,13 @@ export default function App() {
   }, []);
 
   const fetchRank = useCallback(async (tab) => {
+    if (!window.DramaboxCore) return;
     setLoadingRank(true);
     try {
       const core = window.DramaboxCore;
       const device = await core.getDevice();
-      const token = (await core.getToken(CONFIG.API_BASE, 'in', device, false)).token;
+      const tokenResult = await core.getToken(CONFIG.API_BASE, 'in', device, false);
+      const token = tokenResult.token;
       const fid = tab === 'popular' ? CONFIG.FEED_IDS.POPULAR : tab === 'latest' ? CONFIG.FEED_IDS.LATEST : CONFIG.FEED_IDS.TRENDING;
       const res = await core.doClassify(CONFIG.API_BASE, 'in', device, token, fid, 30);
       setRankData(res || []);
@@ -428,7 +490,6 @@ export default function App() {
   useEffect(() => { if (scriptLoaded) fetchHome(); }, [scriptLoaded, fetchHome]);
   useEffect(() => { if (view === 'rank') fetchRank(rankTab); }, [view, rankTab, fetchRank]);
 
-  // Filter Logic
   useEffect(() => {
     let filtered = [...allDramaData];
     if (activeFilters.voice === '1') filtered = filtered.filter(i => (i.bookName || i.title || '').toLowerCase().includes('(sulih suara)'));
@@ -446,7 +507,6 @@ export default function App() {
 
   return (
     <div className="bg-[#0f172a] h-screen text-slate-200 font-sans flex flex-col overflow-hidden">
-      {/* NAVBAR */}
       <nav className="flex-none h-16 bg-[#0f172a]/80 backdrop-blur-xl border-b border-white/5 flex items-center z-40 px-4 sm:px-8">
         <div className="container mx-auto flex justify-between items-center">
           <button onClick={() => setView('home')} className="flex items-center gap-2 group">
@@ -464,7 +524,6 @@ export default function App() {
         </div>
       </nav>
 
-      {/* CONTENT */}
       <main className="flex-1 overflow-y-auto pt-4 pb-16 px-4 sm:px-8 no-scrollbar">
         <div className="container mx-auto max-w-7xl">
           {view === 'home' && (
@@ -489,12 +548,12 @@ export default function App() {
                    </div>
                  </div>
                )}
-              <Section title="Drama Populer" icon={<Flame size={16} className="text-orange-500"/>} onSeeAll={() => { setView('rank'); setRankTab('popular'); }}>
+              <Section Icon={Flame} title="Drama Populer" onSeeAll={() => { setView('rank'); setRankTab('popular'); }}>
                 <div className="grid grid-cols-2 xs:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4 sm:gap-6">
                   {homeData.popular.slice(1, 7).map((item, idx) => <DramaCard key={idx} item={item} onClick={(it) => { setSelectedBookId(it.bookId || it.id); setPreviousView('home'); setView('detail'); }} />)}
                 </div>
               </Section>
-              <Section title="Update Terbaru" icon={<Clock size={16} className="text-blue-400"/>} onSeeAll={() => { setView('rank'); setRankTab('latest'); }}>
+              <Section Icon={Clock} title="Update Terbaru" onSeeAll={() => { setView('rank'); setRankTab('latest'); }}>
                 <div className="grid grid-cols-2 xs:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4 sm:gap-6">
                   {homeData.latest.slice(0, 6).map((item, idx) => <DramaCard key={idx} item={item} onClick={(it) => { setSelectedBookId(it.bookId || it.id); setPreviousView('home'); setView('detail'); }} />)}
                 </div>
@@ -543,7 +602,6 @@ export default function App() {
         </div>
       </main>
 
-      {/* FOOTER */}
       <footer className="flex-none bg-[#0f172a] border-t border-white/5 py-6 px-4 overflow-hidden">
         <div className="container mx-auto max-w-4xl flex flex-col items-center gap-2 text-center">
           <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest">
@@ -558,39 +616,7 @@ export default function App() {
         </div>
       </footer>
 
-      {/* OVERLAYS */}
       {showAd && <SanPoiPopup onClose={handleCloseAd} />}
-      {searchModalOpen && (
-        <div className="fixed inset-0 z-[100] flex items-start justify-center pt-32 px-4">
-          <div className="absolute inset-0 bg-[#0f172a]/95 backdrop-blur-2xl" onClick={() => setSearchModalOpen(false)}></div>
-          <div className="relative w-full max-w-2xl animate-in slide-in-from-top-8 duration-500">
-             <div className="relative group">
-                <Search className="absolute left-6 top-1/2 -translate-y-1/2 text-slate-500 group-focus-within:text-blue-500 transition-colors" size={24} />
-                <input autoFocus type="text" placeholder="Cari drama favorit..." className="w-full bg-slate-900 border border-white/10 rounded-[1.5rem] pl-16 pr-8 py-6 text-xl font-bold text-white outline-none focus:border-blue-600 transition-all shadow-2xl" />
-             </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }
-
-const Section = ({ title, icon, onSeeAll, children }) => (
-  <section className="mb-12">
-    <div className="flex items-center justify-between mb-6">
-      <div className="flex items-center gap-2">
-        <div className="p-1.5 bg-slate-900 rounded-lg border border-white/5 shadow-inner">{icon}</div>
-        <h2 className="text-lg font-black text-white uppercase tracking-tight">{title}</h2>
-      </div>
-      {onSeeAll && (
-        <button 
-          onClick={onSeeAll} 
-          className="flex items-center gap-1 text-[10px] font-black text-blue-500 hover:text-white uppercase tracking-widest transition-all bg-white/5 px-3 py-1 rounded-full border border-white/5"
-        >
-          Lihat Semua <ChevronRight size={12}/>
-        </button>
-      )}
-    </div>
-    {children}
-  </section>
-);
