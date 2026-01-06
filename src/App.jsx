@@ -311,72 +311,48 @@ const CustomPlayerPage = ({ book, chapters, initialEp, onBack, audioSettings, se
 
   return (
     <div className="fixed inset-0 z-[1000] bg-black flex flex-col items-center justify-center overflow-hidden" onMouseMove={() => { setShowControls(true); setTimeout(() => setShowControls(false), 5000); }}>
-      <div className={`absolute top-0 left-0 right-0 p-6 z-50 flex items-center justify-between bg-gradient-to-b from-black/90 via-black/40 to-transparent transition-opacity duration-500 ${showControls ? 'opacity-100' : 'opacity-0'}`}>
-        <button onClick={onBack} className="text-white hover:bg-white/10 p-2 rounded-full transition-all"><ChevronLeft size={24} /></button>
+      <div className={`absolute top-0 left-0 right-0 p-8 z-50 flex items-center justify-between bg-gradient-to-b from-black/90 via-black/40 to-transparent transition-opacity duration-500 ${showControls ? 'opacity-100' : 'opacity-0'}`}>
+        <button onClick={onBack} className="text-white hover:bg-white/10 p-3 rounded-full transition-all"><ChevronLeft size={28} /></button>
         <div className="text-center flex-1 max-w-xl">
           <h2 className="text-white font-black text-sm truncate uppercase tracking-tight">{book.bookName}</h2>
-          <p className="text-blue-400 text-[8px] font-black uppercase tracking-[0.2em]">Episode {currentEp}</p>
+          <p className="text-blue-400 text-[10px] font-black uppercase tracking-[0.2em]">Episode {currentEp}</p>
         </div>
-        <button className="text-white p-2 rounded-full"><Share2 size={18} /></button>
+        <button className="text-white p-3 rounded-full"><Share2 size={20} /></button>
       </div>
 
       <div className="relative w-full h-full flex items-center justify-center bg-black" onClick={() => (isPlaying ? videoRef.current.pause() : videoRef.current.play())}>
-        {loading ? <Loader2 className="animate-spin text-blue-500" size={48} /> : error ? <div className="text-white text-[10px] font-black bg-red-600/40 px-8 py-4 rounded-2xl border border-red-500/20 uppercase tracking-widest">Video Gagal Dimuat</div> : 
+        {loading ? <Loader2 className="animate-spin text-blue-500" size={60} /> : error ? <div className="text-white text-xs font-black bg-red-600/40 px-10 py-5 rounded-3xl border border-red-500/20 uppercase tracking-widest">Video Gagal Dimuat</div> : 
           <video ref={videoRef} className="w-full h-full object-contain cursor-pointer" onPlay={() => setIsPlaying(true)} onPause={() => setIsPlaying(false)} onTimeUpdate={() => setCurrentTime(videoRef.current?.currentTime || 0)} onLoadedMetadata={() => setDuration(videoRef.current?.duration || 0)} onEnded={() => setCurrentEp(e => e + 1)} playsInline />
         }
-        {!isPlaying && !loading && <div className="absolute inset-0 flex items-center justify-center pointer-events-none bg-black/30"><div className="bg-white/10 p-8 rounded-full backdrop-blur-md border border-white/20"><Play size={40} fill="white" className="text-white ml-1.5" /></div></div>}
+        {!isPlaying && !loading && <div className="absolute inset-0 flex items-center justify-center pointer-events-none bg-black/30"><div className="bg-white/10 p-10 rounded-full backdrop-blur-md border border-white/20"><Play size={50} fill="white" className="text-white ml-2" /></div></div>}
       </div>
 
-      <div className={`absolute bottom-0 left-0 right-0 p-6 z-50 transition-all duration-500 ${showControls ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-8 pointer-events-none'}`}>
-        <div className="max-w-4xl mx-auto flex flex-col gap-3">
-          <div className="flex flex-col gap-1.5">
-            <input type="range" min="0" max={duration || 0} step="0.1" value={currentTime} onChange={(e) => { videoRef.current.currentTime = e.target.value; }} className="w-full h-1 accent-blue-600 bg-white/20 rounded-full appearance-none cursor-pointer hover:h-1.5 transition-all" />
-            <div className="flex justify-between items-center px-1 text-[9px] font-mono font-bold text-white/50 tracking-tighter">
-              <span>{formatTime(currentTime)}</span>
-              <span>{formatTime(duration)}</span>
-            </div>
+      <div className={`absolute bottom-0 left-0 right-0 p-8 z-50 transition-all duration-500 ${showControls ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-8 pointer-events-none'}`}>
+        <div className="max-w-5xl mx-auto flex flex-col gap-6">
+          <div className="relative group/timeline flex items-center h-4">
+            <input type="range" min="0" max={duration || 0} step="0.1" value={currentTime} onChange={(e) => { videoRef.current.currentTime = e.target.value; }} className="w-full h-1 accent-blue-600 bg-white/20 rounded-full appearance-none cursor-pointer hover:h-2 transition-all" />
           </div>
-
-          <div className="flex items-center justify-between bg-slate-900/60 backdrop-blur-2xl p-4 rounded-[1.5rem] border border-white/10 shadow-2xl">
-            <div className="flex items-center gap-6">
-              <button disabled={currentEp <= 1} onClick={(e) => { e.stopPropagation(); setCurrentEp(e => e - 1); }} className="text-white/40 hover:text-white disabled:opacity-10"><SkipBack size={24} fill="currentColor" /></button>
-              <button onClick={(e) => { e.stopPropagation(); isPlaying ? videoRef.current.pause() : videoRef.current.play(); }} className="text-white transform active:scale-90 transition-transform">{isPlaying ? <Pause size={40} fill="white" /> : <Play size={40} fill="white" />}</button>
-              <button onClick={(e) => { e.stopPropagation(); setCurrentEp(e => e + 1); }} className="text-white/40 hover:text-white"><SkipForward size={24} fill="currentColor" /></button>
+          <div className="flex items-center justify-between bg-slate-900/60 backdrop-blur-2xl p-6 rounded-[2rem] border border-white/10 shadow-2xl">
+            <div className="flex items-center gap-10">
+              <button disabled={currentEp <= 1} onClick={(e) => { e.stopPropagation(); setCurrentEp(e => e - 1); }} className="text-white/40 hover:text-white disabled:opacity-10"><SkipBack size={28} fill="currentColor" /></button>
+              <button onClick={(e) => { e.stopPropagation(); isPlaying ? videoRef.current.pause() : videoRef.current.play(); }} className="text-white transform hover:scale-110 transition-transform">{isPlaying ? <Pause size={48} fill="white" /> : <Play size={48} fill="white" />}</button>
+              <button onClick={(e) => { e.stopPropagation(); setCurrentEp(e => e + 1); }} className="text-white/40 hover:text-white"><SkipForward size={28} fill="currentColor" /></button>
             </div>
-            <div className="flex items-center gap-6">
-               <div className="hidden sm:flex items-center gap-2 group/vol bg-white/5 px-3 py-1.5 rounded-xl border border-white/5 hover:bg-white/10 transition-all">
-                  <button onClick={(e) => { e.stopPropagation(); setAudioSettings(s => ({...s, isMuted: !s.isMuted}))}} className="text-white/70 hover:text-white transition-colors">
-                    {getVolumeIcon()}
-                  </button>
-                  <div className="w-0 group-hover/vol:w-28 overflow-hidden transition-all duration-300 ease-out flex items-center">
-                    <input 
-                      type="range" min="0" max="1" step="0.01" 
-                      value={volumeVal} 
-                      onChange={(e) => {
-                        const val = parseFloat(e.target.value);
-                        setAudioSettings(s => ({...s, volume: val, isMuted: val === 0}));
-                      }} 
-                      style={{
-                        background: `linear-gradient(to right, #3b82f6 ${volumePercent}%, rgba(255,255,255,0.1) ${volumePercent}%)`
-                      }} 
-                      className="volume-premium w-28 h-1 appearance-none rounded-full cursor-pointer outline-none" 
-                    />
+            <div className="flex items-center gap-8">
+               <div className="hidden sm:flex items-center gap-2 group/volume bg-white/5 px-4 py-2 rounded-2xl hover:bg-white/10 transition-all">
+                  <button onClick={(e) => { e.stopPropagation(); setAudioSettings(s => ({...s, isMuted: !s.isMuted}))}} className="text-white/70">{getVolumeIcon()}</button>
+                  <div className="w-0 group-hover/volume:w-32 overflow-hidden transition-all duration-500 ease-out">
+                    <input type="range" min="0" max="1" step="0.01" value={audioSettings.isMuted ? 0 : audioSettings.volume} onChange={(e) => setAudioSettings(s => ({...s, volume: parseFloat(e.target.value), isMuted: parseFloat(e.target.value) === 0}))} style={{background: `linear-gradient(to right, #3b82f6 ${audioSettings.volume*100}%, rgba(255,255,255,0.2) ${audioSettings.volume*100}%)`}} className="volume-premium w-32 h-1 appearance-none rounded-full cursor-pointer" />
                   </div>
                </div>
-               <button onClick={(e) => { e.stopPropagation(); setAudioSettings(s => ({...s, isMuted: !s.isMuted}))}} className="sm:hidden text-white/70">
-                 {getVolumeIcon()}
-               </button>
-               <button onClick={(e) => { e.stopPropagation(); setAudioSettings(s => ({...s, playbackRate: s.playbackRate === 1 ? 1.5 : s.playbackRate === 1.5 ? 2 : 1}))}} className="px-3 py-1.5 bg-blue-600 text-white rounded-lg text-[9px] font-black tracking-widest uppercase shadow-lg shadow-blue-600/20 active:scale-95 transition-all">
-                 {audioSettings.playbackRate}X SPEED
-               </button>
+               <button onClick={(e) => { e.stopPropagation(); setAudioSettings(s => ({...s, playbackRate: s.playbackRate === 1 ? 1.5 : s.playbackRate === 1.5 ? 2 : 1}))}} className="px-5 py-2 bg-blue-600 text-white rounded-xl text-[11px] font-black shadow-lg shadow-blue-600/20 active:scale-95 transition-all">KECEPATAN {audioSettings.playbackRate}X</button>
             </div>
           </div>
         </div>
       </div>
       <style>{`
-        .volume-premium::-webkit-slider-thumb { -webkit-appearance: none; width: 10px; height: 10px; background: white; border-radius: 50%; border: 2px solid #3b82f6; cursor: pointer; opacity: 0; transition: 0.2s; }
-        .group\\/vol:hover .volume-premium::-webkit-slider-thumb { opacity: 1; }
-        .volume-premium::-moz-range-thumb { width: 10px; height: 10px; background: white; border-radius: 50%; border: 2px solid #3b82f6; cursor: pointer; opacity: 0; border: none; }
+        .volume-premium::-webkit-slider-thumb { -webkit-appearance: none; width: 14px; height: 14px; background: white; border-radius: 50%; border: 3px solid #3b82f6; cursor: pointer; opacity: 0; transition: 0.2s; }
+        .group\\/volume:hover .volume-premium::-webkit-slider-thumb { opacity: 1; }
       `}</style>
     </div>
   );
@@ -418,7 +394,7 @@ export default function App() {
   const fbReady = fbApp && fbAuth && fbStore;
 
   /**
-   * --- LOGIKA AKSI (Didefinisikan sebelum dipanggil oleh UI) ---
+   * --- LOGIKA TINDAKAN ---
    */
 
   const handleGoogleLogin = async () => {
@@ -429,14 +405,15 @@ export default function App() {
       const provider = new fb.auth.GoogleAuthProvider();
       await fb.auth().signInWithPopup(provider);
     } catch (e) {
-      console.error("Login error:", e);
+      console.error("Gagal login:", e);
       const errStr = String(e);
+      // Deteksi galat spesifik environment di pratonton sistem
       const isEnvError = e.code === 'auth/operation-not-supported-in-this-environment' || 
                          errStr.includes('location.protocol') || 
                          errStr.includes('operation-not-supported');
       
       if (isEnvError) {
-        setAuthError("Login Google tidak didukung di lingkungan pratinjau ini (iframe/blob). Harap coba setelah aplikasi di-deploy ke domain HTTPS asli.");
+        setAuthError("Login Google tidak didukung di lingkungan pratinjau ini (iframe/blob). Fitur ini akan berfungsi normal setelah aplikasi Anda di-deploy ke domain HTTPS asli seperti Vercel.");
       } else if (e.code === 'auth/popup-closed-by-user') {
         setAuthError("Login dibatalkan oleh pengguna.");
       } else {
@@ -449,7 +426,7 @@ export default function App() {
     if (!fbReady || !window.firebase) return;
     try {
       await window.firebase.auth().signOut();
-    } catch (e) { console.error("Logout failed:", e); }
+    } catch (e) { console.error("Gagal keluar:", e); }
   };
 
   const handleCloseAd = async (isPersistent) => {
@@ -463,7 +440,7 @@ export default function App() {
           ts: Date.now(), 
           p: isPersistent 
         });
-      } catch(e) { console.error("Save ad pref error:", e); }
+      } catch(e) { console.error("Gagal simpan preferensi iklan:", e); }
     }
   };
 
@@ -476,7 +453,7 @@ export default function App() {
         setSearchData(res.items || []);
         setView('search-results');
         setSearchModalOpen(false);
-      } catch (e) { console.error("Search error:", e); } finally { setLoadingData(false); }
+      } catch (e) { console.error("Gagal mencari:", e); } finally { setLoadingData(false); }
     }
   };
 
@@ -497,7 +474,7 @@ export default function App() {
       setHomeData(result);
       const combined = [...(pop || []), ...(lat || [])];
       setAllDramaData(combined.filter((item, index, self) => index === self.findIndex(t => (t.bookId || t.id) === (item.bookId || item.id))));
-    } catch (e) { console.error("Home fetch error:", e); }
+    } catch (e) { console.error("Gagal memuat beranda:", e); }
   }, []);
 
   const fetchRank = useCallback(async (tab, page = 1) => {
@@ -513,7 +490,7 @@ export default function App() {
       const res = await core.doClassify(CONFIG.API_BASE, 'in', device, token, fid, count);
       setRankData(res || []);
       setHasMoreRank((res || []).length >= count);
-    } catch (e) { console.error("Rank fetch error:", e); } finally { setLoadingData(false); }
+    } catch (e) { console.error("Gagal memuat peringkat:", e); } finally { setLoadingData(false); }
   }, []);
 
   const handleLoadMoreRank = () => {
@@ -558,9 +535,7 @@ export default function App() {
                         if (d.p ? diff < 86400000 : diff < 3600000) show = false;
                     }
                     if (show) setTimeout(() => setShowAd(true), 3000);
-                } catch(e) { 
-                   setTimeout(() => setShowAd(true), 3000); 
-                }
+                } catch(e) { setTimeout(() => setShowAd(true), 3000); }
             }
         });
         return unsubscribe;
@@ -591,11 +566,11 @@ export default function App() {
       <nav className="flex-none h-16 bg-[#0f172a]/80 backdrop-blur-xl border-b border-white/5 flex items-center z-40 px-4 sm:px-8">
         <div className="container mx-auto flex justify-between items-center">
           <button onClick={() => setView('home')} className="flex items-center gap-2 group">
-            <div className="w-8 h-8 bg-gradient-to-br from-blue-600 to-indigo-500 rounded-lg flex items-center justify-center text-white font-black shadow-lg">D</div>
+            <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center text-white font-black shadow-lg">D</div>
             <span className="text-base font-black text-white hidden xs:block">NontonDracin</span>
           </button>
           <div className="flex items-center gap-1.5 bg-white/5 p-1 rounded-full border border-white/10">
-            {[ { id: 'home', label: 'Home', icon: Home }, { id: 'rank', label: 'Ranking', icon: Trophy }, { id: 'filter', label: 'Filter', icon: Filter } ].map((m) => (
+            {[ { id: 'home', label: 'Beranda', icon: Home }, { id: 'rank', label: 'Ranking', icon: Trophy }, { id: 'filter', label: 'Filter', icon: Filter } ].map((m) => (
               <button key={m.id} onClick={() => setView(m.id)} className={`px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-wider flex items-center gap-1.5 transition-all ${view === m.id ? 'bg-blue-600 text-white shadow-lg' : 'text-slate-400 hover:text-white'}`}>
                 <m.icon size={12} /> <span className="hidden sm:inline">{m.label}</span>
               </button>
@@ -606,16 +581,16 @@ export default function App() {
             {user && !user.isAnonymous ? (
               <div className="flex items-center gap-2 pl-1 pr-2">
                 <img src={user.photoURL} alt="User" className="w-6 h-6 rounded-full border border-white/20 shadow-lg" />
-                <button onClick={handleLogout} className="p-1.5 text-slate-400 hover:text-red-400 transition-colors" title="Logout"><LogOut size={14} /></button>
+                <button onClick={handleLogout} className="p-1.5 text-slate-400 hover:text-red-400 transition-colors" title="Keluar"><LogOut size={14} /></button>
               </div>
             ) : (
-              <button onClick={handleGoogleLogin} className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/5 hover:bg-blue-600 text-slate-300 hover:text-white transition-all text-[10px] font-black uppercase tracking-wider"><LogIn size={12} /> <span className="hidden sm:inline">Login</span></button>
+              <button onClick={handleGoogleLogin} className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/5 hover:bg-blue-600 text-slate-300 hover:text-white transition-all text-[10px] font-black uppercase tracking-wider"><LogIn size={12} /> <span className="hidden sm:inline">Masuk</span></button>
             )}
           </div>
         </div>
       </nav>
 
-      {/* ERROR BAR */}
+      {/* BILAH RALAT */}
       {authError && (
         <div className="bg-orange-600/20 border-b border-orange-500/20 px-6 py-2 flex items-center justify-between animate-in slide-in-from-top-full duration-300">
            <div className="flex items-center gap-2 text-orange-400 text-[9px] font-bold uppercase tracking-widest text-left">
@@ -625,7 +600,7 @@ export default function App() {
         </div>
       )}
 
-      {/* MAIN CONTENT */}
+      {/* KONTEN UTAMA */}
       <main className="flex-1 overflow-y-auto pt-4 pb-16 px-4 sm:px-8 no-scrollbar">
         <div className="container mx-auto max-w-7xl">
           {view === 'home' && (
