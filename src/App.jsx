@@ -328,7 +328,7 @@ const DramaDetailPage = ({ bookId, onBack, onPlayEpisode, watchlist, onToggleWat
 };
 
 // =============================
-// CUSTOM PLAYER PAGE (PERBAIKAN UI & LOGIKA)
+// CUSTOM PLAYER PAGE (LOGIKA VIDEO DIPERBAIKI)
 // =============================
 const CustomPlayerPage = ({
   book,
@@ -386,7 +386,7 @@ const CustomPlayerPage = ({
     }
   }, [book]);
 
-  // VIDEO INIT
+  // VIDEO INIT (PERBAIKAN DOMAIN)
   useEffect(() => {
     const video = videoRef.current;
     if (!video || !videoUrl) return;
@@ -400,8 +400,16 @@ const CustomPlayerPage = ({
     video.src = '';
     video.load();
 
+    // HLS Configuration to handle cross-domain issues
     if (isHls(videoUrl) && window.Hls && window.Hls.isSupported()) {
-      const hls = new window.Hls({ enableWorker: true, lowLatencyMode: true });
+      const hls = new window.Hls({ 
+        enableWorker: true, 
+        lowLatencyMode: true,
+        // Penting untuk domain nonton.dahono.com: bypass referrer check
+        xhrSetup: function(xhr, url) {
+          xhr.withCredentials = false;
+        }
+      });
       hls.loadSource(videoUrl);
       hls.attachMedia(video);
       hls.on(window.Hls.Events.MANIFEST_PARSED, () => video.play().catch(() => {}));
@@ -475,6 +483,9 @@ const CustomPlayerPage = ({
             ref={videoRef} 
             className="w-full h-full object-contain cursor-pointer" 
             playsInline 
+            // FIX: Atribut penting untuk melewati blokir domain
+            referrerPolicy="no-referrer"
+            crossOrigin="anonymous"
             onPlay={() => setIsPlaying(true)} 
             onPause={() => setIsPlaying(false)} 
             onTimeUpdate={() => setCurrentTime(videoRef.current?.currentTime || 0)} 
