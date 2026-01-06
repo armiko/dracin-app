@@ -11,13 +11,8 @@ import {
 
 /**
  * --- ARAHAN KONFIGURASI GOOGLE OAUTH ---
- * Silakan tambahkan URI berikut di Google Cloud Console -> Credentials -> OAuth 2.0 Client IDs:
- * * Authorized JavaScript origins:
- * 1. https://nontondracin-f5065.firebaseapp.com
- * 2. https://your-vercel-domain.vercel.app
- * * Authorized redirect URIs:
- * 1. https://nontondracin-f5065.firebaseapp.com/__/auth/handler
- * 2. https://nontondracin-f5065.web.app/__/auth/handler
+ * Jika tombol Login Google tidak merespons di pratinjau, ini karena batasan origin 'blob:'.
+ * Fitur ini akan berfungsi 100% di domain HTTPS asli Anda (Vercel).
  */
 
 /**
@@ -46,7 +41,7 @@ const FIREBASE_CONFIG_OVERRIDE = {
   measurementId: "G-6B89Y55E2F"
 };
 
-// Menggunakan ID yang konsisten untuk path Firestore (Rule 1)
+// ID Proyek untuk penyimpanan Firestore yang konsisten
 const customAppId = '3KNDH1p5iIG6U7FmuGTS';
 
 const STATIC_FILTERS = [
@@ -84,7 +79,7 @@ const STATIC_FILTERS = [
 ];
 
 /**
- * --- UTILS & HELPERS ---
+ * --- UTILS ---
  */
 const useExternalScript = (url) => {
   const [state, setState] = useState({ loaded: false, error: false });
@@ -436,7 +431,7 @@ export default function App() {
   const fbReady = fbApp && fbAuth && fbStore;
 
   /**
-   * --- LOGIKA TINDAKAN ---
+   * --- LOGIKA TINDAKAN (Didefinisikan lebih awal) ---
    */
 
   const handleGoogleLogin = async () => {
@@ -471,7 +466,6 @@ export default function App() {
     if (!user || !fbReady || !window.firebase) return;
     const fb = window.firebase;
     const dramaId = String(drama.bookId || drama.id);
-    // Path Firestore yang benar (Rule 1)
     const watchlistRef = fb.firestore().doc(`artifacts/${customAppId}/users/${user.uid}/watchlist/${dramaId}`);
     
     const exists = watchlistData.some(item => String(item.bookId) === dramaId);
@@ -495,7 +489,6 @@ export default function App() {
     if (!user || !fbReady || !window.firebase) return;
     const fb = window.firebase;
     const dramaId = String(drama.bookId || drama.id);
-    // Path Firestore yang benar (Rule 1)
     const historyRef = fb.firestore().doc(`artifacts/${customAppId}/users/${user.uid}/history/${dramaId}`);
     
     try {
@@ -580,7 +573,7 @@ export default function App() {
    * --- EFFECTS ---
    */
 
-  // Efek Satu Kali: Inisialisasi Firebase
+  // Inisialisasi Firebase
   useEffect(() => {
     if (!fbReady || !window.firebase) return;
     const fb = window.firebase;
@@ -589,7 +582,7 @@ export default function App() {
     }
   }, [fbReady]);
 
-  // Efek: Auth State Listener
+  // Auth State Listener
   useEffect(() => {
     if (!fbReady || !window.firebase || !window.firebase.apps.length) return;
     const fb = window.firebase;
@@ -611,9 +604,9 @@ export default function App() {
     return () => unsubscribeAuth();
   }, [fbReady]);
 
-  // Efek: Firestore Sync Listener (Watchlist & History)
+  // Firestore Sync (Watchlist & History)
   useEffect(() => {
-    if (!user || user.isAnonymous || !fbReady || !window.firebase) return;
+    if (!user || !fbReady || !window.firebase || !window.firebase.apps.length) return;
     const fb = window.firebase;
 
     // RULE 1: Listen Watchlist
@@ -632,21 +625,6 @@ export default function App() {
           items.sort((a,b) => b.ts - a.ts);
           setHistoryData(items);
       }, err => console.error("History sync error:", err));
-
-    // Ad Preference sync
-    const checkAdPref = async () => {
-      try {
-        const adRef = fb.firestore().doc(`artifacts/${customAppId}/users/${user.uid}/settings/ad_pref`);
-        const snap = await adRef.get();
-        if (snap.exists) {
-          const d = snap.data();
-          const diff = Date.now() - (d.ts || 0);
-          if (d.p ? diff < 86400000 : diff < 3600000) return;
-        }
-        setTimeout(() => setShowAd(true), 3000);
-      } catch(e) { setTimeout(() => setShowAd(true), 3000); }
-    };
-    checkAdPref();
 
     return () => {
       if (unsubscribeWatch) unsubscribeWatch();
@@ -701,7 +679,7 @@ export default function App() {
               </button>
             ))}
             
-            {user && !user.isAnonymous && (
+            {user && (
                 <>
                     <button onClick={() => setView('watchlist')} className={`px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-wider flex items-center gap-1.5 transition-all ${view === 'watchlist' ? 'bg-blue-600 text-white shadow-lg' : 'text-slate-400 hover:text-white'}`}>
                         <Bookmark size={12} /> <span className="hidden sm:inline">Watchlist</span>
