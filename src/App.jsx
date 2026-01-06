@@ -199,7 +199,7 @@ const Section = React.memo(({ title, icon: IconComponent, onSeeAll, children }) 
   <section className="mb-8 md:mb-12 text-left">
     <div className="flex items-center justify-between mb-4 md:mb-6">
       <div className="flex items-center gap-2">
-        <div className="p-1 md:p-1.5 bg-slate-900 rounded-lg border border-white/5 shadow-inner">
+        <div className="p-1.5 bg-slate-900 rounded-lg border border-white/5 shadow-inner">
            {IconComponent && <IconComponent size={14} className="text-blue-400 md:w-4 md:h-4" />}
         </div>
         <h2 className="text-sm md:text-lg font-black text-white uppercase tracking-tight">{title}</h2>
@@ -230,7 +230,7 @@ const DramaCard = React.memo(({ item, onClick, rank, onRemove, isHistory, lastEp
             </div>
           </div>
           {rank && <div className="absolute top-0 left-0 bg-blue-600 text-white font-black text-[7px] md:text-[9px] px-1.5 md:px-2 py-0.5 rounded-br-lg shadow-lg">#{rank}</div>}
-          <div className="absolute bottom-1 right-1 md:bottom-1.5 md:right-1.5 bg-black/60 backdrop-blur-md text-white text-[6px] md:text-[7px] font-black px-1 md:px-1.5 py-0.5 rounded border border-white/10 uppercase">
+          <div className="absolute bottom-1.5 right-1.5 bg-black/60 backdrop-blur-md text-white text-[6px] md:text-[7px] font-black px-1 md:px-1.5 py-0.5 rounded border border-white/10 uppercase">
             {isHistory ? `EPS ${lastEpisode}` : `${item.chapterCount || '?'} EPS`}
           </div>
         </div>
@@ -239,7 +239,7 @@ const DramaCard = React.memo(({ item, onClick, rank, onRemove, isHistory, lastEp
       {onRemove && (
         <button 
           onClick={(e) => { e.stopPropagation(); onRemove(bid); }}
-          className="absolute -top-1 -right-1 md:-top-2 md:-right-2 p-1 bg-red-600 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity shadow-lg hover:scale-110 z-10"
+          className="absolute -top-1.5 -right-1.5 p-1 bg-red-600 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity shadow-lg hover:scale-110 z-10"
         >
           <Trash2 size={10} className="md:w-3 md:h-3" />
         </button>
@@ -568,8 +568,8 @@ export default function App() {
           <button onClick={closeAppleBanner} className="p-1.5 text-amber-500/50 hover:text-amber-500 hover:bg-white/5 rounded-full transition-all"><X size={16} /></button>
         </div>
       )}
-
-      {/* HEADER: PERSISTEN */}
+      
+      {/* NAVBAR PERSISTEN */}
       <nav className="flex-none h-16 bg-[#0f172a]/80 backdrop-blur-xl border-b border-white/5 flex items-center z-40 px-4 sm:px-8">
         <div className="container mx-auto flex justify-between items-center">
           <button onClick={() => { setPlayerState(null); setView('home'); }} className="flex items-center gap-2 group transition-all active:scale-95 text-left">
@@ -596,7 +596,7 @@ export default function App() {
         </div>
       </nav>
 
-      <main className="flex-1 overflow-y-auto pt-4 md:pt-6 pb-20 px-4 sm:px-8 no-scrollbar text-left">
+      <main className="flex-1 overflow-y-auto pt-6 pb-20 px-4 sm:px-8 no-scrollbar text-left">
         <div className="container mx-auto max-w-7xl">
           {playerState ? (
             <CustomPlayerPage 
@@ -613,24 +613,24 @@ export default function App() {
               {view === 'home' && (
                 <div className="animate-in fade-in duration-700">
                    {homeData.popular[0] && (
-                     <div className="mb-8 md:mb-10 relative rounded-[1.5rem] md:rounded-[2rem] overflow-hidden min-h-[300px] md:min-h-[400px] flex items-center bg-slate-900 border border-white/5 shadow-2xl">
+                     <div className="mb-10 relative rounded-[2rem] overflow-hidden min-h-[300px] md:min-h-[350px] flex items-center bg-slate-900 border border-white/5 shadow-2xl">
                        <div className="absolute inset-0">
-                         <img src={homeData.popular[0].coverWap || homeData.popular[0].cover} className="w-full h-full object-cover opacity-20 blur-sm" alt="" />
+                         <img src={homeData.popular[0].coverWap || homeData.popular[0].cover} className="w-full h-full object-cover opacity-30 blur-sm scale-105" alt="" />
                          <div className="absolute inset-0 bg-gradient-to-t from-[#0f172a] via-[#0f172a]/60 to-transparent"></div>
                        </div>
-                       <div className="relative z-10 flex flex-col md:flex-row items-center gap-6 md:gap-10 p-6 md:p-12 w-full text-left">
-                         <div className="hidden md:block w-[180px] shrink-0 transform -rotate-2 hover:rotate-0 transition-all duration-500">
-                           <div className="aspect-[2/3] rounded-2xl overflow-hidden shadow-2xl border border-white/10 cursor-pointer" onClick={() => { setSelectedBookId(homeData.popular[0].bookId || homeData.popular[0].id); setView('detail'); }}>
+                       <div className="relative z-10 flex flex-col md:flex-row items-center gap-8 p-10 sm:p-14 w-full text-left">
+                         <div className="hidden lg:block w-[200px] shrink-0 transform -rotate-2 hover:rotate-0 transition-all duration-500">
+                           <div className="aspect-[2/3] rounded-2xl overflow-hidden shadow-2xl border-2 border-white/10 cursor-pointer" onClick={() => { setSelectedBookId(homeData.popular[0].bookId || homeData.popular[0].id); setView('detail'); }}>
                              <img src={homeData.popular[0].coverWap || homeData.popular[0].cover} className="w-full h-full object-cover" alt="" />
                            </div>
                          </div>
                          <div className="flex-1 text-center md:text-left">
-                           <div className="inline-flex items-center gap-1.5 px-2 py-0.5 md:px-3 md:py-1 bg-blue-600 text-white text-[7px] md:text-[8px] font-black rounded-full mb-3 md:mb-5 uppercase tracking-widest"><Flame size={12} fill="white" /> Rekomendasi</div>
-                           <h1 className="text-2xl md:text-5xl font-black text-white mb-4 md:mb-6 leading-tight tracking-tighter line-clamp-2">{homeData.popular[0].bookName || homeData.popular[0].title}</h1>
-                           <div className="flex flex-wrap items-center justify-center md:justify-start gap-3 md:gap-4">
-                            <button onClick={() => { setSelectedBookId(homeData.popular[0].bookId || homeData.popular[0].id); setView('detail'); }} className="bg-white text-black hover:bg-blue-600 hover:text-white px-5 md:px-8 py-2.5 md:py-3.5 rounded-xl font-black text-[9px] md:text-[10px] uppercase tracking-widest transition-all shadow-xl flex items-center gap-2">MULAI TONTON <Play size={14} fill="currentColor"/></button>
-                            <button onClick={() => handleToggleWatchlist(homeData.popular[0])} className="bg-white/10 hover:bg-white/20 text-white px-4 md:px-6 py-2.5 md:py-3.5 rounded-xl font-black text-[9px] md:text-[10px] uppercase tracking-widest transition-all backdrop-blur-md border border-white/10 flex items-center gap-2">
-                               {watchlist.some(i => String(i.bookId || i.id) === String(homeData.popular[0].bookId || homeData.popular[0].id)) ? <BookmarkCheck size={16} className="text-blue-400" /> : <Bookmark size={16} />} SIMPAN
+                           <div className="inline-flex items-center gap-2 px-3 py-1 bg-blue-600 text-white text-[8px] font-black rounded-full mb-5 uppercase tracking-widest"><Flame size={12} fill="white" /> Rekomendasi Hari Ini</div>
+                           <h1 className="text-3xl sm:text-6xl font-black text-white mb-6 leading-tight tracking-tighter">{homeData.popular[0].bookName || homeData.popular[0].title}</h1>
+                           <div className="flex flex-wrap items-center justify-center md:justify-start gap-4">
+                            <button onClick={() => { setSelectedBookId(homeData.popular[0].bookId || homeData.popular[0].id); setView('detail'); }} className="bg-white text-black hover:bg-blue-600 hover:text-white px-8 py-3.5 rounded-xl font-black text-[10px] uppercase tracking-widest transition-all shadow-xl flex items-center gap-2 shadow-white/10">MULAI TONTON <Play size={16} fill="currentColor"/></button>
+                            <button onClick={() => handleToggleWatchlist(homeData.popular[0])} className="bg-white/10 hover:bg-white/20 text-white px-6 py-3.5 rounded-xl font-black text-[10px] uppercase tracking-widest transition-all backdrop-blur-md border border-white/10 flex items-center gap-2">
+                               {watchlist.some(i => String(i.bookId || i.id) === String(homeData.popular[0].bookId || homeData.popular[0].id)) ? <BookmarkCheck size={18} className="text-blue-400" /> : <Bookmark size={18} />} SIMPAN
                             </button>
                            </div>
                          </div>
@@ -638,24 +638,24 @@ export default function App() {
                      </div>
                    )}
                    <Section icon={Flame} title="Drama Populer" onSeeAll={() => { setRankTab('popular'); setView('rank'); }}>
-                     <div className="grid grid-cols-3 xs:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3 md:gap-6">
+                     <div className="grid grid-cols-3 xs:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3 md:gap-6 text-left">
                        {homeData.popular.slice(1, 7).map((item, idx) => <DramaCard key={idx} item={item} onClick={(it) => { setSelectedBookId(it.bookId || it.id); setPreviousView('home'); setView('detail'); }} />)}
                      </div>
                    </Section>
                    {watchHistory.length > 0 && (
                      <Section icon={History} title="Lanjutkan Nonton">
-                       <div className="grid grid-cols-3 xs:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3 md:gap-6">
+                       <div className="grid grid-cols-3 xs:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3 md:gap-6 text-left">
                          {watchHistory.slice(0, 6).map((item, idx) => (<DramaCard key={idx} item={item} isHistory lastEpisode={item.lastEpisode} onRemove={clearHistoryItem} onClick={(it) => { setSelectedBookId(it.bookId); setView('detail'); }} />))}
                        </div>
                      </Section>
                    )}
                    <Section icon={Zap} title="Sedang Trending" onSeeAll={() => { setRankTab('trending'); setView('rank'); }}>
-                     <div className="grid grid-cols-3 xs:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3 md:gap-6">
+                     <div className="grid grid-cols-3 xs:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3 md:gap-6 text-left">
                        {homeData.trending.slice(0, 6).map((item, idx) => <DramaCard key={idx} item={item} onClick={(it) => { setSelectedBookId(it.bookId || it.id); setPreviousView('home'); setView('detail'); }} />)}
                      </div>
                    </Section>
                    <Section icon={Clock} title="Update Terbaru" onSeeAll={() => { setRankTab('latest'); setView('rank'); }}>
-                     <div className="grid grid-cols-3 xs:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3 md:gap-6">
+                     <div className="grid grid-cols-3 xs:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3 md:gap-6 text-left">
                        {homeData.latest.slice(0, 6).map((item, idx) => <DramaCard key={idx} item={item} onClick={(it) => { setSelectedBookId(it.bookId || it.id); setPreviousView('home'); setView('detail'); }} />)}
                      </div>
                    </Section>
@@ -663,7 +663,7 @@ export default function App() {
               )}
               {view === 'rank' && (
                 <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 text-left">
-                   <div className="flex justify-center gap-2 md:gap-3 mb-8 md:mb-10 overflow-x-auto no-scrollbar py-1">
+                   <div className="flex justify-center gap-2 md:gap-3 mb-10 overflow-x-auto no-scrollbar py-1">
                      {[ { id: 'popular', label: 'Populer' }, { id: 'trending', label: 'Trending' }, { id: 'latest', label: 'Terbaru' } ].map(t => (
                         <button key={t.id} onClick={() => { setRankTab(t.id); setRankPage(1); }} className={`px-5 md:px-8 py-2 md:py-2.5 rounded-xl font-black text-[9px] md:text-[10px] uppercase tracking-widest border transition-all ${rankTab === t.id ? 'bg-blue-600 border-blue-600 text-white shadow-lg shadow-blue-600/20' : 'bg-white/5 border-white/10 text-slate-400 hover:border-white/20'}`}>{t.label}</button>
                      ))}
@@ -671,8 +671,8 @@ export default function App() {
                    <div className="grid grid-cols-3 xs:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3 md:gap-6 text-left">
                       {rankData.map((item, idx) => <DramaCard key={idx} item={item} rank={idx+1} onClick={(it) => { setSelectedBookId(it.bookId || it.id); setView('detail'); }} />)}
                    </div>
-                   <div className="mt-8 md:mt-12 flex justify-center">
-                      <button onClick={() => setRankPage(p => p + 1)} disabled={loading} className="px-8 md:px-10 py-3 md:py-3.5 bg-blue-600 hover:bg-blue-500 text-white rounded-2xl font-black text-[9px] md:text-[10px] uppercase tracking-[0.2em] shadow-xl flex items-center gap-3 disabled:opacity-50 transition-all">
+                   <div className="mt-12 flex justify-center">
+                      <button onClick={() => setRankPage(p => p + 1)} disabled={loading} className="px-10 py-3.5 bg-blue-600 hover:bg-blue-500 text-white rounded-2xl font-black text-[10px] uppercase tracking-[0.2em] shadow-xl flex items-center gap-3 disabled:opacity-50 transition-all">
                         {loading ? <Loader2 size={16} className="animate-spin" /> : <Plus size={16} />} MUAT LEBIH BANYAK
                       </button>
                    </div>
@@ -680,19 +680,19 @@ export default function App() {
               )}
               {view === 'filter' && (
                 <div className="animate-in fade-in duration-500 text-left">
-                   <div className="bg-slate-900/50 p-6 md:p-8 rounded-3xl border border-white/5 mb-8 md:mb-10 grid grid-cols-1 md:grid-cols-3 gap-6 md:gap-8 backdrop-blur-sm">
+                   <div className="bg-slate-900/50 p-8 rounded-3xl border border-white/5 mb-10 grid grid-cols-1 md:grid-cols-3 gap-8 backdrop-blur-sm text-left">
                       {STATIC_FILTERS.map(f => (
                         <div key={f.key}>
-                          <h4 className="text-[7px] md:text-[8px] font-black text-slate-500 uppercase tracking-widest mb-3 md:mb-4 flex items-center gap-2"><div className="w-1 h-1 bg-blue-500 rounded-full"></div> {f.title}</h4>
+                          <h4 className="text-[8px] font-black text-slate-500 uppercase tracking-widest mb-4 flex items-center gap-2"><div className="w-1 h-1 bg-blue-500 rounded-full"></div> {f.title}</h4>
                           <div className="flex flex-wrap gap-2">
                             {f.options.map(o => (
-                              <button key={o.value} onClick={() => setActiveFilters(p => ({...p, [f.key]: p[f.key] === o.value ? '' : o.value}))} className={`px-3 md:px-4 py-1.5 md:py-2 rounded-xl text-[8px] md:text-[9px] font-bold uppercase tracking-wider border transition-all ${activeFilters[f.key] === o.value ? 'bg-blue-600 border-blue-600 text-white shadow-lg' : 'bg-white/5 border-white/10 text-slate-400 hover:text-white hover:bg-white/10'}`}>{o.display}</button>
+                              <button key={o.value} onClick={() => setActiveFilters(p => ({...p, [f.key]: p[f.key] === o.value ? '' : o.value}))} className={`px-4 py-2 rounded-xl text-[9px] font-bold uppercase tracking-wider border transition-all ${activeFilters[f.key] === o.value ? 'bg-blue-600 border-blue-600 text-white shadow-lg' : 'bg-white/5 border-white/10 text-slate-400 hover:text-white hover:bg-white/10'}`}>{o.display}</button>
                             ))}
                           </div>
                         </div>
                       ))}
                    </div>
-                   <div className="grid grid-cols-3 xs:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3 md:gap-6">
+                   <div className="grid grid-cols-3 xs:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3 md:gap-6 text-left">
                       {filteredItems.map((item, idx) => <DramaCard key={idx} item={item} onClick={(it) => { setSelectedBookId(it.bookId || it.id); setView('detail'); }} />)}
                    </div>
                 </div>
@@ -704,7 +704,7 @@ export default function App() {
                 <div className="animate-in fade-in duration-700 text-left">
                   <Section icon={Bookmark} title="Koleksi Favorit Saya">
                     {watchlist.length > 0 ? (
-                      <div className="grid grid-cols-3 xs:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3 md:gap-6 text-left">
+                      <div className="grid grid-cols-3 xs:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3 md:gap-6 text-left text-left">
                         {watchlist.map((item, idx) => <DramaCard key={idx} item={item} onRemove={() => handleToggleWatchlist(item)} onClick={(it) => { setSelectedBookId(it.bookId || it.id); setView('detail'); }} />)}
                       </div>
                     ) : <EmptyState icon={Bookmark} title="Favorit Kosong" message="Ayo simpan drama favoritmu agar mudah ditemukan kembali." actionText="CARI DRAMA" onAction={() => setView('home')} />}
@@ -715,7 +715,7 @@ export default function App() {
                 <div className="animate-in fade-in duration-700 text-left">
                   <Section icon={History} title="Sudah Ditonton">
                     {watchHistory.length > 0 ? (
-                      <div className="grid grid-cols-3 xs:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3 md:gap-6 text-left">
+                      <div className="grid grid-cols-3 xs:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3 md:gap-6 text-left text-left">
                         {watchHistory.map((item, idx) => <DramaCard key={idx} item={item} isHistory lastEpisode={item.lastEpisode} onRemove={clearHistoryItem} onClick={(it) => { setSelectedBookId(it.bookId); setView('detail'); }} />)}
                       </div>
                     ) : <EmptyState icon={History} title="Riwayat Kosong" message="Anda belum pernah menonton drama apa pun." actionText="NONTON SEKARANG" onAction={() => setView('home')} />}
@@ -725,7 +725,7 @@ export default function App() {
               {view === 'search-results' && (
                 <div className="animate-in fade-in duration-700 text-left">
                    <Section title={`Hasil Pencarian: ${searchQuery}`} icon={Search} onSeeAll={() => setView('home')}>
-                     <div className="grid grid-cols-3 xs:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3 md:gap-6">
+                     <div className="grid grid-cols-3 xs:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3 md:gap-6 text-left text-left">
                        {searchData.map((item, idx) => <DramaCard key={idx} item={item} onClick={(it) => { setSelectedBookId(it.bookId || it.id); setPreviousView('search-results'); setView('detail'); }} />)}
                      </div>
                    </Section>
@@ -736,7 +736,7 @@ export default function App() {
         </div>
       </main>
 
-      {/* FOOTER: PERSISTEN */}
+      {/* FOOTER PERSISTEN */}
       <div className="md:hidden fixed bottom-0 left-0 right-0 bg-[#0f172a]/95 backdrop-blur-xl border-t border-white/5 px-6 py-4 flex justify-between items-center z-50 text-left">
         {[ {id:'home', icon:Home, label:'Home'}, {id:'rank', icon:Trophy, label:'Top'}, {id:'filter', icon:Filter, label:'Saring'}, {id:'watchlist', icon:Bookmark, label:'Favorit'} ].map(m => (
           <button key={m.id} onClick={() => { setPlayerState(null); setView(m.id); }} className={`flex flex-col items-center gap-1 transition-all active:scale-90 ${(view === m.id && !playerState) ? 'text-blue-500' : 'text-slate-500'}`}><m.icon size={20} /><span className="text-[8px] font-black uppercase tracking-widest">{m.label}</span></button>
@@ -777,38 +777,38 @@ const DramaDetailPage = ({ bookId, onBack, user, watchlist, history, onToggleWat
   if (loading) return <div className="flex flex-col items-center justify-center p-20 gap-4 text-center"><Loader2 className="animate-spin text-blue-500" size={40} /><p className="text-[10px] font-black text-slate-600 uppercase tracking-[0.3em]">Memuat Drama...</p></div>;
   return (
     <div className="animate-in fade-in duration-700 text-left">
-      <button onClick={onBack} className="flex items-center gap-2 text-slate-500 font-bold hover:text-white transition-colors text-[9px] md:text-[10px] uppercase tracking-widest mb-6 md:mb-8"><ChevronLeft size={18} /> Kembali</button>
-      <div className="flex flex-col lg:flex-row gap-8 md:gap-10 bg-slate-900/40 rounded-[1.5rem] md:rounded-[2.5rem] p-6 md:p-10 border border-white/5 backdrop-blur-xl shadow-2xl">
-        <div className="w-full lg:w-[300px] xl:w-[320px] shrink-0">
-          <div className="relative aspect-[2/3] rounded-2xl md:rounded-3xl overflow-hidden shadow-2xl border border-white/10">
+      <button onClick={onBack} className="flex items-center gap-2 text-slate-500 font-bold hover:text-white transition-colors text-[10px] uppercase tracking-widest mb-8"><ChevronLeft size={18} /> Kembali</button>
+      <div className="flex flex-col lg:flex-row gap-10 bg-slate-900/40 rounded-[2.5rem] p-6 sm:p-10 border border-white/5 backdrop-blur-xl shadow-2xl">
+        <div className="w-full lg:w-[320px] shrink-0 text-left">
+          <div className="relative aspect-[2/3] rounded-3xl overflow-hidden shadow-2xl border border-white/10 text-left">
             <img src={data.book.cover} className="w-full h-full object-cover" alt="" />
-            <div className="absolute top-3 left-3 md:top-4 md:left-4 flex gap-2">
-               <span className="bg-blue-600 text-white text-[7px] md:text-[8px] font-black px-2 py-1 rounded-lg shadow-lg uppercase tracking-wider">{data.book.chapterCount} EPS</span>
+            <div className="absolute top-4 left-4 flex gap-2 text-left">
+               <span className="bg-blue-600 text-white text-[8px] font-black px-2 py-1 rounded-lg shadow-lg uppercase tracking-wider">{data.book.chapterCount} EPS</span>
             </div>
           </div>
         </div>
         <div className="flex-1 flex flex-col justify-center text-left">
-          <h2 className="text-2xl md:text-5xl font-black text-white mb-3 md:mb-4 leading-tight tracking-tighter">{data.book.bookName}</h2>
-          <div className="mb-4 md:mb-6 flex flex-wrap gap-1.5 md:gap-2 text-left">
-             {data.book.typeTwoNames?.map((tag, idx) => (<button key={idx} onClick={() => onTagClick(tag)} className="flex items-center gap-1 md:gap-1.5 px-2 md:px-3 py-1 md:py-1.5 bg-blue-600/10 border border-blue-500/20 text-blue-400 text-[8px] md:text-[9px] font-black rounded-xl uppercase tracking-wider hover:bg-blue-600 hover:text-white transition-all active:scale-95"><Tag size={10} /> {tag}</button>))}
+          <h2 className="text-3xl sm:text-5xl font-black text-white mb-4 leading-tight tracking-tighter">{data.book.bookName}</h2>
+          <div className="mb-6 flex flex-wrap gap-2 text-left">
+             {data.book.typeTwoNames?.map((tag, idx) => (<button key={idx} onClick={() => onTagClick(tag)} className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600/10 border border-blue-500/20 text-blue-400 text-[9px] font-black rounded-xl uppercase tracking-wider hover:bg-blue-600 hover:text-white transition-all active:scale-95"><Tag size={10} /> {tag}</button>))}
           </div>
-          <div className="flex flex-wrap gap-2.5 md:gap-3 mb-6 md:mb-8">
-            <button onClick={() => onPlayEpisode(lastWatched || 1, data.book, data.chapters)} className="bg-blue-600 hover:bg-blue-500 text-white px-6 md:px-8 py-3 md:py-3.5 rounded-2xl font-black text-[9px] md:text-[10px] uppercase tracking-widest shadow-xl shadow-blue-600/30 transition-all flex items-center gap-2 group active:scale-95"><Play size={18} fill="currentColor"/> {lastWatched ? `EPS ${lastWatched}` : 'TONTON'}</button>
-            <button onClick={() => onToggleWatchlist(data.book)} className={`px-5 md:px-6 py-3 md:py-3.5 rounded-2xl font-black text-[9px] md:text-[10px] uppercase tracking-widest transition-all border flex items-center gap-2 active:scale-95 ${isBookmarked ? 'bg-blue-600/10 border-blue-500/30 text-blue-400' : 'bg-white/5 border-white/10 text-white hover:bg-white/10'}`}>
+          <div className="flex flex-wrap gap-3 mb-8">
+            <button onClick={() => onPlayEpisode(lastWatched || 1, data.book, data.chapters)} className="bg-blue-600 hover:bg-blue-500 text-white px-8 py-3.5 rounded-2xl font-black text-[10px] uppercase tracking-widest shadow-xl shadow-blue-600/30 transition-all flex items-center gap-2 group active:scale-95"><Play size={18} fill="currentColor"/> {lastWatched ? `LANJUT EPS ${lastWatched}` : 'TONTON SEKARANG'}</button>
+            <button onClick={() => onToggleWatchlist(data.book)} className={`px-6 py-3.5 rounded-2xl font-black text-[10px] uppercase tracking-widest transition-all border flex items-center gap-2 active:scale-95 ${isBookmarked ? 'bg-blue-600/10 border-blue-500/30 text-blue-400' : 'bg-white/5 border-white/10 text-white hover:bg-white/10'}`}>
               {isBookmarked ? <BookmarkCheck size={18} /> : <Bookmark size={18} />} {isBookmarked ? 'FAVORIT' : 'SIMPAN'}
             </button>
           </div>
-          <div className="mb-8 md:mb-10">
-            <h4 className="text-[8px] md:text-[9px] font-black text-slate-500 uppercase tracking-[0.3em] mb-2 md:mb-3">SINOPSIS</h4>
-            <div className="p-4 md:p-5 bg-white/5 rounded-2xl border border-white/5 text-slate-400 text-[11px] md:text-xs leading-relaxed italic line-clamp-4 md:line-clamp-none transition-all duration-300">{cleanIntro(data.book.introduction)}</div>
+          <div className="mb-10 text-left">
+            <h4 className="text-[9px] font-black text-slate-500 uppercase tracking-[0.3em] mb-3">SINOPSIS</h4>
+            <div className="p-5 bg-white/5 rounded-2xl border border-white/5 text-slate-400 text-xs leading-relaxed italic line-clamp-4 hover:line-clamp-none transition-all duration-300">{cleanIntro(data.book.introduction)}</div>
           </div>
-          <div>
-             <h4 className="text-[8px] md:text-[9px] font-black text-slate-500 uppercase tracking-[0.3em] mb-3 md:mb-4 text-slate-400">DAFTAR EPISODE</h4>
-             <div className="grid grid-cols-5 xs:grid-cols-6 sm:grid-cols-8 lg:grid-cols-10 xl:grid-cols-12 gap-1.5 md:gap-2 max-h-[160px] overflow-y-auto pr-2 no-scrollbar pb-1">
+          <div className="text-left text-left">
+             <h4 className="text-[9px] font-black text-slate-500 uppercase tracking-[0.3em] mb-4 text-slate-400 text-left">DAFTAR EPISODE</h4>
+             <div className="grid grid-cols-5 xs:grid-cols-6 sm:grid-cols-8 lg:grid-cols-12 gap-2 max-h-[160px] overflow-y-auto pr-3 no-scrollbar pb-2 text-left">
               {data.chapters?.map((ch, i) => {
                 const num = ch.num || (ch.index + 1);
                 return (
-                  <button key={i} onClick={() => onPlayEpisode(num, data.book, data.chapters)} className={`aspect-square rounded-lg md:rounded-xl text-[9px] md:text-[10px] font-black flex items-center justify-center transition-all border ${num === lastWatched ? 'bg-blue-600 border-blue-600 text-white shadow-lg' : 'bg-slate-800 border-white/5 text-slate-500 hover:text-white'}`}>{num}</button>
+                  <button key={i} onClick={() => onPlayEpisode(num, data.book, data.chapters)} className={`aspect-square rounded-xl text-[10px] font-black flex items-center justify-center transition-all border ${num === lastWatched ? 'bg-blue-600 border-blue-600 text-white shadow-lg' : 'bg-slate-800 border-white/5 text-slate-500 hover:text-white'}`}>{num}</button>
                 );
               })}
             </div>
@@ -902,81 +902,128 @@ const CustomPlayerPage = ({ book, initialEp, onBack, onEpisodeChange, audioSetti
 
   return (
     <div className="animate-in fade-in duration-500">
-      <div className="flex flex-col lg:grid lg:grid-cols-12 gap-6 md:gap-8 items-start">
-        
-        {/* PLAYER PORTRAIT (9:16) */}
-        <div className="lg:col-span-8 w-full max-w-[450px] mx-auto">
-          <div 
-            ref={containerRef}
-            className="relative w-full aspect-[9/16] bg-black rounded-3xl overflow-hidden shadow-2xl border border-white/5 group"
-            onMouseMove={() => { setShowControls(true); clearTimeout(timerRef.current); timerRef.current = setTimeout(() => setShowControls(false), 3000); }}
-          >
-            <video ref={videoRef} className="w-full h-full object-cover cursor-pointer" playsInline onPlay={() => setIsPlaying(true)} onPause={() => setIsPlaying(false)} onTimeUpdate={() => setCurrentTime(videoRef.current?.currentTime || 0)} onLoadedMetadata={() => setDuration(videoRef.current?.duration || 0)} onEnded={() => localAutoNext && handleNext()} onWaiting={() => setLoading(true)} onPlaying={() => setLoading(false)} onClick={togglePlay} />
-            
-            {loading && <div className="absolute inset-0 flex items-center justify-center bg-black/40 backdrop-blur-sm z-10"><Loader2 className="animate-spin text-blue-500" size={48} /></div>}
-            
-            <div className={`absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-black/60 flex flex-col justify-between p-5 md:p-8 transition-opacity duration-500 ${showControls ? 'opacity-100' : 'opacity-0'}`}>
-              <div className="flex justify-between items-center text-left">
-                <button onClick={onBack} className="p-2 md:p-2.5 bg-white/10 backdrop-blur-md rounded-full hover:bg-white/20 transition-all border border-white/10 active:scale-90"><ChevronLeft size={20}/></button>
-                <div className="text-center">
-                  <h2 className="text-[10px] md:text-xs font-black uppercase tracking-[0.2em] text-white">EPS {currentEp}</h2>
+        <div className="flex flex-col lg:flex-row gap-6 md:gap-10 items-start">
+          
+          {/* PLAYER PORTRAIT (9:16) */}
+          <div className="w-full lg:flex-1 max-w-[450px] mx-auto">
+            <div 
+              ref={containerRef}
+              className="relative w-full aspect-[9/16] bg-black rounded-3xl overflow-hidden shadow-2xl border border-white/5 group"
+              onMouseMove={() => { setShowControls(true); clearTimeout(timerRef.current); timerRef.current = setTimeout(() => setShowControls(false), 3000); }}
+            >
+              <video 
+                ref={videoRef} 
+                className="w-full h-full object-cover cursor-pointer" 
+                playsInline 
+                onPlay={() => setIsPlaying(true)} 
+                onPause={() => setIsPlaying(false)} 
+                onTimeUpdate={() => setCurrentTime(videoRef.current?.currentTime || 0)} 
+                onLoadedMetadata={() => setDuration(videoRef.current?.duration || 0)} 
+                onEnded={() => localAutoNext && handleNext()} 
+                onWaiting={() => setLoading(true)} 
+                onPlaying={() => setLoading(false)} 
+                onClick={togglePlay} 
+              />
+              
+              {loading && <div className="absolute inset-0 flex items-center justify-center bg-black/60 backdrop-blur-sm z-10"><Loader2 className="animate-spin text-blue-500" size={48} /></div>}
+              
+              <div className={`absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-black/60 flex flex-col justify-between p-4 md:p-8 transition-opacity duration-500 ${showControls ? 'opacity-100' : 'opacity-0'}`}>
+                <div className="flex justify-between items-center text-left">
+                  <button onClick={onBack} className="p-2 md:p-2.5 bg-white/10 backdrop-blur-md rounded-full hover:bg-white/20 transition-all border border-white/10 active:scale-90"><ChevronLeft size={20}/></button>
+                  <div className="text-center">
+                    <h2 className="text-[10px] md:text-xs font-black uppercase tracking-[0.2em] text-white">EPS {currentEp}</h2>
+                  </div>
+                  <button onClick={toggleFullScreen} className="p-2 md:p-2.5 bg-white/10 backdrop-blur-md rounded-full hover:bg-white/20 transition-all border border-white/10 active:scale-90"><Maximize size={20}/></button>
                 </div>
-                <button onClick={toggleFullScreen} className="p-2 md:p-2.5 bg-white/10 backdrop-blur-md rounded-full hover:bg-white/20 transition-all border border-white/10 active:scale-90"><Maximize size={20}/></button>
-              </div>
 
-              <div className="flex flex-col gap-4">
-                <div className="flex items-center justify-center gap-8 md:gap-12">
-                   <button onClick={handlePrev} disabled={currentEp <= 1} className="text-white/60 hover:text-blue-400 disabled:opacity-20 transition-colors"><SkipBack size={32} fill="currentColor"/></button>
-                   <button onClick={togglePlay} className="text-white transform active:scale-90 transition-transform">{isPlaying ? <Pause size={56} fill="white" /> : <Play size={56} fill="white" />}</button>
-                   <button onClick={handleNext} disabled={currentEp >= (details?.book?.chapterCount || 0)} className="text-white/60 hover:text-blue-400 disabled:opacity-20 transition-colors"><SkipForward size={32} fill="currentColor"/></button>
-                </div>
+                <div className="flex flex-col gap-4">
+                  {/* OVERLAY PLAY/PAUSE CENTER */}
+                  <div className="flex items-center justify-center gap-10">
+                    <button onClick={handlePrev} disabled={currentEp <= 1} className="text-white/60 hover:text-blue-400 disabled:opacity-20 transition-colors"><SkipBack size={32} fill="currentColor"/></button>
+                    <button onClick={togglePlay} className="text-white transform active:scale-90 transition-transform">
+                      {isPlaying ? <Pause size={56} fill="white" /> : <Play size={56} fill="white" />}
+                    </button>
+                    <button onClick={handleNext} disabled={currentEp >= (details?.book?.chapterCount || 0)} className="text-white/60 hover:text-blue-400 disabled:opacity-20 transition-colors"><SkipForward size={32} fill="currentColor"/></button>
+                  </div>
 
-                <div className="flex flex-col gap-2">
-                  <input type="range" min="0" max={duration || 0} step="0.1" value={currentTime} onChange={(e) => { if (videoRef.current) videoRef.current.currentTime = parseFloat(e.target.value); }} className="w-full h-1 md:h-1.5 accent-blue-600 bg-white/20 rounded-full appearance-none cursor-pointer" />
-                  <div className="flex justify-between text-[8px] font-mono font-black text-white/50 tracking-tighter"><span>{formatTime(currentTime)}</span><span>{formatTime(duration)}</span></div>
+                  <div className="flex flex-col gap-2">
+                    <div className="flex items-center gap-3">
+                       <input type="range" min="0" max={duration || 0} step="0.1" value={currentTime} onChange={(e) => { if (videoRef.current) videoRef.current.currentTime = parseFloat(e.target.value); }} className="flex-1 h-1 md:h-1.5 accent-blue-600 bg-white/20 rounded-full appearance-none cursor-pointer" />
+                       
+                       {/* VOLUME SLIDER (DIBERSIHKAN & MUNCUL KEMBALI) */}
+                       <div className="hidden sm:flex items-center gap-2 group/vol relative">
+                         <div className="p-1.5 bg-white/10 rounded-lg hover:bg-white/20 transition-colors">
+                           {volume === 0 ? <VolumeX size={16} /> : <Volume2 size={16} />}
+                         </div>
+                         <input 
+                           type="range" 
+                           min="0" max="1" step="0.05" 
+                           value={volume} 
+                           onChange={(e) => setVolume(parseFloat(e.target.value))} 
+                           className="w-16 h-1 accent-white appearance-none bg-white/20 rounded-full cursor-pointer opacity-0 group-hover/vol:opacity-100 transition-opacity" 
+                         />
+                       </div>
+                    </div>
+                    <div className="flex justify-between text-[8px] font-mono font-black text-white/50 tracking-tighter"><span>{formatTime(currentTime)}</span><span>{formatTime(duration)}</span></div>
+                  </div>
                 </div>
               </div>
             </div>
-          </div>
 
-          {/* KONTROL MINIMALIS RESPONSIF */}
-          <div className="mt-4 flex gap-2">
-             <button onClick={() => setLocalAutoNext(!localAutoNext)} className={`flex-1 flex items-center justify-center gap-2 py-3 rounded-2xl border transition-all text-[10px] font-black uppercase tracking-widest ${localAutoNext ? 'bg-blue-600 border-blue-600 text-white shadow-lg' : 'bg-white/5 border-white/10 text-slate-400 hover:bg-white/10'}`}>
+            {/* KONTROL MINIMALIS: AUTO NEXT & SPEED (RESPONSIF MOBILE) */}
+            <div className="mt-4 grid grid-cols-2 gap-2">
+              <button 
+                onClick={() => setLocalAutoNext(!localAutoNext)} 
+                className={`flex items-center justify-center gap-2 py-3 rounded-2xl border transition-all text-[10px] font-black uppercase tracking-widest ${localAutoNext ? 'bg-blue-600 border-blue-600 text-white shadow-lg' : 'bg-white/5 border-white/10 text-slate-400'}`}
+              >
                 <RotateCcw size={14} /> Auto {localAutoNext ? 'ON' : 'OFF'}
-             </button>
-             <button onClick={() => { const rates = [1, 1.25, 1.5, 2]; const next = rates[(rates.indexOf(audioSettings.playbackRate) + 1) % rates.length]; setAudioSettings({...audioSettings, playbackRate: next}); }} className="flex-1 flex items-center justify-center gap-2 py-3 bg-white/5 border border-white/10 rounded-2xl text-[10px] font-black text-slate-200 uppercase tracking-widest transition-all active:scale-95 hover:bg-white/10">
+              </button>
+              <button 
+                onClick={() => {
+                  const rates = [1, 1.25, 1.5, 2];
+                  const next = rates[(rates.indexOf(audioSettings.playbackRate) + 1) % rates.length];
+                  setAudioSettings({...audioSettings, playbackRate: next});
+                }}
+                className="flex items-center justify-center gap-2 py-3 bg-white/5 border border-white/10 rounded-2xl text-[10px] font-black text-slate-200 uppercase tracking-widest transition-all active:scale-95"
+              >
                 <Settings size={14} /> Speed {audioSettings.playbackRate}x
-             </button>
+              </button>
+            </div>
           </div>
+
+          {/* LIST EPISODE & SINOPSIS */}
+          <div className="w-full lg:w-[360px] flex flex-col gap-6">
+             <div className="bg-slate-900/60 backdrop-blur-3xl border border-white/10 rounded-[2rem] p-6 md:p-8 flex flex-col shadow-2xl">
+                <div className="flex items-center gap-3 mb-6 border-b border-white/5 pb-5">
+                   <div className="w-10 h-10 bg-blue-600 rounded-xl shadow-xl shadow-blue-600/20 flex items-center justify-center text-white"><List size={20} /></div>
+                   <div>
+                     <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-white">List Episode</h3>
+                     <p className="text-[8px] font-bold text-slate-500 uppercase mt-0.5">{details?.book?.chapterCount || 0} Total Eps</p>
+                   </div>
+                </div>
+                <div className="grid grid-cols-5 md:grid-cols-4 lg:grid-cols-4 gap-2 max-h-[300px] lg:max-h-[450px] overflow-y-auto no-scrollbar py-1 text-left">
+                   {details?.chapters?.map((ch, i) => {
+                     const num = ch.num || (i + 1);
+                     return (
+                       <button 
+                        key={i} 
+                        onClick={() => { setCurrentEp(num); scrollToTop(); }} 
+                        className={`aspect-square rounded-xl text-[10px] font-black transition-all border ${num === currentEp ? 'bg-blue-600 border-blue-600 text-white shadow-lg scale-105' : 'bg-slate-800/40 border-white/5 text-slate-500 hover:text-white hover:bg-blue-600/10'}`}
+                       >
+                         {num}
+                       </button>
+                     );
+                   })}
+                </div>
+             </div>
+
+             <div className="p-6 bg-slate-900/30 border border-white/5 rounded-[2rem] text-xs text-slate-400 leading-relaxed italic text-left">
+                <p className="text-[8px] font-black text-slate-500 uppercase mb-3 tracking-widest">Sinopsis</p>
+                {details?.book?.introduction ? cleanIntro(details.book.introduction) : "Memuat sinopsis drama..."}
+             </div>
+          </div>
+
         </div>
-
-        {/* SIDEBAR / INFO */}
-        <div className="lg:col-span-4 w-full flex flex-col gap-6">
-           <div className="bg-slate-900/60 backdrop-blur-3xl border border-white/10 rounded-[2rem] p-6 flex flex-col shadow-2xl">
-              <div className="flex items-center gap-3 mb-6 border-b border-white/5 pb-4">
-                 <div className="w-10 h-10 bg-blue-600 rounded-xl shadow-xl shadow-blue-600/20 flex items-center justify-center text-white"><List size={18} /></div>
-                 <div>
-                   <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-white">Daftar Episode</h3>
-                   <p className="text-[8px] font-bold text-slate-500 uppercase mt-0.5">{details?.book?.chapterCount || 0} Total</p>
-                 </div>
-              </div>
-              <div className="grid grid-cols-5 xs:grid-cols-6 sm:grid-cols-8 lg:grid-cols-4 gap-2 max-h-[250px] lg:max-h-[400px] overflow-y-auto no-scrollbar py-1">
-                 {details?.chapters?.map((ch, i) => {
-                   const num = ch.num || (i + 1);
-                   return (<button key={i} onClick={() => { setCurrentEp(num); scrollToTop(); }} className={`aspect-square rounded-xl text-[10px] font-black transition-all border ${num === currentEp ? 'bg-blue-600 border-blue-600 text-white shadow-lg scale-105' : 'bg-slate-800/40 border-white/5 text-slate-500 hover:text-white hover:bg-blue-600/10'}`}>{num}</button>);
-                 })}
-              </div>
-           </div>
-
-           <div className="p-6 bg-white/5 border border-white/5 rounded-[2rem] text-xs text-slate-400 italic leading-relaxed">
-              <p className="text-[8px] font-black text-slate-500 uppercase mb-3 tracking-widest">Sinopsis Drama</p>
-              <div className="line-clamp-6 hover:line-clamp-none transition-all duration-500">
-                {details?.book?.introduction ? cleanIntro(details.book.introduction) : "Memuat sinopsis..."}
-              </div>
-           </div>
-        </div>
-
-      </div>
     </div>
   );
 };
