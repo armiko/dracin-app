@@ -386,41 +386,79 @@ const CustomPlayerPage = ({
     }
   }, [book]);
 
-  // VIDEO INIT (PERBAIKAN DOMAIN)
+  // VIDEO INIT (PERBAIKAN DOMAIN & NOTSUPPORTEDERROR)
   useEffect(() => {
     const video = videoRef.current;
     if (!video || !videoUrl) return;
 
+    // Bersihkan HLS lama sebelum memulai yang baru
     if (hlsRef.current) {
       hlsRef.current.destroy();
       hlsRef.current = null;
     }
 
+    // Reset video element sepenuhnya untuk mencegah NotSupportedError
     video.pause();
-    video.src = '';
+    video.removeAttribute('src'); // Gunakan removeAttribute daripada string kosong
     video.load();
 
-    // HLS Configuration to handle cross-domain issues
+    const startPlay = () => {
+      // Putar hanya jika video element benar-benar ada dan memiliki src
+      if (video && video.src) {
+        video.play().catch(e => {
+          // Abaikan error AbortError (karena pergantian episode cepat)
+          if (e.name !== 'AbortError') console.warn("Auto-play failed:", e);
+        });
+      }
+    };
+
     if (isHls(videoUrl) && window.Hls && window.Hls.isSupported()) {
       const hls = new window.Hls({ 
         enableWorker: true, 
         lowLatencyMode: true,
-        // Penting untuk domain nonton.dahono.com: bypass referrer check
+        // Konfigurasi retry untuk stabilitas domain kustom
+        manifestLoadingRetryDelay: 1000,
+        manifestLoadingMaxRetry: 4,
         xhrSetup: function(xhr, url) {
           xhr.withCredentials = false;
         }
       });
+
       hls.loadSource(videoUrl);
       hls.attachMedia(video);
-      hls.on(window.Hls.Events.MANIFEST_PARSED, () => video.play().catch(() => {}));
+      
+      hls.on(window.Hls.Events.MANIFEST_PARSED, startPlay);
+      
+      hls.on(window.Hls.Events.ERROR, (event, data) => {
+        if (data.fatal) {
+          switch (data.type) {
+            case window.Hls.ErrorTypes.NETWORK_ERROR:
+              hls.startLoad();
+              break;
+            case window.Hls.ErrorTypes.MEDIA_ERROR:
+              hls.recoverMediaError();
+              break;
+            default:
+              setError(true);
+              hls.destroy();
+              break;
+          }
+        }
+      });
+
       hlsRef.current = hls;
     } else {
+      // Native fallback
       video.src = videoUrl;
-      video.play().catch(() => {});
+      // Berikan jeda sedikit agar DOM video siap
+      setTimeout(startPlay, 50);
     }
 
     return () => {
-      if (hlsRef.current) hlsRef.current.destroy();
+      if (hlsRef.current) {
+        hlsRef.current.destroy();
+        hlsRef.current = null;
+      }
     };
   }, [videoUrl]);
 
@@ -439,7 +477,9 @@ const CustomPlayerPage = ({
     if (e) e.stopPropagation();
     if (!videoRef.current) return;
     if (isPlaying) videoRef.current.pause();
-    else videoRef.current.play();
+    else {
+      videoRef.current.play().catch(err => console.warn("Play interrupted", err));
+    }
   };
 
   const handleMouseMove = () => {
@@ -457,7 +497,6 @@ const CustomPlayerPage = ({
 
   return (
     <div className="fixed inset-0 z-[1000] bg-black flex flex-col items-center justify-center overflow-hidden" onMouseMove={handleMouseMove}>
-      {/* TOP BAR */}
       <div className={`absolute top-0 left-0 right-0 p-6 z-50 flex items-center justify-between bg-gradient-to-b from-black/90 via-black/40 to-transparent transition-opacity duration-500 ${showControls ? 'opacity-100' : 'opacity-0'}`}>
         <button onClick={onBack} className="text-white hover:bg-white/10 p-2 rounded-full transition-all"><ChevronLeft size={24} /></button>
         <div className="text-center flex-1 max-w-xl">
@@ -467,7 +506,6 @@ const CustomPlayerPage = ({
         <button className="text-white p-2 rounded-full"><Share2 size={18} /></button>
       </div>
 
-      {/* VIDEO CONTAINER */}
       <div className="relative w-full h-full flex items-center justify-center bg-black" onClick={togglePlay}>
         {loading ? (
           <Loader2 className="animate-spin text-blue-500" size={48} />
@@ -483,7 +521,6 @@ const CustomPlayerPage = ({
             ref={videoRef} 
             className="w-full h-full object-contain cursor-pointer" 
             playsInline 
-            // FIX: Atribut penting untuk melewati blokir domain
             referrerPolicy="no-referrer"
             crossOrigin="anonymous"
             onPlay={() => setIsPlaying(true)} 
@@ -502,10 +539,8 @@ const CustomPlayerPage = ({
         )}
       </div>
 
-      {/* BOTTOM CONTROLS */}
       <div className={`absolute bottom-0 left-0 right-0 p-6 z-50 transition-all duration-500 ${showControls ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-8 pointer-events-none'}`}>
         <div className="max-w-4xl mx-auto flex flex-col gap-3">
-          {/* SEEK BAR */}
           <div className="flex flex-col gap-1.5" onClick={(e) => e.stopPropagation()}>
             <input 
               type="range" min="0" max={duration || 0} step="0.1" 
@@ -519,7 +554,6 @@ const CustomPlayerPage = ({
             </div>
           </div>
 
-          {/* CONTROL BUTTONS */}
           <div className="flex items-center justify-between bg-slate-900/60 backdrop-blur-2xl p-4 rounded-[1.5rem] border border-white/10 shadow-2xl" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center gap-6">
               <button disabled={currentEp <= 1} onClick={() => setCurrentEp(e => e - 1)} className="text-white/40 hover:text-white disabled:opacity-10 transition-colors"><SkipBack size={24} fill="currentColor" /></button>
@@ -528,7 +562,6 @@ const CustomPlayerPage = ({
             </div>
             
             <div className="flex items-center gap-6">
-              {/* VOLUME SLIDER */}
               <div className="hidden sm:flex items-center gap-2 group/vol bg-white/5 px-3 py-1.5 rounded-xl border border-white/5 hover:bg-white/10 transition-all">
                 <button onClick={() => setAudioSettings(s => ({...s, isMuted: !s.isMuted}))} className="text-white/70 hover:text-white transition-colors">
                   {getVolumeIcon()}
@@ -546,7 +579,6 @@ const CustomPlayerPage = ({
                   />
                 </div>
               </div>
-              {/* SPEED BUTTON */}
               <button onClick={() => setAudioSettings(s => ({...s, playbackRate: s.playbackRate === 1 ? 1.5 : s.playbackRate === 1.5 ? 2 : 1}))} className="px-3 py-1.5 bg-blue-600 text-white rounded-lg text-[9px] font-black tracking-widest uppercase shadow-lg shadow-blue-600/20 active:scale-95 transition-all">
                  {audioSettings.playbackRate}X SPEED
               </button>
@@ -578,9 +610,6 @@ export default function App() {
   const [historyData, setHistoryData] = useState([]);
   
   const [user, setUser] = useState(null);
-  const [profile, setProfile] = useState({ watchlist: [], history: [] });
-  const [syncing, setSyncing] = useState(false);
-
   const [loadingData, setLoadingData] = useState(false);
   const [hasMoreRank, setHasMoreRank] = useState(true);
   const [searchModalOpen, setSearchModalOpen] = useState(false);
@@ -593,7 +622,6 @@ export default function App() {
   const [authError, setAuthError] = useState(null);
   const [showAd, setShowAd] = useState(false);
 
-  // Scripts Loading
   const { loaded: scriptLoaded } = useExternalScript(CONFIG.SCRIPT_URL);
   const { loaded: hlsLoaded } = useExternalScript(CONFIG.HLS_URL);
   const { loaded: fbApp } = useExternalScript(CONFIG.FIREBASE_APP);
@@ -625,51 +653,45 @@ export default function App() {
     } catch (e) { console.error("Gagal keluar:", e); }
   };
 
+  // LOGIKA WATCHLIST (SEPARATE COLLECTION)
   const toggleWatchlist = async (drama) => {
     if (!user || !fbReady || !window.firebase) return;
     const fb = window.firebase;
     const dramaId = String(drama.bookId || drama.id);
-    const profileRef = fb.firestore().doc(`artifacts/${customAppId}/users/${user.uid}/data/profile`);
+    const watchlistDoc = fb.firestore().doc(`artifacts/${customAppId}/users/${user.uid}/watchlist/${dramaId}`);
+    
     try {
-        const snap = await profileRef.get();
-        const data = snap.exists ? snap.data() : { watchlist: [], history: [] };
-        const exists = (data.watchlist || []).some(item => String(item.bookId) === dramaId);
-        let newWatchlist;
-        if (exists) {
-            newWatchlist = data.watchlist.filter(item => String(item.bookId) !== dramaId);
+        const snap = await watchlistDoc.get();
+        if (snap.exists) {
+            await watchlistDoc.delete();
         } else {
-            const newItem = {
+            await watchlistDoc.set({
                 bookId: dramaId,
                 bookName: drama.bookName || drama.title,
                 coverWap: drama.coverWap || drama.cover || drama.coverUrl,
                 chapterCount: drama.chapterCount || drama.episodeCount || 0,
                 ts: Date.now()
-            };
-            newWatchlist = [newItem, ...(data.watchlist || [])];
+            });
         }
-        await profileRef.set({ ...data, watchlist: newWatchlist });
     } catch(e) { console.error("Watchlist toggle failed:", e); }
   };
 
+  // LOGIKA HISTORY (SEPARATE COLLECTION)
   const saveToHistory = async (drama, episode) => {
     if (!user || !fbReady || !window.firebase) return;
     const fb = window.firebase;
     const dramaId = String(drama.bookId || drama.id);
-    const profileRef = fb.firestore().doc(`artifacts/${customAppId}/users/${user.uid}/data/profile`);
+    const historyDoc = fb.firestore().doc(`artifacts/${customAppId}/users/${user.uid}/history/${dramaId}`);
+    
     try {
-        const snap = await profileRef.get();
-        const data = snap.exists ? snap.data() : { watchlist: [], history: [] };
-        const existingHistory = (data.history || []).filter(item => String(item.bookId) !== dramaId);
-        const newItem = {
+        await historyDoc.set({
             bookId: dramaId,
             bookName: drama.bookName || drama.title,
             coverWap: drama.coverWap || drama.cover || drama.coverUrl,
             chapterCount: drama.chapterCount || drama.episodeCount || 0,
             lastEpisode: episode,
             ts: Date.now()
-        };
-        const newHistory = [newItem, ...existingHistory].slice(0, 50);
-        await profileRef.set({ ...data, history: newHistory });
+        });
     } catch(e) { console.error("History save failed:", e); }
   };
 
@@ -732,6 +754,7 @@ export default function App() {
     } catch (e) { console.error("Rank fetch error:", e); } finally { setLoadingData(false); }
   }, []);
 
+  // FIREBASE INIT & LISTENERS
   useEffect(() => {
     if (!fbReady || !window.firebase) return;
     const fb = window.firebase;
@@ -740,18 +763,24 @@ export default function App() {
     fb.auth().onAuthStateChanged(async (u) => {
         setUser(u);
         if (u) {
-            fb.firestore().doc(`artifacts/${customAppId}/users/${u.uid}/data/profile`)
+            // Watchlist Listener
+            fb.firestore().collection(`artifacts/${customAppId}/users/${u.uid}/watchlist`)
                 .onSnapshot(snap => {
-                    if (snap.exists) {
-                        const data = snap.data();
-                        setWatchlistData(data.watchlist || []);
-                        const history = data.history || [];
-                        history.sort((a,b) => b.ts - a.ts);
-                        setHistoryData(history);
-                    } else {
-                        fb.firestore().doc(`artifacts/${customAppId}/users/${u.uid}/data/profile`).set({ watchlist: [], history: [] });
-                    }
+                    const list = [];
+                    snap.forEach(doc => list.push(doc.data()));
+                    list.sort((a,b) => b.ts - a.ts);
+                    setWatchlistData(list);
                 });
+
+            // History Listener
+            fb.firestore().collection(`artifacts/${customAppId}/users/${u.uid}/history`)
+                .onSnapshot(snap => {
+                    const list = [];
+                    snap.forEach(doc => list.push(doc.data()));
+                    list.sort((a,b) => b.ts - a.ts);
+                    setHistoryData(list);
+                });
+
             try {
                 const adRef = fb.firestore().doc(`artifacts/${customAppId}/users/${u.uid}/settings/ad_pref`);
                 const snap = await adRef.get();
@@ -797,7 +826,6 @@ export default function App() {
 
   return (
     <div className="bg-[#0f172a] h-screen text-slate-200 font-sans flex flex-col overflow-hidden selection:bg-blue-600 selection:text-white">
-      {/* NAVBAR */}
       <nav className="flex-none h-16 bg-[#0f172a]/80 backdrop-blur-xl border-b border-white/5 flex items-center z-40 px-4 sm:px-8">
         <div className="container mx-auto flex justify-between items-center">
           <button onClick={() => setView('home')} className="flex items-center gap-2 group">
@@ -838,7 +866,6 @@ export default function App() {
         </div>
       </nav>
 
-      {/* ERROR BAR */}
       {authError && (
         <div className="bg-orange-600/20 border-b border-orange-500/20 px-6 py-2 flex items-center justify-between animate-in slide-in-from-top-full duration-300">
            <div className="flex items-center gap-2 text-orange-400 text-[9px] font-bold uppercase tracking-widest text-left">
@@ -848,7 +875,6 @@ export default function App() {
         </div>
       )}
 
-      {/* MAIN CONTENT */}
       <main className="flex-1 overflow-y-auto pt-4 pb-16 px-4 sm:px-8 no-scrollbar">
         <div className="container mx-auto max-w-7xl">
           {view === 'home' && (
@@ -928,7 +954,7 @@ export default function App() {
                             <div key={idx} className="flex flex-col">
                                 <DramaCard item={{...item, id: item.bookId}} onClick={() => { setSelectedBookId(item.bookId); setPreviousView('history'); setView('detail'); }} />
                                 <div className="mt-1 flex items-center gap-1 text-blue-400 font-black text-[8px] uppercase tracking-tighter px-1">
-                                    <Clock size={8} /> Episode Terakhir: {item.lastEpisode || '?'}
+                                    <Clock size={8} /> Terakhir ditonton
                                 </div>
                             </div>
                         )) : (
