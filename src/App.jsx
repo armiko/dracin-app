@@ -11,23 +11,34 @@ import {
 } from 'lucide-react';
 
 /**
- * --- KONFIGURASI PROYEK ---
+ * --- FIREBASE IMPORTS ---
  */
-const CONFIG = {
-  SCRIPT_URL: "https://cdn.jsdelivr.net/gh/armiko/dracin-app@169efe4fc99586d445cbf8780629c5ac210ca929/js/dramabox-core.js",
-  HLS_URL: "https://cdn.jsdelivr.net/npm/hls.js@latest",
-  API_BASE: "https://drachin.dicky.app",
-  LOCALE_API: "in",
-  FEED_IDS: { POPULAR: 1, LATEST: 2, TRENDING: 3 },
-  PER_PAGE: 24,
-  // Menggunakan Firebase Compat SDK melalui CDN untuk menghindari kesalahan resolusi Rollup/Vite
-  FIREBASE_SCRIPTS: [
-    "https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js",
-    "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js",
-    "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"
-  ]
-};
+import { initializeApp } from 'firebase/app';
+import { 
+  getAuth, 
+  signInAnonymously, 
+  signInWithPopup, 
+  GoogleAuthProvider, 
+  onAuthStateChanged, 
+  signOut 
+} from 'firebase/auth';
+import { 
+  getFirestore,
+  doc, 
+  setDoc, 
+  collection, 
+  onSnapshot, 
+  deleteDoc, 
+  serverTimestamp 
+} from 'firebase/firestore';
 
+/**
+ * --- KONFIGURASI FIREBASE & API ---
+ * Catatan: Karena lingkungan pratinjau tidak mendukung import.meta, 
+ * kita menggunakan pengecekan variabel global atau fallback.
+ */
+
+// Konfigurasi default (ambil dari data yang Anda berikan)
 const defaultFirebaseConfig = {
   apiKey: "AIzaSyDm5JBMP_NZTpiM-EmgvXNwRCLNtdROy8s",
   authDomain: "nontondracin-f5065.firebaseapp.com",
@@ -36,6 +47,27 @@ const defaultFirebaseConfig = {
   messagingSenderId: "166957230434",
   appId: "1:166957230434:web:dc20d828a59048765da43b",
   measurementId: "G-6B89Y55E2F"
+};
+
+// Inisialisasi Firebase secara internal untuk mengatasi error resolusi './firebase'
+const firebaseConfig = typeof __firebase_config !== 'undefined' 
+  ? JSON.parse(__firebase_config) 
+  : defaultFirebaseConfig;
+
+const app = initializeApp(firebaseConfig);
+const auth = getAuth(app);
+const db = getFirestore(app);
+
+// App ID unik untuk koleksi Firestore
+const appId = typeof __app_id !== 'undefined' ? __app_id : '3KNDH1p5iIG6U7FmuGTS';
+
+const CONFIG = {
+  SCRIPT_URL: "https://cdn.jsdelivr.net/gh/armiko/dracin-app@169efe4fc99586d445cbf8780629c5ac210ca929/js/dramabox-core.js",
+  HLS_URL: "https://cdn.jsdelivr.net/npm/hls.js@latest",
+  API_BASE: "https://drachin.dicky.app",
+  LOCALE_API: "in",
+  FEED_IDS: { POPULAR: 1, LATEST: 2, TRENDING: 3 },
+  PER_PAGE: 24
 };
 
 const STATIC_FILTERS = [
@@ -59,7 +91,23 @@ const STATIC_FILTERS = [
       { display: "Balas Dendam", value: "balas dendam" },
       { display: "CEO", value: "ceo" },
       { display: "Keluarga", value: "keluarga" },
-      { display: "Kekuatan Khusus", value: "keluarga khusus" }
+      { display: "Kekuatan Khusus", value: "keluarga khusus" },
+      { display: "Pembalikan Identitas", value: "pembalikan identitas" },
+      { display: "Perselingkuhan", value: "perselingkuhan" },
+      { display: "Terlahir Kembali", value: "terlahir kembali" },
+      { display: "Sejarah", value: "sejarah" },
+      { display: "Tokoh Legendaris", value: "tokoh legendaris" },
+      { display: "Cinta Rahasia", value: "cinta rahasia" },
+      { display: "Intrik Keluarga", value: "intrik keluarga" },
+      { display: "Cinta Setelah Menikah", value: "cinta setelah menikah" }
+    ]
+  },
+  {
+    title: "Urutkan",
+    key: "sort",
+    options: [
+      { display: "Terpopuler", value: "popular" },
+      { display: "Terbaru", value: "latest" }
     ]
   }
 ];
@@ -67,44 +115,24 @@ const STATIC_FILTERS = [
 /**
  * --- UTILS ---
  */
-const useExternalScript = (urls) => {
+const useExternalScript = (url) => {
   const [state, setState] = useState({ loaded: false, error: false });
-
   useEffect(() => {
-    const scripts = Array.isArray(urls) ? urls : [urls];
-    let loadedCount = 0;
-
-    const onScriptLoad = () => {
-      loadedCount++;
-      if (loadedCount === scripts.length) {
-        setState({ loaded: true, error: false });
-      }
-    };
-
+    let script = document.querySelector(`script[src="${url}"]`);
+    if (!script) {
+      script = document.createElement("script");
+      script.src = url; script.async = true;
+      document.body.appendChild(script);
+    }
+    const onScriptLoad = () => setState({ loaded: true, error: false });
     const onScriptError = () => setState({ loaded: true, error: true });
-
-    scripts.forEach(url => {
-      let script = document.querySelector(`script[src="${url}"]`);
-      if (!script) {
-        script = document.createElement("script");
-        script.src = url;
-        script.async = false; // Memastikan urutan pemuatan untuk Firebase
-        document.body.appendChild(script);
-      }
-      
-      // Jika sudah ada dan sudah dimuat sebelumnya
-      if (script.getAttribute('data-loaded') === 'true') {
-        onScriptLoad();
-      } else {
-        script.addEventListener("load", () => {
-          script.setAttribute('data-loaded', 'true');
-          onScriptLoad();
-        });
-        script.addEventListener("error", onScriptError);
-      }
-    });
-  }, [urls]);
-
+    script.addEventListener("load", onScriptLoad);
+    script.addEventListener("error", onScriptError);
+    return () => {
+      script.removeEventListener("load", onScriptLoad);
+      script.removeEventListener("error", onScriptError);
+    };
+  }, [url]);
   return state;
 };
 
@@ -141,7 +169,7 @@ const formatTime = (seconds) => {
 };
 
 /**
- * --- KOMPONEN UI SHARED ---
+ * --- UI COMPONENTS ---
  */
 
 const Section = ({ title, icon: IconComponent, onSeeAll, children }) => (
@@ -169,7 +197,7 @@ const DramaCard = ({ item, onClick, rank, onRemove, isHistory, lastEpisode }) =>
   const bid = item.bookId || item.id;
 
   return (
-    <div className="group relative">
+    <div className="group relative animate-in fade-in duration-300">
       <div className="cursor-pointer" onClick={() => onClick(item)}>
         <div className="relative aspect-[2/3] rounded-xl overflow-hidden bg-slate-800 shadow-md mb-2 border border-white/5">
           <img src={cover} alt={title} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700" loading="lazy" />
@@ -180,7 +208,7 @@ const DramaCard = ({ item, onClick, rank, onRemove, isHistory, lastEpisode }) =>
           </div>
           {rank && <div className="absolute top-0 left-0 bg-blue-600 text-white font-black text-[9px] px-2 py-0.5 rounded-br-lg shadow-lg">#{rank}</div>}
           <div className="absolute bottom-1.5 right-1.5 bg-black/60 backdrop-blur-md text-white text-[7px] font-black px-1.5 py-0.5 rounded border border-white/10 uppercase">
-            {isHistory ? `EP ${lastEpisode}` : `${item.chapterCount || '?'} EPS`}
+            {isHistory ? `EPS ${lastEpisode}` : `${item.chapterCount || '?'} EPS`}
           </div>
         </div>
         <h3 className="text-[10px] font-bold text-slate-200 line-clamp-2 leading-snug group-hover:text-blue-400 transition-colors px-0.5">{title}</h3>
@@ -188,7 +216,7 @@ const DramaCard = ({ item, onClick, rank, onRemove, isHistory, lastEpisode }) =>
       {onRemove && (
         <button 
           onClick={(e) => { e.stopPropagation(); onRemove(bid); }}
-          className="absolute -top-2 -right-2 p-1.5 bg-red-600 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity shadow-lg hover:scale-110"
+          className="absolute -top-2 -right-2 p-1.5 bg-red-600 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity shadow-lg hover:scale-110 z-10"
         >
           <Trash2 size={12} />
         </button>
@@ -219,15 +247,18 @@ export default function App() {
   const [view, setView] = useState('home');
   const [previousView, setPreviousView] = useState('home');
   const [user, setUser] = useState(null);
-  const [fbReady, setFbReady] = useState(false);
   
   // Data States
   const [homeData, setHomeData] = useState({ popular: [], latest: [] });
+  const [rankData, setRankData] = useState([]);
+  const [rankPage, setRankPage] = useState(1);
   const [allDramaData, setAllDramaData] = useState([]);
   const [watchlist, setWatchlist] = useState([]);
   const [watchHistory, setWatchHistory] = useState([]);
+  const [searchData, setSearchData] = useState([]);
   
   // UI States
+  const [loading, setLoading] = useState(false);
   const [searchModalOpen, setSearchModalOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedBookId, setSelectedBookId] = useState(null);
@@ -237,97 +268,63 @@ export default function App() {
   const [playerState, setPlayerState] = useState(null);
   const [authError, setAuthError] = useState(null);
 
-  // Memuat Script Eksternal
   const { loaded: scriptLoaded } = useExternalScript(CONFIG.SCRIPT_URL);
-  const { loaded: firebaseLoaded } = useExternalScript(CONFIG.FIREBASE_SCRIPTS);
 
   const [audioSettings, setAudioSettings] = useState(() => {
     const saved = localStorage.getItem('dracin_settings_global');
     return saved ? JSON.parse(saved) : { volume: 1, isMuted: false, playbackRate: 1, autoNext: true };
   });
 
-  // App ID unik untuk Firestore
-  const appId = typeof __app_id !== 'undefined' ? __app_id : '3KNDH1p5iIG6U7FmuGTS';
-
   /**
-   * --- FIREBASE INITIALIZATION ---
+   * --- AUTHENTICATION ---
    */
   useEffect(() => {
-    if (!firebaseLoaded || !window.firebase) return;
-
-    const firebase = window.firebase;
-    const config = typeof __firebase_config !== 'undefined' 
-      ? JSON.parse(__firebase_config) 
-      : defaultFirebaseConfig;
-
-    if (!firebase.apps.length) {
-      firebase.initializeApp(config);
-    }
-
-    const auth = firebase.auth();
-    
-    const initAuth = async () => {
-      try {
-        if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
-          await auth.signInWithCustomToken(__initial_auth_token);
-        } else {
-          if (!auth.currentUser) await auth.signInAnonymously();
-        }
-        setFbReady(true);
-      } catch (err) {
-        console.error("Autentikasi Firebase gagal:", err);
+    const unsubscribe = onAuthStateChanged(auth, (u) => {
+      if (u) {
+        setUser(u);
+      } else {
+        signInAnonymously(auth).catch(err => console.warn("SignIn Anonymously failed", err));
       }
-    };
-
-    initAuth();
-    const unsubscribe = auth.onAuthStateChanged(setUser);
+    });
     return () => unsubscribe();
-  }, [firebaseLoaded]);
+  }, []);
 
   /**
    * --- FIRESTORE SYNC ---
    */
   useEffect(() => {
-    if (!fbReady || !user || !window.firebase) return;
+    if (!user) return;
 
-    const db = window.firebase.firestore();
-    
-    // Path: /artifacts/{appId}/users/{userId}/{collectionName}
-    const watchlistRef = db.collection('artifacts').doc(appId).collection('users').doc(user.uid).collection('watchlist');
-    const historyRef = db.collection('artifacts').doc(appId).collection('users').doc(user.uid).collection('history');
+    // Path absolut sesuai aturan RULE 1
+    const watchlistRef = collection(db, 'artifacts', appId, 'users', user.uid, 'watchlist');
+    const historyRef = collection(db, 'artifacts', appId, 'users', user.uid, 'history');
 
-    const unsubWatchlist = watchlistRef.onSnapshot((snap) => {
+    const unsubWatchlist = onSnapshot(watchlistRef, (snap) => {
       const data = snap.docs.map(doc => doc.data()).sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
       setWatchlist(data);
-    }, (err) => console.error("Sinkronisasi Favorit gagal:", err));
+    }, (err) => console.error("Sync Watchlist Gagal:", err));
 
-    const unsubHistory = historyRef.onSnapshot((snap) => {
+    const unsubHistory = onSnapshot(historyRef, (snap) => {
       const data = snap.docs.map(doc => doc.data()).sort((a, b) => (b.updatedAt?.seconds || 0) - (a.updatedAt?.seconds || 0));
       setWatchHistory(data.slice(0, 20));
-    }, (err) => console.error("Sinkronisasi Riwayat gagal:", err));
+    }, (err) => console.error("Sync History Gagal:", err));
 
-    return () => {
-      unsubWatchlist();
-      unsubHistory();
-    };
-  }, [fbReady, user, appId]);
+    return () => { unsubWatchlist(); unsubHistory(); };
+  }, [user]);
 
   /**
    * --- CORE ACTIONS ---
    */
   const handleLogin = async () => {
-    if (!window.firebase) return;
     setAuthError(null);
     try {
-      const provider = new window.firebase.auth.GoogleAuthProvider();
-      await window.firebase.auth().signInWithPopup(provider);
+      const provider = new GoogleAuthProvider();
+      await signInWithPopup(auth, provider);
       setProfileOpen(false);
-    } catch (e) {
-      setAuthError("Gagal masuk. Silakan coba kembali.");
-    }
+    } catch (e) { setAuthError("Gagal masuk. Pastikan pop-up diizinkan."); }
   };
 
-  const handleLogout = () => window.firebase.auth().signOut().then(() => { setView('home'); setProfileOpen(false); });
+  const handleLogout = () => signOut(auth).then(() => { setView('home'); setProfileOpen(false); });
 
   const fetchHome = useCallback(async () => {
     if (!window.DramaboxCore) return;
@@ -344,47 +341,51 @@ export default function App() {
     } catch (e) { console.error("Fetch home error:", e); }
   }, []);
 
+  const fetchRank = useCallback(async (tab, page = 1) => {
+    if (!window.DramaboxCore) return;
+    setLoading(true);
+    try {
+      const core = window.DramaboxCore;
+      const device = await core.getDevice();
+      const tokenRes = await core.getToken(CONFIG.API_BASE, 'in', device, false);
+      const fid = tab === 'popular' ? CONFIG.FEED_IDS.POPULAR : tab === 'latest' ? CONFIG.FEED_IDS.LATEST : CONFIG.FEED_IDS.TRENDING;
+      const count = page * CONFIG.PER_PAGE;
+      const res = await core.doClassify(CONFIG.API_BASE, 'in', device, tokenRes.token, fid, count);
+      setRankData(res || []);
+    } catch (e) { console.error("Rank error:", e); } finally { setLoading(false); }
+  }, []);
+
   const handleToggleWatchlist = async (book) => {
-    if (!fbReady || !user || user.isAnonymous) {
-      setAuthError("Silakan masuk dengan Google untuk menyimpan drama.");
+    if (!user || user.isAnonymous) {
+      setAuthError("Silakan masuk akun untuk menyimpan ke favorit.");
       return;
     }
     const bid = String(book.bookId || book.id);
-    const db = window.firebase.firestore();
-    const docRef = db.collection('artifacts').doc(appId).collection('users').doc(user.uid).collection('watchlist').doc(bid);
-    
-    if (watchlist.some(i => String(i.bookId || i.id) === bid)) {
-      await docRef.delete();
-    } else {
-      await docRef.set({ 
-        ...book, 
-        bookId: bid, 
-        createdAt: window.firebase.firestore.FieldValue.serverTimestamp() 
-      });
-    }
+    const docRef = doc(db, 'artifacts', appId, 'users', user.uid, 'watchlist', bid);
+    if (watchlist.some(i => String(i.bookId || i.id) === bid)) await deleteDoc(docRef);
+    else await setDoc(docRef, { ...book, bookId: bid, createdAt: serverTimestamp() });
   };
 
   const updateHistory = async (book, episode) => {
-    if (!fbReady || !user || user.isAnonymous) return;
+    if (!user || user.isAnonymous) return;
     const bid = String(book.bookId || book.id);
-    const db = window.firebase.firestore();
-    const docRef = db.collection('artifacts').doc(appId).collection('users').doc(user.uid).collection('history').doc(bid);
-    await docRef.set({
+    const docRef = doc(db, 'artifacts', appId, 'users', user.uid, 'history', bid);
+    await setDoc(docRef, {
       bookId: bid,
       bookName: book.bookName || book.title,
       cover: book.cover || book.coverWap,
       lastEpisode: episode,
-      updatedAt: window.firebase.firestore.FieldValue.serverTimestamp()
+      updatedAt: serverTimestamp()
     });
   };
 
   const clearHistoryItem = async (bid) => {
-    if (!fbReady || !user) return;
-    const db = window.firebase.firestore();
-    await db.collection('artifacts').doc(appId).collection('users').doc(user.uid).collection('history').doc(String(bid)).delete();
+    if (!user) return;
+    await deleteDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'history', String(bid)));
   };
 
   useEffect(() => { if (scriptLoaded) fetchHome(); }, [scriptLoaded, fetchHome]);
+  useEffect(() => { if (view === 'rank') fetchRank(rankTab, rankPage); }, [view, rankTab, rankPage, fetchRank]);
 
   const filteredItems = useMemo(() => {
     let result = [...allDramaData];
@@ -394,19 +395,18 @@ export default function App() {
       const tags = [...(i.typeTwoNames || []), ...(i.tags || [])].map(t => String(t).toLowerCase());
       return tags.some(tag => tag.includes(activeFilters.category.toLowerCase()));
     });
+    if (activeFilters.sort === 'popular') result.sort((a, b) => (b.score || 0) - (a.score || 0));
+    else if (activeFilters.sort === 'latest') result.sort((a, b) => (b.bookId || b.id) - (a.bookId || a.id));
     return result;
   }, [allDramaData, activeFilters]);
 
   /**
-   * --- NAVIGATION & COMPONENTS ---
+   * --- COMPONENTS ---
    */
 
   const ProfileMenu = () => (
     <div className="relative">
-      <button 
-        onClick={() => setProfileOpen(!profileOpen)}
-        className="flex items-center gap-2 p-1 pl-1.5 pr-2.5 rounded-full bg-white/5 border border-white/10 hover:bg-white/10 transition-all group"
-      >
+      <button onClick={() => setProfileOpen(!profileOpen)} className="flex items-center gap-2 p-1 pl-1.5 pr-2.5 rounded-full bg-white/5 border border-white/10 hover:bg-white/10 transition-all group">
         {user && !user.isAnonymous ? (
           <img src={user.photoURL} alt="Avatar" className="w-7 h-7 rounded-full shadow-lg border border-white/20" />
         ) : (
@@ -414,7 +414,6 @@ export default function App() {
         )}
         <ChevronDown size={14} className={`text-slate-500 transition-transform ${profileOpen ? 'rotate-180' : ''}`} />
       </button>
-
       {profileOpen && (
         <>
           <div className="fixed inset-0 z-[100]" onClick={() => setProfileOpen(false)}></div>
@@ -427,10 +426,9 @@ export default function App() {
             ) : (
               <div className="p-5 border-b border-white/5 text-center">
                 <p className="text-slate-400 text-[10px] font-black uppercase tracking-widest mb-3">Fitur Terbatas</p>
-                <button onClick={handleLogin} className="w-full py-2 bg-blue-600 text-white rounded-xl text-[10px] font-black uppercase tracking-widest shadow-lg shadow-blue-600/20">Masuk Akun</button>
+                <button onClick={handleLogin} className="w-full py-2 bg-blue-600 text-white rounded-xl text-[10px] font-black uppercase tracking-widest shadow-lg">Masuk Akun</button>
               </div>
             )}
-            
             <div className="p-2">
               <button onClick={() => { setView('watchlist'); setProfileOpen(false); }} className="w-full flex items-center gap-3 px-4 py-3 text-slate-300 hover:bg-white/5 rounded-xl transition-colors text-left group">
                 <Bookmark size={16} className="text-slate-500 group-hover:text-blue-400" />
@@ -438,11 +436,11 @@ export default function App() {
               </button>
               <button onClick={() => { setView('history'); setProfileOpen(false); }} className="w-full flex items-center gap-3 px-4 py-3 text-slate-300 hover:bg-white/5 rounded-xl transition-colors text-left group">
                 <History size={16} className="text-slate-500 group-hover:text-blue-400" />
-                <span className="text-[10px] font-black uppercase tracking-widest">Sudah Ditonton</span>
+                <span className="text-[10px] font-black uppercase tracking-widest">Terakhir Dilihat</span>
               </button>
               <div className="my-2 h-[1px] bg-white/5 mx-2"></div>
               {user && !user.isAnonymous && (
-                <button onClick={handleLogout} className="w-full flex items-center gap-3 px-4 py-3 text-red-400 hover:bg-red-400/10 rounded-xl transition-colors text-left group">
+                <button onClick={handleLogout} className="w-full flex items-center gap-3 px-4 py-3 text-red-400 hover:bg-red-400/10 rounded-xl transition-colors text-left">
                   <LogOut size={16} />
                   <span className="text-[10px] font-black uppercase tracking-widest">Logout</span>
                 </button>
@@ -477,12 +475,11 @@ export default function App() {
           <div className="flex items-center gap-2">
             <div className="hidden md:flex items-center gap-1 bg-white/5 p-1 rounded-full border border-white/10">
               {[ {id:'home', icon:Home}, {id:'rank', icon:Trophy}, {id:'filter', icon:Filter} ].map(m => (
-                <button key={m.id} onClick={() => setView(m.id)} className={`p-2 rounded-full transition-all ${view === m.id ? 'bg-blue-600 text-white' : 'text-slate-400 hover:text-white'}`}>
+                <button key={m.id} onClick={() => setView(m.id)} className={`p-2 rounded-full transition-all ${view === m.id ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/20' : 'text-slate-400 hover:text-white'}`}>
                   <m.icon size={16} />
                 </button>
               ))}
             </div>
-            
             <button onClick={() => setSearchModalOpen(true)} className="p-2 text-slate-400 hover:text-white transition-colors"><Search size={20} /></button>
             <div className="h-6 w-[1px] bg-white/10 mx-1"></div>
             <ProfileMenu />
@@ -514,12 +511,12 @@ export default function App() {
                        </div>
                      </div>
                      <div className="flex-1 text-center md:text-left">
-                       <div className="inline-flex items-center gap-2 px-3 py-1 bg-blue-600 text-white text-[8px] font-black rounded-full mb-5 uppercase tracking-widest"><Flame size={12} fill="white" /> Populer</div>
+                       <div className="inline-flex items-center gap-2 px-3 py-1 bg-blue-600 text-white text-[8px] font-black rounded-full mb-5 uppercase tracking-widest"><Flame size={12} fill="white" /> Rekomendasi Hari Ini</div>
                        <h1 className="text-3xl sm:text-6xl font-black text-white mb-6 leading-tight tracking-tighter">{homeData.popular[0].bookName || homeData.popular[0].title}</h1>
                        <div className="flex flex-wrap items-center justify-center md:justify-start gap-4">
-                        <button onClick={() => { setSelectedBookId(homeData.popular[0].bookId || homeData.popular[0].id); setView('detail'); }} className="bg-white text-black hover:bg-blue-600 hover:text-white px-8 py-3.5 rounded-xl font-black text-[10px] uppercase tracking-widest transition-all shadow-xl flex items-center gap-2 shadow-white/10">LIHAT DETAIL <Play size={16} fill="currentColor"/></button>
+                        <button onClick={() => { setSelectedBookId(homeData.popular[0].bookId || homeData.popular[0].id); setView('detail'); }} className="bg-white text-black hover:bg-blue-600 hover:text-white px-8 py-3.5 rounded-xl font-black text-[10px] uppercase tracking-widest transition-all shadow-xl flex items-center gap-2">TONTON <Play size={16} fill="currentColor"/></button>
                         <button onClick={() => handleToggleWatchlist(homeData.popular[0])} className="bg-white/10 hover:bg-white/20 text-white px-6 py-3.5 rounded-xl font-black text-[10px] uppercase tracking-widest transition-all backdrop-blur-md border border-white/10 flex items-center gap-2">
-                           {watchlist.some(i => String(i.bookId || i.id) === String(homeData.popular[0].bookId || homeData.popular[0].id)) ? <BookmarkCheck size={18} className="text-blue-400" /> : <Bookmark size={18} />} SIMPAN
+                           {watchlist.some(i => String(i.bookId || i.id) === String(homeData.popular[0].bookId || homeData.popular[0].id)) ? <BookmarkCheck size={18} className="text-blue-400" /> : <Bookmark size={18} />} FAVORIT
                         </button>
                        </div>
                      </div>
@@ -537,14 +534,7 @@ export default function App() {
                  <Section icon={History} title="Lanjut Tonton">
                    <div className="grid grid-cols-2 xs:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-6">
                      {watchHistory.slice(0, 6).map((item, idx) => (
-                       <DramaCard 
-                         key={idx} 
-                         item={item} 
-                         isHistory 
-                         lastEpisode={item.lastEpisode}
-                         onRemove={clearHistoryItem}
-                         onClick={(it) => { setSelectedBookId(it.bookId); setView('detail'); }} 
-                       />
+                       <DramaCard key={idx} item={item} isHistory lastEpisode={item.lastEpisode} onRemove={clearHistoryItem} onClick={(it) => { setSelectedBookId(it.bookId); setView('detail'); }} />
                      ))}
                    </div>
                  </Section>
@@ -562,18 +552,23 @@ export default function App() {
             <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
                <div className="flex justify-center gap-3 mb-10 overflow-x-auto no-scrollbar py-1">
                  {[ { id: 'popular', label: 'Populer' }, { id: 'latest', label: 'Terbaru' } ].map(t => (
-                    <button key={t.id} onClick={() => setRankTab(t.id)} className={`px-8 py-2.5 rounded-xl font-black text-[10px] uppercase tracking-widest border transition-all ${rankTab === t.id ? 'bg-blue-600 border-blue-600 text-white shadow-lg shadow-blue-600/20' : 'bg-white/5 border-white/10 text-slate-400 hover:border-white/20'}`}>{t.label}</button>
+                    <button key={t.id} onClick={() => { setRankTab(t.id); setRankPage(1); }} className={`px-8 py-2.5 rounded-xl font-black text-[10px] uppercase tracking-widest border transition-all ${rankTab === t.id ? 'bg-blue-600 border-blue-600 text-white shadow-lg' : 'bg-white/5 border-white/10 text-slate-400 hover:border-white/20'}`}>{t.label}</button>
                  ))}
                </div>
                <div className="grid grid-cols-2 xs:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-6">
-                  {(rankTab === 'popular' ? homeData.popular : homeData.latest).map((item, idx) => <DramaCard key={idx} item={item} rank={idx+1} onClick={(it) => { setSelectedBookId(it.bookId || it.id); setView('detail'); }} />)}
+                  {rankData.map((item, idx) => <DramaCard key={idx} item={item} rank={idx+1} onClick={(it) => { setSelectedBookId(it.bookId || it.id); setView('detail'); }} />)}
+               </div>
+               <div className="mt-12 flex justify-center">
+                  <button onClick={() => setRankPage(p => p + 1)} disabled={loading} className="px-10 py-3.5 bg-blue-600 hover:bg-blue-500 text-white rounded-2xl font-black text-[10px] uppercase tracking-[0.2em] shadow-xl shadow-blue-600/20 flex items-center gap-3 disabled:opacity-50 transition-all">
+                    {loading ? <Loader2 size={16} className="animate-spin" /> : <Plus size={16} />} MUAT LEBIH BANYAK
+                  </button>
                </div>
             </div>
           )}
 
           {view === 'filter' && (
             <div className="animate-in fade-in duration-500">
-               <div className="bg-slate-900/50 p-8 rounded-3xl border border-white/5 mb-10 grid grid-cols-1 md:grid-cols-2 gap-8 backdrop-blur-sm">
+               <div className="bg-slate-900/50 p-8 rounded-3xl border border-white/5 mb-10 grid grid-cols-1 md:grid-cols-3 gap-8 backdrop-blur-sm">
                   {STATIC_FILTERS.map(f => (
                     <div key={f.key}>
                       <h4 className="text-[8px] font-black text-slate-500 uppercase tracking-widest mb-4 flex items-center gap-2">
@@ -590,7 +585,7 @@ export default function App() {
                <div className="grid grid-cols-2 xs:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-6">
                   {filteredItems.map((item, idx) => <DramaCard key={idx} item={item} onClick={(it) => { setSelectedBookId(it.bookId || it.id); setView('detail'); }} />)}
                </div>
-               {filteredItems.length === 0 && <EmptyState icon={Filter} title="Hasil Kosong" message="Ubah filter pencarian Anda." />}
+               {filteredItems.length === 0 && <EmptyState icon={Filter} title="Hasil Kosong" message="Coba ubah filter pencarian Anda." />}
             </div>
           )}
 
@@ -604,13 +599,7 @@ export default function App() {
                     ))}
                   </div>
                 ) : (
-                  <EmptyState 
-                    icon={Bookmark} 
-                    title="Favorit Kosong" 
-                    message="Simpan drama favorit Anda agar mudah ditemukan kembali."
-                    actionText="JELAJAHI DRAMA"
-                    onAction={() => setView('home')}
-                  />
+                  <EmptyState icon={Bookmark} title="Favorit Kosong" message="Simpan drama favorit Anda agar mudah ditemukan kembali." actionText="JELAJAHI DRAMA" onAction={() => setView('home')} />
                 )}
               </Section>
             </div>
@@ -622,24 +611,11 @@ export default function App() {
                 {watchHistory.length > 0 ? (
                   <div className="grid grid-cols-2 xs:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-6">
                     {watchHistory.map((item, idx) => (
-                      <DramaCard 
-                        key={idx} 
-                        item={item} 
-                        isHistory 
-                        lastEpisode={item.lastEpisode}
-                        onRemove={clearHistoryItem}
-                        onClick={(it) => { setSelectedBookId(it.bookId); setView('detail'); }} 
-                      />
+                      <DramaCard key={idx} item={item} isHistory lastEpisode={item.lastEpisode} onRemove={clearHistoryItem} onClick={(it) => { setSelectedBookId(it.bookId); setView('detail'); }} />
                     ))}
                   </div>
                 ) : (
-                  <EmptyState 
-                    icon={History} 
-                    title="Riwayat Kosong" 
-                    message="Anda belum menonton drama apapun baru-baru ini."
-                    actionText="MULAI NONTON"
-                    onAction={() => setView('home')}
-                  />
+                  <EmptyState icon={History} title="Riwayat Kosong" message="Anda belum menonton drama apapun baru-baru ini." actionText="MULAI NONTON" onAction={() => setView('home')} />
                 )}
               </Section>
             </div>
@@ -656,9 +632,20 @@ export default function App() {
               onPlayEpisode={(ep, b, c) => { setPlayerState({ book: b, chapters: c, ep }); updateHistory(b, ep); }} 
             />
           )}
+          
+          {view === 'search-results' && (
+            <div className="animate-in fade-in duration-700">
+               <Section title={`Hasil Cari: ${searchQuery}`} icon={Search} onSeeAll={() => setView('home')}>
+                 <div className="grid grid-cols-2 xs:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-6">
+                   {searchData.map((item, idx) => <DramaCard key={idx} item={item} onClick={(it) => { setSelectedBookId(it.bookId || it.id); setPreviousView('search-results'); setView('detail'); }} />)}
+                 </div>
+               </Section>
+            </div>
+          )}
         </div>
       </main>
 
+      {/* Footer Mobile Bar */}
       <div className="md:hidden fixed bottom-0 left-0 right-0 bg-[#0f172a]/95 backdrop-blur-xl border-t border-white/5 px-6 py-4 flex justify-between items-center z-50">
         {[ {id:'home', icon:Home, label:'Home'}, {id:'rank', icon:Trophy, label:'Ranking'}, {id:'filter', icon:Filter, label:'Filter'}, {id:'watchlist', icon:Bookmark, label:'Favorit'} ].map(m => (
           <button key={m.id} onClick={() => setView(m.id)} className={`flex flex-col items-center gap-1 ${view === m.id ? 'text-blue-500' : 'text-slate-500'}`}>
@@ -669,8 +656,8 @@ export default function App() {
       </div>
 
       {searchModalOpen && (
-        <div className="fixed inset-0 z-[100] flex items-start justify-center pt-32 px-4">
-          <div className="absolute inset-0 bg-[#0f172a]/95 backdrop-blur-md animate-in fade-in" onClick={() => setSearchModalOpen(false)}></div>
+        <div className="fixed inset-0 z-[100] flex items-start justify-center pt-32 px-4 animate-in fade-in duration-300">
+          <div className="absolute inset-0 bg-[#0f172a]/95 backdrop-blur-md" onClick={() => setSearchModalOpen(false)}></div>
           <div className="relative w-full max-w-2xl animate-in slide-in-from-top-8">
              <div className="relative group">
                 <Search className="absolute left-6 top-1/2 -translate-y-1/2 text-slate-500" size={24} />
@@ -690,7 +677,7 @@ export default function App() {
 }
 
 /**
- * --- DETAIL MODULE ---
+ * --- DETAIL PAGE COMPONENT ---
  */
 const DramaDetailPage = ({ bookId, onBack, user, watchlist, history, onToggleWatchlist, onPlayEpisode }) => {
   const [data, setData] = useState(null);
@@ -713,11 +700,9 @@ const DramaDetailPage = ({ bookId, onBack, user, watchlist, history, onToggleWat
   if (loading) return (
     <div className="flex flex-col items-center justify-center p-20 gap-4">
       <Loader2 className="animate-spin text-blue-500" size={40} />
-      <p className="text-[10px] font-black text-slate-600 uppercase tracking-[0.3em]">Menyinkronkan...</p>
+      <p className="text-[10px] font-black text-slate-600 uppercase tracking-[0.3em]">Memuat Koleksi...</p>
     </div>
   );
-
-  if (!data?.book) return <EmptyState icon={AlertTriangle} title="Data Tidak Ditemukan" message="Drama ini mungkin sudah dihapus." actionText="KEMBALI" onAction={onBack} />;
 
   return (
     <div className="animate-in fade-in duration-700">
@@ -737,11 +722,11 @@ const DramaDetailPage = ({ bookId, onBack, user, watchlist, history, onToggleWat
           <h2 className="text-3xl sm:text-5xl font-black text-white mb-6 leading-tight tracking-tighter">{data.book.bookName}</h2>
           
           <div className="flex flex-wrap gap-3 mb-8">
-            <button onClick={() => onPlayEpisode(lastWatched || 1, data.book, data.chapters)} className="bg-blue-600 hover:bg-blue-500 text-white px-8 py-3.5 rounded-2xl font-black text-[10px] uppercase tracking-widest shadow-xl shadow-blue-600/30 transition-all flex items-center gap-2">
+            <button onClick={() => onPlayEpisode(lastWatched || 1, data.book, data.chapters)} className="bg-blue-600 hover:bg-blue-500 text-white px-8 py-3.5 rounded-2xl font-black text-[10px] uppercase tracking-widest shadow-xl shadow-blue-600/30 transition-all flex items-center gap-2 group active:scale-95">
               <Play size={18} fill="currentColor" /> {lastWatched ? `LANJUT EPS ${lastWatched}` : 'TONTON SEKARANG'}
             </button>
-            <button onClick={() => onToggleWatchlist(data.book)} className={`px-6 py-3.5 rounded-2xl font-black text-[10px] uppercase tracking-widest transition-all border flex items-center gap-2 ${isBookmarked ? 'bg-blue-600/10 border-blue-500/30 text-blue-400' : 'bg-white/5 border-white/10 text-white hover:bg-white/10'}`}>
-              {isBookmarked ? <BookmarkCheck size={18} /> : <Bookmark size={18} />} {isBookmarked ? 'DISIMPAN' : 'SIMPAN'}
+            <button onClick={() => onToggleWatchlist(data.book)} className={`px-6 py-3.5 rounded-2xl font-black text-[10px] uppercase tracking-widest transition-all border flex items-center gap-2 active:scale-95 ${isBookmarked ? 'bg-blue-600/10 border-blue-500/30 text-blue-400' : 'bg-white/5 border-white/10 text-white hover:bg-white/10'}`}>
+              {isBookmarked ? <BookmarkCheck size={18} /> : <Bookmark size={18} />} {isBookmarked ? 'FAVORIT' : 'SIMPAN'}
             </button>
           </div>
 
@@ -753,7 +738,7 @@ const DramaDetailPage = ({ bookId, onBack, user, watchlist, history, onToggleWat
           </div>
 
           <div>
-             <h4 className="text-[9px] font-black text-slate-500 uppercase tracking-[0.3em] mb-4">DAFTAR EPISODE</h4>
+             <h4 className="text-[9px] font-black text-slate-500 uppercase tracking-[0.3em] mb-4 text-slate-400">DAFTAR EPISODE</h4>
              <div className="grid grid-cols-4 xs:grid-cols-6 sm:grid-cols-8 lg:grid-cols-12 gap-2 max-h-[160px] overflow-y-auto pr-3 no-scrollbar pb-2">
               {data.chapters?.map((ch, i) => {
                 const num = ch.num || (ch.index + 1);
@@ -772,7 +757,7 @@ const DramaDetailPage = ({ bookId, onBack, user, watchlist, history, onToggleWat
 };
 
 /**
- * --- PLAYER MODULE ---
+ * --- PREMIUM PLAYER MODULE ---
  */
 const CustomPlayerPage = ({ book, initialEp, onBack, onEpisodeChange, audioSettings, setAudioSettings }) => {
   const [currentEp, setCurrentEp] = useState(initialEp);
@@ -782,6 +767,7 @@ const CustomPlayerPage = ({ book, initialEp, onBack, onEpisodeChange, audioSetti
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
   const [showControls, setShowControls] = useState(true);
+  const [volume, setVolume] = useState(audioSettings.volume);
 
   const videoRef = useRef(null);
   const hlsRef = useRef(null);
@@ -808,39 +794,74 @@ const CustomPlayerPage = ({ book, initialEp, onBack, onEpisodeChange, audioSetti
     if (!video || !videoUrl) return;
     if (hlsRef.current) hlsRef.current.destroy();
 
-    const startPlay = () => { if(video) { video.playbackRate = audioSettings.playbackRate; video.play().catch(() => {}); } };
+    const startPlay = () => { if(video) { video.playbackRate = audioSettings.playbackRate; video.volume = volume; video.play().catch(() => {}); } };
     if (videoUrl.includes('.m3u8')) {
-      if (window.Hls) {
+      // Pengecekan aman untuk Hls yang dimuat dari CDN script eksternal
+      if (window.Hls && window.Hls.isSupported()) {
         const hls = new window.Hls(); hls.loadSource(videoUrl); hls.attachMedia(video);
         hls.on(window.Hls.Events.MANIFEST_PARSED, startPlay); hlsRef.current = hls;
-      } else {
-        video.src = videoUrl; video.oncanplay = startPlay;
-      }
+      } else { video.src = videoUrl; video.oncanplay = startPlay; }
     } else { video.src = videoUrl; video.oncanplay = startPlay; }
-  }, [videoUrl, audioSettings.playbackRate]);
+  }, [videoUrl, audioSettings.playbackRate, volume]);
+
+  const togglePlay = () => isPlaying ? videoRef.current.pause() : videoRef.current.play();
 
   return (
-    <div className="fixed inset-0 z-[1000] bg-black flex flex-col items-center justify-center" onMouseMove={() => { setShowControls(true); clearTimeout(timerRef.current); timerRef.current = setTimeout(() => setShowControls(false), 3000); }}>
-      <div className={`absolute top-0 left-0 right-0 p-6 flex items-center justify-between bg-gradient-to-b from-black/90 to-transparent z-50 transition-opacity ${showControls ? 'opacity-100' : 'opacity-0'}`}>
-        <button onClick={onBack} className="text-white p-2 rounded-full hover:bg-white/10"><ChevronLeft size={24}/></button>
-        <div className="text-center">
-          <h2 className="text-white text-xs font-black uppercase tracking-widest truncate max-w-[200px]">{book.bookName || book.title}</h2>
+    <div className="fixed inset-0 z-[1000] bg-black flex flex-col items-center justify-center group" onMouseMove={() => { setShowControls(true); clearTimeout(timerRef.current); timerRef.current = setTimeout(() => setShowControls(false), 3000); }}>
+      {/* Top HUD */}
+      <div className={`absolute top-0 left-0 right-0 p-6 flex items-center justify-between bg-gradient-to-b from-black/95 to-transparent z-50 transition-opacity duration-500 ${showControls ? 'opacity-100' : 'opacity-0'}`}>
+        <button onClick={onBack} className="text-white p-2 rounded-full hover:bg-white/10 transition-all"><ChevronLeft size={24}/></button>
+        <div className="text-center flex-1 mx-4">
+          <h2 className="text-white text-xs font-black uppercase tracking-widest truncate max-w-[250px]">{book.bookName || book.title}</h2>
           <p className="text-blue-500 text-[9px] font-black uppercase tracking-[0.2em]">Episode {currentEp}</p>
         </div>
-        <div className="w-10"></div>
+        <button className="text-white p-2"><Share2 size={20}/></button>
       </div>
-      <video ref={videoRef} className="w-full h-full object-contain" playsInline onPlay={() => setIsPlaying(true)} onPause={() => setIsPlaying(false)} onTimeUpdate={() => setCurrentTime(videoRef.current?.currentTime || 0)} onLoadedMetadata={() => setDuration(videoRef.current?.duration || 0)} />
-      {loading && <div className="absolute inset-0 flex items-center justify-center bg-black/50"><Loader2 className="animate-spin text-blue-500" size={48} /></div>}
-      <div className={`absolute bottom-0 left-0 right-0 p-6 bg-gradient-to-t from-black/90 to-transparent z-50 transition-all ${showControls ? 'translate-y-0 opacity-100' : 'translate-y-10 opacity-0'}`}>
-        <div className="max-w-4xl mx-auto flex flex-col gap-4">
-          <input type="range" min="0" max={duration || 0} step="0.1" value={currentTime} onChange={(e) => videoRef.current.currentTime = parseFloat(e.target.value)} className="w-full accent-blue-600 h-1" />
+
+      {/* Interaction Layer */}
+      <div className="relative w-full h-full flex items-center justify-center" onClick={togglePlay}>
+        <video ref={videoRef} className="w-full h-full object-contain cursor-pointer" playsInline onPlay={() => setIsPlaying(true)} onPause={() => setIsPlaying(false)} onTimeUpdate={() => setCurrentTime(videoRef.current?.currentTime || 0)} onLoadedMetadata={() => setDuration(videoRef.current?.duration || 0)} onEnded={() => audioSettings.autoNext && setCurrentEp(e => e + 1)} />
+        {loading && <div className="absolute inset-0 flex items-center justify-center bg-black/50 z-10"><Loader2 className="animate-spin text-blue-500" size={48} /></div>}
+        {!isPlaying && !loading && (
+          <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+             <div className="p-8 rounded-full bg-blue-600/20 backdrop-blur-xl border border-blue-500/30 shadow-2xl animate-in zoom-in duration-300">
+               <Play size={48} fill="white" className="text-white ml-2"/>
+             </div>
+          </div>
+        )}
+      </div>
+
+      {/* Control HUD */}
+      <div className={`absolute bottom-0 left-0 right-0 p-8 bg-gradient-to-t from-black/95 via-black/40 to-transparent z-50 transition-all duration-500 ${showControls ? 'translate-y-0 opacity-100' : 'translate-y-10 opacity-0'}`}>
+        <div className="max-w-5xl mx-auto flex flex-col gap-6">
+          <div className="flex flex-col gap-2">
+             <input type="range" min="0" max={duration || 0} step="0.1" value={currentTime} onChange={(e) => videoRef.current.currentTime = parseFloat(e.target.value)} className="w-full accent-blue-600 h-1.5 bg-white/10 rounded-full appearance-none cursor-pointer hover:scale-y-125 transition-all" />
+             <div className="flex justify-between text-[10px] font-mono font-bold text-white/40 tracking-tighter">
+                <span>{formatTime(currentTime)}</span>
+                <span>{formatTime(duration)}</span>
+             </div>
+          </div>
+          
           <div className="flex items-center justify-between">
-            <div className="flex items-center gap-6">
-              <button disabled={currentEp <= 1} onClick={() => setCurrentEp(e => e - 1)} className="text-white/40 hover:text-white"><SkipBack size={24}/></button>
-              <button onClick={() => isPlaying ? videoRef.current.pause() : videoRef.current.play()} className="text-white">{isPlaying ? <Pause size={32} /> : <Play size={32} />}</button>
-              <button onClick={() => setCurrentEp(e => e + 1)} className="text-white/40 hover:text-white"><SkipForward size={24}/></button>
+            <div className="flex items-center gap-8">
+              <button disabled={currentEp <= 1} onClick={() => setCurrentEp(e => e - 1)} className="text-white/40 hover:text-white transition-colors disabled:opacity-10"><SkipBack size={28} fill="currentColor"/></button>
+              <button onClick={togglePlay} className="text-white transform active:scale-90 transition-transform">{isPlaying ? <Pause size={42} fill="white" /> : <Play size={42} fill="white" />}</button>
+              <button onClick={() => setCurrentEp(e => e + 1)} className="text-white/40 hover:text-white transition-colors"><SkipForward size={28} fill="currentColor"/></button>
             </div>
-            <button onClick={() => setAudioSettings({...audioSettings, playbackRate: audioSettings.playbackRate >= 2 ? 1 : audioSettings.playbackRate + 0.5})} className="px-3 py-1 bg-white/10 text-white rounded-lg text-[10px] font-black">{audioSettings.playbackRate}X SPEED</button>
+
+            <div className="flex items-center gap-6">
+               <div className="hidden sm:flex items-center gap-3 group/vol bg-white/5 p-2 rounded-xl border border-white/5">
+                  <button onClick={() => setVolume(v => v === 0 ? 1 : 0)} className="text-white/70 hover:text-white transition-colors">
+                    {volume === 0 ? <VolumeX size={20}/> : <Volume2 size={20}/>}
+                  </button>
+                  <div className="w-0 group-hover/vol:w-24 overflow-hidden transition-all duration-300 flex items-center">
+                    <input type="range" min="0" max="1" step="0.05" value={volume} onChange={(e) => setVolume(parseFloat(e.target.value))} className="w-24 accent-white h-1 rounded-full appearance-none" />
+                  </div>
+               </div>
+               <button onClick={() => setAudioSettings({...audioSettings, playbackRate: audioSettings.playbackRate >= 2 ? 1 : audioSettings.playbackRate + 0.5})} className="px-4 py-2 bg-blue-600 text-white rounded-xl font-black text-[10px] tracking-widest shadow-xl shadow-blue-600/30 active:scale-95 transition-all">
+                 {audioSettings.playbackRate}X SPEED
+               </button>
+            </div>
           </div>
         </div>
       </div>
