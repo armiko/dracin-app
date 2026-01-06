@@ -35,6 +35,9 @@ const FIREBASE_CONFIG_OVERRIDE = {
   measurementId: "G-6B89Y55E2F"
 };
 
+// Menggunakan ID yang diberikan pengguna untuk path Firestore yang konsisten
+const customAppId = '3KNDH1p5iIG6U7FmuGTS';
+
 const STATIC_FILTERS = [
   {
     title: "Tipe Suara",
@@ -176,7 +179,7 @@ const SanPoiPopup = ({ onClose }) => {
           </div>
           <a href="https://sanpoi.com" target="_blank" rel="noopener noreferrer" className="block w-full bg-blue-600 hover:bg-blue-500 text-white py-2.5 rounded-lg font-black text-[10px] text-center shadow-lg transition-all active:scale-95 flex items-center justify-center gap-1.5 uppercase">TOP UP SEKARANG <ExternalLink size={12}/></a>
           <label className="mt-3 flex items-center justify-center gap-1.5 cursor-pointer group">
-            <input type="checkbox" checked={dontShowToday} onChange={(e) => setDontShowToday(e.target.checked)} className="peer appearance-none w-3.5 h-3.5 border border-white/20 rounded bg-transparent checked:bg-blue-600 transition-all cursor-pointer" />
+            <input type="checkbox" checked={dontShowToday} onChange={(e) => setDontShowToday(e.target.checked)} className="peer appearance-none w-3.5 h-3.5 border border-white/20 rounded bg-transparent text-blue-600 focus:ring-0 cursor-pointer" />
             <span className="text-[8px] font-bold text-slate-500 group-hover:text-slate-300 uppercase tracking-wider cursor-pointer">Jangan tampilkan hari ini</span>
           </label>
         </div>
@@ -454,7 +457,8 @@ export default function App() {
     if (!user || !fbReady || !window.firebase) return;
     const fb = window.firebase;
     const dramaId = String(drama.bookId || drama.id);
-    const watchlistRef = fb.firestore().doc(`artifacts/${FIREBASE_CONFIG_OVERRIDE.projectId}/users/${user.uid}/watchlist/${dramaId}`);
+    // MANDATORY RULE 1: artifacts/{appId}/users/{userId}/{collectionName}
+    const watchlistRef = fb.firestore().doc(`artifacts/${customAppId}/users/${user.uid}/watchlist/${dramaId}`);
     
     const exists = watchlistData.some(item => String(item.bookId) === dramaId);
     
@@ -477,7 +481,8 @@ export default function App() {
     if (!user || !fbReady || !window.firebase) return;
     const fb = window.firebase;
     const dramaId = String(drama.bookId || drama.id);
-    const historyRef = fb.firestore().doc(`artifacts/${FIREBASE_CONFIG_OVERRIDE.projectId}/users/${user.uid}/history/${dramaId}`);
+    // MANDATORY RULE 1: artifacts/{appId}/users/{userId}/{collectionName}
+    const historyRef = fb.firestore().doc(`artifacts/${customAppId}/users/${user.uid}/history/${dramaId}`);
     
     try {
         await historyRef.set({
@@ -496,8 +501,7 @@ export default function App() {
     if (user && fbReady && window.firebase && window.firebase.apps.length) {
       try {
         const fb = window.firebase;
-        const configRaw = typeof __firebase_config !== 'undefined' ? __firebase_config : '{}';
-        const appIdStr = typeof __app_id !== 'undefined' ? __app_id : 'nontondracin-compact';
+        const appIdStr = customAppId;
         await fb.firestore().doc(`artifacts/${appIdStr}/users/${user.uid}/settings/ad_pref`).set({ 
           ts: Date.now(), 
           p: isPersistent 
@@ -566,7 +570,6 @@ export default function App() {
   useEffect(() => {
     if (!fbReady || !window.firebase) return;
     const fb = window.firebase;
-    const appIdStr = FIREBASE_CONFIG_OVERRIDE.projectId;
     
     if (!fb.apps.length) {
       try { fb.initializeApp(FIREBASE_CONFIG_OVERRIDE); } catch(e) {}
@@ -587,25 +590,24 @@ export default function App() {
             if (u && !u.isAnonymous) {
                 // Listen Watchlist
                 const unsubscribeWatch = fb.firestore()
-                    .collection(`artifacts/${appIdStr}/users/${u.uid}/watchlist`)
+                    .collection(`artifacts/${customAppId}/users/${u.uid}/watchlist`)
                     .onSnapshot(snap => {
                         const items = snap.docs.map(doc => doc.data());
                         setWatchlistData(items);
-                    });
+                    }, err => console.error("Watchlist listener error:", err));
 
                 // Listen History
                 const unsubscribeHist = fb.firestore()
-                    .collection(`artifacts/${appIdStr}/users/${u.uid}/history`)
+                    .collection(`artifacts/${customAppId}/users/${u.uid}/history`)
                     .onSnapshot(snap => {
                         const items = snap.docs.map(doc => doc.data());
-                        // Urutkan riwayat berdasarkan waktu terbaru
                         items.sort((a,b) => b.ts - a.ts);
                         setHistoryData(items);
-                    });
+                    }, err => console.error("History listener error:", err));
 
                 // Ad Preference
                 try {
-                    const adRef = fb.firestore().doc(`artifacts/${appIdStr}/users/${u.uid}/settings/ad_pref`);
+                    const adRef = fb.firestore().doc(`artifacts/${customAppId}/users/${u.uid}/settings/ad_pref`);
                     const snap = await adRef.get();
                     let show = true;
                     if (snap.exists) {
@@ -617,8 +619,8 @@ export default function App() {
                 } catch(e) { setTimeout(() => setShowAd(true), 3000); }
 
                 return () => {
-                    unsubscribeWatch();
-                    unsubscribeHist();
+                    if (unsubscribeWatch) unsubscribeWatch();
+                    if (unsubscribeHist) unsubscribeHist();
                 };
             } else if (u && u.isAnonymous) {
                 setTimeout(() => setShowAd(true), 3000);
@@ -794,7 +796,7 @@ export default function App() {
                         {historyData.length > 0 ? historyData.map((item, idx) => (
                             <div key={idx} className="flex flex-col">
                                 <DramaCard item={{...item, id: item.bookId}} onClick={(it) => { setSelectedBookId(it.bookId); setPreviousView('history'); setView('detail'); }} />
-                                <div className="mt-1 flex items-center gap-1 text-blue-400 font-black text-[8px] uppercase tracking-tighter">
+                                <div className="mt-1 flex items-center gap-1 text-blue-400 font-black text-[8px] uppercase tracking-tighter px-1">
                                     <Clock size={8} /> Episode Terakhir: {item.lastEpisode || '?'}
                                 </div>
                             </div>
