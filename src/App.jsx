@@ -7,7 +7,7 @@ import {
   Volume1, Gamepad2, CheckCircle2, ExternalLink,
   LogOut, LogIn, User as UserIcon, AlertCircle,
   Bookmark, BookmarkCheck, History, Trash2, 
-  ChevronDown, Zap
+  ChevronDown, Zap, ShoppingCart
 } from 'lucide-react';
 
 import { initializeApp } from 'firebase/app';
@@ -30,12 +30,12 @@ import {
 } from 'firebase/firestore';
 
 /**
- * --- KONFIGURASI ---
+ * --- KONFIGURASI ENVIRONMENT ---
  */
 const getSafeEnv = (key, fallback = '') => {
   try {
     if (key === 'VITE_APP_ID' && typeof __app_id !== 'undefined') return __app_id;
-    // @ts-ignore
+    // Penanganan aman untuk Vercel Production agar tidak error esbuild
     const env = (typeof import.meta !== 'undefined' && import.meta.env) ? import.meta.env : {};
     return env[key] || fallback;
   } catch (e) {
@@ -71,7 +71,8 @@ const appId = getSafeEnv('VITE_APP_ID', '3KNDH1p5iIG6U7FmuGTS');
 const STORAGE_KEYS = {
   SETTINGS: `dracin_settings_${appId}`,
   WATCHLIST: `dracin_watchlist_${appId}`,
-  HISTORY: `dracin_history_${appId}`
+  HISTORY: `dracin_history_${appId}`,
+  PROMO_DISMISSED: `dracin_promo_v1_${appId}`
 };
 
 const CONFIG = {
@@ -86,7 +87,7 @@ const CONFIG = {
 const apiCache = { home: null, timestamp: 0 };
 
 /**
- * --- HELPER API & SCRIPT ---
+ * --- UTILS ---
  */
 const fetchWithRetry = async (fn, retries = 3, delay = 1000) => {
   try {
@@ -152,7 +153,7 @@ const formatTime = (seconds) => {
 };
 
 /**
- * --- UI COMPONENTS ---
+ * --- KOMPONEN UI ---
  */
 const Section = React.memo(({ title, icon: IconComponent, onSeeAll, children }) => (
   <section className="mb-12">
@@ -182,7 +183,7 @@ const DramaCard = React.memo(({ item, onClick, rank, onRemove, isHistory, lastEp
     <div className="group relative animate-in fade-in duration-300">
       <div className="cursor-pointer" onClick={() => onClick(item)}>
         <div className="relative aspect-[2/3] rounded-xl overflow-hidden bg-slate-800 shadow-md mb-2 border border-white/5">
-          <img src={cover} alt={title} className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110" loading="lazy" />
+          <img src={cover} alt={title} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700" loading="lazy" />
           <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
             <div className="bg-white/20 backdrop-blur-md p-3 rounded-full border border-white/30 transform translate-y-3 group-hover:translate-y-0 transition-transform duration-500">
               <Play size={18} fill="white" className="text-white" />
@@ -223,6 +224,61 @@ const EmptyState = ({ icon: Icon, title, message, actionText, onAction }) => (
 );
 
 /**
+ * --- MODAL PROMOSI SANPOI STORE ---
+ */
+const SanPoiPromoModal = ({ onClose }) => {
+  return (
+    <div className="fixed inset-0 z-[2000] flex items-center justify-center p-4 animate-in fade-in duration-300">
+      <div className="absolute inset-0 bg-black/80 backdrop-blur-sm" onClick={onClose}></div>
+      <div className="relative w-full max-w-sm bg-[#1e293b] border border-white/10 rounded-[2.5rem] overflow-hidden shadow-2xl animate-in zoom-in-95 duration-500">
+        <button onClick={onClose} className="absolute top-6 right-6 p-2 bg-white/5 hover:bg-white/10 rounded-full text-slate-400 hover:text-white transition-colors z-10">
+          <X size={18} />
+        </button>
+        
+        <div className="p-8 pt-10">
+          <div className="flex justify-center mb-6">
+            <div className="w-20 h-20 bg-blue-600 rounded-[2rem] flex items-center justify-center shadow-2xl shadow-blue-600/40 transform -rotate-6">
+              <Gamepad2 size={40} className="text-white" />
+            </div>
+          </div>
+          
+          <div className="text-center mb-8">
+            <h2 className="text-2xl font-black text-white mb-2 tracking-tight">SanPoi Store</h2>
+            <p className="text-blue-400 text-[10px] font-black uppercase tracking-[0.2em] mb-4">Top Up Game Termurah</p>
+            
+            <div className="space-y-3 text-left">
+              {[
+                { icon: Star, text: "Harga Paling Murah se-Indonesia" },
+                { icon: Zap, text: "Proses Kilat (Otomatis 24 Jam)" },
+                { icon: CheckCircle2, text: "100% Aman & Terpercaya" }
+              ].map((item, i) => (
+                <div key={i} className="flex items-center gap-3 p-3 bg-white/5 rounded-2xl border border-white/5">
+                  <div className="p-1.5 bg-blue-600/20 rounded-lg">
+                    <item.icon size={14} className="text-blue-400" />
+                  </div>
+                  <span className="text-slate-300 text-[11px] font-bold">{item.text}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <a 
+            href="https://sanpoi.com" 
+            target="_blank" 
+            rel="noopener noreferrer"
+            className="group flex items-center justify-center gap-3 w-full py-4 bg-white text-black hover:bg-blue-600 hover:text-white rounded-2xl font-black text-xs uppercase tracking-widest transition-all shadow-xl active:scale-95"
+          >
+            Top Up Sekarang <ExternalLink size={16} />
+          </a>
+          
+          <p className="mt-4 text-center text-slate-500 text-[9px] font-bold uppercase tracking-widest">WWW.SANPOI.COM</p>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+/**
  * --- MAIN APP ---
  */
 export default function App() {
@@ -236,8 +292,20 @@ export default function App() {
   const [allDramaData, setAllDramaData] = useState([]);
   const [searchData, setSearchData] = useState([]);
   
-  const [watchlist, setWatchlist] = useState(() => JSON.parse(localStorage.getItem(STORAGE_KEYS.WATCHLIST) || '[]'));
-  const [watchHistory, setWatchHistory] = useState(() => JSON.parse(localStorage.getItem(STORAGE_KEYS.HISTORY) || '[]'));
+  // Persistence States
+  const [watchlist, setWatchlist] = useState(() => {
+    try {
+      const saved = localStorage.getItem(STORAGE_KEYS.WATCHLIST);
+      return saved ? JSON.parse(saved) : [];
+    } catch (e) { return []; }
+  });
+  
+  const [watchHistory, setWatchHistory] = useState(() => {
+    try {
+      const saved = localStorage.getItem(STORAGE_KEYS.HISTORY);
+      return saved ? JSON.parse(saved) : [];
+    } catch (e) { return []; }
+  });
 
   useEffect(() => { localStorage.setItem(STORAGE_KEYS.WATCHLIST, JSON.stringify(watchlist)); }, [watchlist]);
   useEffect(() => { localStorage.setItem(STORAGE_KEYS.HISTORY, JSON.stringify(watchHistory)); }, [watchHistory]);
@@ -251,18 +319,32 @@ export default function App() {
   const [activeFilters, setActiveFilters] = useState({ voice: '', category: '', sort: 'popular' });
   const [playerState, setPlayerState] = useState(null);
   const [authError, setAuthError] = useState(null);
+  const [showPromo, setShowPromo] = useState(false);
 
   const { loaded: scriptLoaded } = useExternalScript(CONFIG.SCRIPT_URL);
 
   const [audioSettings, setAudioSettings] = useState(() => {
-    const saved = localStorage.getItem(STORAGE_KEYS.SETTINGS);
-    return saved ? JSON.parse(saved) : { volume: 1, isMuted: false, playbackRate: 1, autoNext: true };
+    try {
+      const saved = localStorage.getItem(STORAGE_KEYS.SETTINGS);
+      return saved ? JSON.parse(saved) : { volume: 1, isMuted: false, playbackRate: 1, autoNext: true };
+    } catch (e) { return { volume: 1, isMuted: false, playbackRate: 1, autoNext: true }; }
   });
 
+  /**
+   * --- FIREBASE AUTH & PROMO LOGIC ---
+   */
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (u) => {
-      if (u) setUser(u);
-      else signInAnonymously(auth).catch(() => {});
+      if (u) {
+        setUser(u);
+        // Popup Promo Logic
+        const dismissed = localStorage.getItem(STORAGE_KEYS.PROMO_DISMISSED);
+        if (!dismissed) {
+          setTimeout(() => setShowPromo(true), 3500);
+        }
+      } else {
+        signInAnonymously(auth).catch(() => {});
+      }
     });
     return () => unsubscribe();
   }, []);
@@ -296,7 +378,7 @@ export default function App() {
     try {
       const core = window.DramaboxCore;
       const device = await core.getDevice();
-      const tokenRes = await fetchWithRetry(() => core.getToken(CONFIG.API_BASE, 'in', device, false));
+      const tokenRes = await core.getToken(CONFIG.API_BASE, 'in', device, false);
       const fid = tab === 'popular' ? CONFIG.FEED_IDS.POPULAR : tab === 'latest' ? CONFIG.FEED_IDS.LATEST : CONFIG.FEED_IDS.TRENDING;
       const count = page * CONFIG.PER_PAGE;
       const res = await core.doClassify(CONFIG.API_BASE, 'in', device, tokenRes.token, fid, count);
@@ -332,7 +414,6 @@ export default function App() {
     setWatchHistory(prev => prev.filter(i => String(i.bookId) !== String(bid)));
   }, []);
 
-  // STABILISASI FUNGSI: Mencegah re-render loop pada Player
   const handlePlayerBack = useCallback(() => {
     setPlayerState(null);
     setView('detail');
@@ -349,6 +430,11 @@ export default function App() {
     }
   }, [playerState?.book, updateHistory]);
 
+  const closePromo = useCallback(() => {
+    setShowPromo(false);
+    localStorage.setItem(STORAGE_KEYS.PROMO_DISMISSED, 'true');
+  }, []);
+
   useEffect(() => { if (scriptLoaded) fetchHome(); }, [scriptLoaded, fetchHome]);
   useEffect(() => { if (view === 'rank') fetchRank(rankTab, rankPage); }, [view, rankTab, rankPage, fetchRank]);
 
@@ -363,53 +449,51 @@ export default function App() {
     return result;
   }, [allDramaData, activeFilters]);
 
-  const ProfileMenu = () => (
-    <div className="relative">
-      <button onClick={() => setProfileOpen(!profileOpen)} className="flex items-center gap-2 p-1 pl-1.5 pr-2.5 rounded-full bg-white/5 border border-white/10 hover:bg-white/10 transition-all">
-        {user && !user.isAnonymous ? <img src={user.photoURL} alt="User" className="w-7 h-7 rounded-full border border-white/20" /> : <div className="w-7 h-7 rounded-full bg-slate-800 flex items-center justify-center text-slate-400"><UserIcon size={14}/></div>}
-        <ChevronDown size={14} className={`text-slate-500 transition-transform ${profileOpen ? 'rotate-180' : ''}`} />
-      </button>
-      {profileOpen && (
-        <>
-          <div className="fixed inset-0 z-[100]" onClick={() => setProfileOpen(false)}></div>
-          <div className="absolute right-0 mt-3 w-64 bg-slate-900 border border-white/10 rounded-2xl shadow-2xl z-[101] overflow-hidden animate-in fade-in zoom-in-95 duration-200">
-            {user && !user.isAnonymous ? (
-              <div className="p-5 border-b border-white/5 bg-gradient-to-br from-blue-600/10 to-transparent">
-                <p className="text-white font-black text-xs truncate mb-0.5">{user.displayName}</p>
-                <p className="text-slate-500 text-[10px] font-bold truncate uppercase tracking-widest">{user.email}</p>
-              </div>
-            ) : (
-              <div className="p-5 border-b border-white/5 text-center">
-                <p className="text-slate-400 text-[10px] font-black uppercase tracking-widest mb-3">Login untuk Sinkronisasi</p>
-                <button onClick={async () => {
-                   const provider = new GoogleAuthProvider();
-                   await signInWithPopup(auth, provider);
-                   setProfileOpen(false);
-                }} className="w-full py-2 bg-blue-600 text-white rounded-xl text-[10px] font-black uppercase tracking-widest shadow-lg">Masuk Google</button>
-              </div>
-            )}
-            <div className="p-2">
-              <button onClick={() => { setView('watchlist'); setProfileOpen(false); }} className="w-full flex items-center gap-3 px-4 py-3 text-slate-300 hover:bg-white/5 rounded-xl text-left group transition-colors">
-                <Bookmark size={16} className="text-slate-500 group-hover:text-blue-400" />
-                <span className="text-[10px] font-black uppercase tracking-widest">Favorit Saya</span>
-              </button>
-              <button onClick={() => { setView('history'); setProfileOpen(false); }} className="w-full flex items-center gap-3 px-4 py-3 text-slate-300 hover:bg-white/5 rounded-xl text-left group transition-colors">
-                <History size={16} className="text-slate-500 group-hover:text-blue-400" />
-                <span className="text-[10px] font-black uppercase tracking-widest">Sudah Ditonton</span>
-              </button>
-              <div className="my-2 h-[1px] bg-white/5 mx-2"></div>
-              {user && !user.isAnonymous && (
-                <button onClick={handleLogout} className="w-full flex items-center gap-3 px-4 py-3 text-red-400 hover:bg-red-400/10 rounded-xl transition-colors text-left group">
-                  <LogOut size={16} />
-                  <span className="text-[10px] font-black uppercase tracking-widest">Logout</span>
-                </button>
-              )}
+  /**
+   * --- SUB-COMPONENTS (FIXED FOR PROD) ---
+   */
+  const renderProfileMenu = () => {
+    if (!profileOpen) return null;
+    return (
+      <>
+        <div className="fixed inset-0 z-[100]" onClick={() => setProfileOpen(false)}></div>
+        <div className="absolute right-0 mt-3 w-64 bg-slate-900 border border-white/10 rounded-2xl shadow-2xl z-[101] overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+          {user && !user.isAnonymous ? (
+            <div className="p-5 border-b border-white/5 bg-gradient-to-br from-blue-600/10 to-transparent text-left">
+              <p className="text-white font-black text-xs truncate mb-0.5">{user.displayName || "User"}</p>
+              <p className="text-slate-500 text-[10px] font-bold truncate uppercase tracking-widest">{user.email || ""}</p>
             </div>
+          ) : (
+            <div className="p-5 border-b border-white/5 text-center">
+              <p className="text-slate-400 text-[10px] font-black uppercase tracking-widest mb-3">Fitur Terbatas</p>
+              <button onClick={async () => {
+                 const provider = new GoogleAuthProvider();
+                 await signInWithPopup(auth, provider);
+                 setProfileOpen(false);
+              }} className="w-full py-2 bg-blue-600 text-white rounded-xl text-[10px] font-black uppercase tracking-widest shadow-lg">Masuk Google</button>
+            </div>
+          )}
+          <div className="p-2">
+            <button onClick={() => { setView('watchlist'); setProfileOpen(false); }} className="w-full flex items-center gap-3 px-4 py-3 text-slate-300 hover:bg-white/5 rounded-xl text-left group transition-colors">
+              <Bookmark size={16} className="text-slate-500 group-hover:text-blue-400" />
+              <span className="text-[10px] font-black uppercase tracking-widest">Favorit Saya</span>
+            </button>
+            <button onClick={() => { setView('history'); setProfileOpen(false); }} className="w-full flex items-center gap-3 px-4 py-3 text-slate-300 hover:bg-white/5 rounded-xl text-left group transition-colors">
+              <History size={16} className="text-slate-500 group-hover:text-blue-400" />
+              <span className="text-[10px] font-black uppercase tracking-widest">Sudah Ditonton</span>
+            </button>
+            <div className="my-2 h-[1px] bg-white/5 mx-2"></div>
+            {user && !user.isAnonymous && (
+              <button onClick={handleLogout} className="w-full flex items-center gap-3 px-4 py-3 text-red-400 hover:bg-red-400/10 rounded-xl transition-colors text-left group">
+                <LogOut size={16} />
+                <span className="text-[10px] font-black uppercase tracking-widest">Logout</span>
+              </button>
+            )}
           </div>
-        </>
-      )}
-    </div>
-  );
+        </div>
+      </>
+    );
+  };
 
   if (playerState) return (
     <CustomPlayerPage 
@@ -423,12 +507,14 @@ export default function App() {
 
   return (
     <div className="bg-[#0f172a] h-screen text-slate-200 font-sans flex flex-col overflow-hidden selection:bg-blue-600 selection:text-white">
+      {/* Header */}
       <nav className="flex-none h-16 bg-[#0f172a]/80 backdrop-blur-xl border-b border-white/5 flex items-center z-40 px-4 sm:px-8">
         <div className="container mx-auto flex justify-between items-center">
           <button onClick={() => setView('home')} className="flex items-center gap-2 group transition-all active:scale-95">
             <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center text-white font-black shadow-lg shadow-blue-600/20">D</div>
             <span className="text-base font-black text-white hidden xs:block tracking-tighter">NontonDracin</span>
           </button>
+          
           <div className="flex items-center gap-2">
             <div className="hidden md:flex items-center gap-1 bg-white/5 p-1 rounded-full border border-white/10">
               {[ {id:'home', icon:Home}, {id:'rank', icon:Trophy}, {id:'filter', icon:Filter} ].map(m => (
@@ -437,7 +523,18 @@ export default function App() {
             </div>
             <button onClick={() => setSearchModalOpen(true)} className="p-2 text-slate-400 hover:text-white transition-colors"><Search size={20} /></button>
             <div className="h-6 w-[1px] bg-white/10 mx-1"></div>
-            <ProfileMenu />
+            
+            {/* Profil Button */}
+            <div className="relative">
+              <button onClick={() => setProfileOpen(!profileOpen)} className="flex items-center gap-2 p-1 pl-1.5 pr-2.5 rounded-full bg-white/5 border border-white/10 hover:bg-white/10 transition-all active:scale-95">
+                {user && !user.isAnonymous && user.photoURL ? 
+                  <img src={user.photoURL} alt="User" className="w-7 h-7 rounded-full border border-white/20" /> : 
+                  <div className="w-7 h-7 rounded-full bg-slate-800 flex items-center justify-center text-slate-400"><UserIcon size={14}/></div>
+                }
+                <ChevronDown size={14} className={`text-slate-500 transition-transform ${profileOpen ? 'rotate-180' : ''}`} />
+              </button>
+              {renderProfileMenu()}
+            </div>
           </div>
         </div>
       </nav>
@@ -450,7 +547,7 @@ export default function App() {
       )}
 
       <main className="flex-1 overflow-y-auto pt-6 pb-20 px-4 sm:px-8 no-scrollbar">
-        <div className="container mx-auto max-w-7xl">
+        <div className="container mx-auto max-w-7xl text-left">
           {view === 'home' && (
             <div className="animate-in fade-in duration-700">
                {homeData.popular[0] && (
@@ -509,7 +606,7 @@ export default function App() {
             <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
                <div className="flex justify-center gap-3 mb-10 overflow-x-auto no-scrollbar py-1">
                  {[ { id: 'popular', label: 'Populer' }, { id: 'trending', label: 'Trending' }, { id: 'latest', label: 'Terbaru' } ].map(t => (
-                    <button key={t.id} onClick={() => { setRankTab(t.id); setRankPage(1); }} className={`px-8 py-2.5 rounded-xl font-black text-[10px] uppercase tracking-widest border transition-all ${rankTab === t.id ? 'bg-blue-600 border-blue-600 text-white shadow-lg' : 'bg-white/5 border-white/10 text-slate-400 hover:border-white/20'}`}>{t.label}</button>
+                    <button key={t.id} onClick={() => { setRankTab(t.id); setRankPage(1); }} className={`px-8 py-2.5 rounded-xl font-black text-[10px] uppercase tracking-widest border transition-all ${rankTab === t.id ? 'bg-blue-600 border-blue-600 text-white shadow-lg shadow-blue-600/20' : 'bg-white/5 border-white/10 text-slate-400 hover:border-white/20'}`}>{t.label}</button>
                  ))}
                </div>
                <div className="grid grid-cols-2 xs:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-6">
@@ -569,7 +666,7 @@ export default function App() {
 
       {/* Navigasi Mobile Bawah */}
       <div className="md:hidden fixed bottom-0 left-0 right-0 bg-[#0f172a]/95 backdrop-blur-xl border-t border-white/5 px-6 py-4 flex justify-between items-center z-50">
-        {[ {id:'home', icon:Home, label:'Home'}, {id:'rank', icon:Trophy, label:'Top'}, {id:'filter', icon:Filter, label:'Filter'}, {id:'watchlist', icon:Bookmark, label:'Favorit'} ].map(m => (
+        {[ {id:'home', icon:Home, label:'Home'}, {id:'rank', icon:Trophy, label:'Top'}, {id:'watchlist', icon:Bookmark, label:'Favorit'} ].map(m => (
           <button key={m.id} onClick={() => setView(m.id)} className={`flex flex-col items-center gap-1 transition-all active:scale-90 ${view === m.id ? 'text-blue-500' : 'text-slate-500'}`}><m.icon size={20} /><span className="text-[8px] font-black uppercase tracking-widest">{m.label}</span></button>
         ))}
       </div>
@@ -591,6 +688,8 @@ export default function App() {
           </div>
         </div>
       )}
+
+      {showPromo && <SanPoiPromoModal onClose={closePromo} />}
     </div>
   );
 }
@@ -690,7 +789,6 @@ const CustomPlayerPage = ({ book, initialEp, onBack, onEpisodeChange, audioSetti
   const currentEpRef = useRef(initialEp);
 
   const loadVideo = useCallback(async (ep) => {
-    // Hindari loading berkali-kali untuk episode yang sama
     setLoading(true);
     try {
       const res = await fetchWithRetry(() => window.DramaboxCore.loadViaBatch({ 
@@ -709,7 +807,6 @@ const CustomPlayerPage = ({ book, initialEp, onBack, onEpisodeChange, audioSetti
         currentEpRef.current = ep;
         if (onEpisodeChange) onEpisodeChange(ep); 
       } else {
-        // Jika URL sama (misal trigger render saja), matikan loading
         setLoading(false);
       }
     } catch (e) { 
@@ -719,13 +816,11 @@ const CustomPlayerPage = ({ book, initialEp, onBack, onEpisodeChange, audioSetti
   }, [book.bookId, book.id, onBack, onEpisodeChange]);
 
   useEffect(() => { 
-    // Hanya panggil API jika episode berubah
     if (currentEp !== currentEpRef.current || !videoUrl) {
       loadVideo(currentEp); 
     }
   }, [currentEp, loadVideo, videoUrl]);
 
-  // Inisialisasi HLS - HANYA jika URL berubah
   useEffect(() => {
     const video = videoRef.current;
     if (!video || !videoUrl) return;
@@ -774,9 +869,8 @@ const CustomPlayerPage = ({ book, initialEp, onBack, onEpisodeChange, audioSetti
     return () => {
        if (hlsRef.current) hlsRef.current.destroy();
     };
-  }, [videoUrl]); // Dependency sangat spesifik ke videoUrl
+  }, [videoUrl]); 
 
-  // UPDATE DINAMIS: Hanya manipulasi elemen video secara langsung
   useEffect(() => {
     const video = videoRef.current;
     if (video) {
@@ -839,7 +933,6 @@ const CustomPlayerPage = ({ book, initialEp, onBack, onEpisodeChange, audioSetti
                  const rates = [1, 1.25, 1.5, 2];
                  const currentIdx = rates.indexOf(audioSettings.playbackRate);
                  const nextRate = rates[(currentIdx + 1) % rates.length];
-                 // Gunakan functional update agar stabil
                  setAudioSettings(prev => ({...prev, playbackRate: nextRate}));
                }} className="px-4 py-2 bg-blue-600 text-white rounded-xl font-black text-[10px] tracking-widest shadow-xl shadow-blue-600/30 active:scale-95 transition-all">
                  {audioSettings.playbackRate}X SPEED
