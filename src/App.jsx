@@ -7,12 +7,9 @@ import {
   Volume1, Gamepad2, CheckCircle2, ExternalLink,
   LogOut, LogIn, User as UserIcon, AlertCircle,
   Bookmark, BookmarkCheck, History, Trash2, 
-  ChevronDown
+  ChevronDown, Zap
 } from 'lucide-react';
 
-/**
- * --- FIREBASE MODULAR SDK IMPORTS ---
- */
 import { initializeApp } from 'firebase/app';
 import { 
   getAuth, 
@@ -34,37 +31,48 @@ import {
 
 /**
  * --- KONFIGURASI ---
- * Helper untuk mengakses environment variables secara aman tanpa merusak build ES2015
  */
-const getEnv = (key, fallback = '') => {
+const getSafeEnv = (key, fallback = '') => {
   try {
-    // Mencoba akses variabel global lingkungan jika tersedia
     if (key === 'VITE_APP_ID' && typeof __app_id !== 'undefined') return __app_id;
-    
-    // Akses via import.meta.env dengan pengecekan aman agar esbuild tidak error
-    const env = typeof import.meta !== 'undefined' && import.meta.env ? import.meta.env : {};
+    // @ts-ignore
+    const env = (typeof import.meta !== 'undefined' && import.meta.env) ? import.meta.env : {};
     return env[key] || fallback;
   } catch (e) {
     return fallback;
   }
 };
 
-const firebaseConfig = {
-  apiKey: getEnv('VITE_FIREBASE_API_KEY', "AIzaSyDm5JBMP_NZTpiM-EmgvXNwRCLNtdROy8s"),
-  authDomain: getEnv('VITE_FIREBASE_AUTH_DOMAIN', "nontondracin-f5065.firebaseapp.com"),
-  projectId: getEnv('VITE_FIREBASE_PROJECT_ID', "nontondracin-f5065"),
-  storageBucket: getEnv('VITE_FIREBASE_STORAGE_BUCKET', "nontondracin-f5065.firebasestorage.app"),
-  messagingSenderId: getEnv('VITE_FIREBASE_MESSAGING_SENDER_ID', "166957230434"),
-  appId: getEnv('VITE_FIREBASE_APP_ID', "1:166957230434:web:dc20d828a59048765da43b"),
-  measurementId: getEnv('VITE_FIREBASE_MEASUREMENT_ID', "G-6B89Y55E2F")
+const defaultFirebaseConfig = {
+  apiKey: "AIzaSyDm5JBMP_NZTpiM-EmgvXNwRCLNtdROy8s",
+  authDomain: "nontondracin-f5065.firebaseapp.com",
+  projectId: "nontondracin-f5065",
+  storageBucket: "nontondracin-f5065.firebasestorage.app",
+  messagingSenderId: "166957230434",
+  appId: "1:166957230434:web:dc20d828a59048765da43b",
+  measurementId: "G-6B89Y55E2F"
 };
 
-// Initialize Firebase services
+const firebaseConfig = {
+  apiKey: getSafeEnv('VITE_FIREBASE_API_KEY', defaultFirebaseConfig.apiKey),
+  authDomain: getSafeEnv('VITE_FIREBASE_AUTH_DOMAIN', defaultFirebaseConfig.authDomain),
+  projectId: getSafeEnv('VITE_FIREBASE_PROJECT_ID', defaultFirebaseConfig.projectId),
+  storageBucket: getSafeEnv('VITE_FIREBASE_STORAGE_BUCKET', defaultFirebaseConfig.storageBucket),
+  messagingSenderId: getSafeEnv('VITE_FIREBASE_MESSAGING_SENDER_ID', defaultFirebaseConfig.messagingSenderId),
+  appId: getSafeEnv('VITE_FIREBASE_APP_ID', defaultFirebaseConfig.appId),
+  measurementId: getSafeEnv('VITE_FIREBASE_MEASUREMENT_ID', defaultFirebaseConfig.measurementId)
+};
+
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
+const appId = getSafeEnv('VITE_APP_ID', '3KNDH1p5iIG6U7FmuGTS');
 
-const appId = getEnv('VITE_APP_ID', '3KNDH1p5iIG6U7FmuGTS');
+const STORAGE_KEYS = {
+  SETTINGS: `dracin_settings_${appId}`,
+  WATCHLIST: `dracin_watchlist_${appId}`,
+  HISTORY: `dracin_history_${appId}`
+};
 
 const CONFIG = {
   SCRIPT_URL: "https://cdn.jsdelivr.net/gh/armiko/dracin-app@169efe4fc99586d445cbf8780629c5ac210ca929/js/dramabox-core.js",
@@ -75,47 +83,21 @@ const CONFIG = {
   PER_PAGE: 24
 };
 
-const STATIC_FILTERS = [
-  {
-    title: "Tipe Suara",
-    key: "voice",
-    options: [
-      { display: "Semua", value: "" },
-      { display: "Sulih Suara", value: "1" },
-      { display: "Subtitle", value: "2" }
-    ]
-  },
-  {
-    title: "Genre & Tema",
-    key: "category",
-    options: [
-      { display: "Semua", value: "" },
-      { display: "Romansa", value: "romansa" },
-      { display: "Wanita Kuat", value: "wanita kuat" },
-      { display: "Pria Dominan", value: "pria dominan" },
-      { display: "Balas Dendam", value: "balas dendam" },
-      { display: "CEO", value: "ceo" },
-      { display: "Keluarga", value: "keluarga" },
-      { display: "Kekuatan Khusus", value: "keluarga khusus" },
-      { display: "Pembalikan Identitas", value: "pembalikan identitas" },
-      { display: "Perselingkuhan", value: "perselingkuhan" },
-      { display: "Terlahir Kembali", value: "terlahir kembali" },
-      { display: "Sejarah", value: "sejarah" }
-    ]
-  },
-  {
-    title: "Urutkan",
-    key: "sort",
-    options: [
-      { display: "Terpopuler", value: "popular" },
-      { display: "Terbaru", value: "latest" }
-    ]
-  }
-];
+const apiCache = { home: null, timestamp: 0 };
 
 /**
- * --- UTILS ---
+ * --- HELPER API & SCRIPT ---
  */
+const fetchWithRetry = async (fn, retries = 3, delay = 1000) => {
+  try {
+    return await fn();
+  } catch (error) {
+    if (retries <= 0) throw error;
+    await new Promise(resolve => setTimeout(resolve, delay));
+    return fetchWithRetry(fn, retries - 1, delay * 2);
+  }
+};
+
 const useExternalScript = (url) => {
   const [state, setState] = useState({ loaded: false, error: false });
   useEffect(() => {
@@ -172,7 +154,7 @@ const formatTime = (seconds) => {
 /**
  * --- UI COMPONENTS ---
  */
-const Section = ({ title, icon: IconComponent, onSeeAll, children }) => (
+const Section = React.memo(({ title, icon: IconComponent, onSeeAll, children }) => (
   <section className="mb-12">
     <div className="flex items-center justify-between mb-6">
       <div className="flex items-center gap-2">
@@ -189,9 +171,9 @@ const Section = ({ title, icon: IconComponent, onSeeAll, children }) => (
     </div>
     {children}
   </section>
-);
+));
 
-const DramaCard = ({ item, onClick, rank, onRemove, isHistory, lastEpisode }) => {
+const DramaCard = React.memo(({ item, onClick, rank, onRemove, isHistory, lastEpisode }) => {
   const title = item.bookName || item.title || 'Drama';
   const cover = item.coverWap || item.cover || item.coverUrl || 'https://via.placeholder.com/300x450';
   const bid = item.bookId || item.id;
@@ -200,7 +182,7 @@ const DramaCard = ({ item, onClick, rank, onRemove, isHistory, lastEpisode }) =>
     <div className="group relative animate-in fade-in duration-300">
       <div className="cursor-pointer" onClick={() => onClick(item)}>
         <div className="relative aspect-[2/3] rounded-xl overflow-hidden bg-slate-800 shadow-md mb-2 border border-white/5">
-          <img src={cover} alt={title} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700" loading="lazy" />
+          <img src={cover} alt={title} className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110" loading="lazy" />
           <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
             <div className="bg-white/20 backdrop-blur-md p-3 rounded-full border border-white/30 transform translate-y-3 group-hover:translate-y-0 transition-transform duration-500">
               <Play size={18} fill="white" className="text-white" />
@@ -223,7 +205,7 @@ const DramaCard = ({ item, onClick, rank, onRemove, isHistory, lastEpisode }) =>
       )}
     </div>
   );
-};
+});
 
 const EmptyState = ({ icon: Icon, title, message, actionText, onAction }) => (
   <div className="flex flex-col items-center justify-center py-20 px-6 text-center animate-in fade-in zoom-in duration-500">
@@ -248,16 +230,18 @@ export default function App() {
   const [previousView, setPreviousView] = useState('home');
   const [user, setUser] = useState(null);
   
-  // Data States
-  const [homeData, setHomeData] = useState({ popular: [], latest: [] });
+  const [homeData, setHomeData] = useState({ popular: [], latest: [], trending: [] });
   const [rankData, setRankData] = useState([]);
   const [rankPage, setRankPage] = useState(1);
   const [allDramaData, setAllDramaData] = useState([]);
-  const [watchlist, setWatchlist] = useState([]);
-  const [watchHistory, setWatchHistory] = useState([]);
   const [searchData, setSearchData] = useState([]);
   
-  // UI States
+  const [watchlist, setWatchlist] = useState(() => JSON.parse(localStorage.getItem(STORAGE_KEYS.WATCHLIST) || '[]'));
+  const [watchHistory, setWatchHistory] = useState(() => JSON.parse(localStorage.getItem(STORAGE_KEYS.HISTORY) || '[]'));
+
+  useEffect(() => { localStorage.setItem(STORAGE_KEYS.WATCHLIST, JSON.stringify(watchlist)); }, [watchlist]);
+  useEffect(() => { localStorage.setItem(STORAGE_KEYS.HISTORY, JSON.stringify(watchHistory)); }, [watchHistory]);
+  
   const [loading, setLoading] = useState(false);
   const [searchModalOpen, setSearchModalOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
@@ -271,81 +255,38 @@ export default function App() {
   const { loaded: scriptLoaded } = useExternalScript(CONFIG.SCRIPT_URL);
 
   const [audioSettings, setAudioSettings] = useState(() => {
-    const saved = localStorage.getItem('dracin_settings_global');
+    const saved = localStorage.getItem(STORAGE_KEYS.SETTINGS);
     return saved ? JSON.parse(saved) : { volume: 1, isMuted: false, playbackRate: 1, autoNext: true };
   });
 
-  /**
-   * --- FIREBASE AUTH ---
-   */
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (u) => {
-      if (u) {
-        setUser(u);
-      } else {
-        try {
-          await signInAnonymously(auth);
-        } catch (err) {
-          console.warn("Silent login failed", err);
-        }
-      }
+    const unsubscribe = onAuthStateChanged(auth, (u) => {
+      if (u) setUser(u);
+      else signInAnonymously(auth).catch(() => {});
     });
     return () => unsubscribe();
   }, []);
 
-  /**
-   * --- FIRESTORE SYNC ---
-   */
-  useEffect(() => {
-    if (!user) return;
-
-    // Rule 1: Gunakan path artifacts
-    const watchlistRef = collection(db, 'artifacts', appId, 'users', user.uid, 'watchlist');
-    const historyRef = collection(db, 'artifacts', appId, 'users', user.uid, 'history');
-
-    const unsubWatchlist = onSnapshot(watchlistRef, (snap) => {
-      const data = snap.docs.map(doc => doc.data()).sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
-      setWatchlist(data);
-    }, (err) => console.error("Watchlist sync failed:", err));
-
-    const unsubHistory = onSnapshot(historyRef, (snap) => {
-      const data = snap.docs.map(doc => doc.data()).sort((a, b) => (b.updatedAt?.seconds || 0) - (a.updatedAt?.seconds || 0));
-      setWatchHistory(data.slice(0, 20));
-    }, (err) => console.error("History sync failed:", err));
-
-    return () => { unsubWatchlist(); unsubHistory(); };
-  }, [user]);
-
-  /**
-   * --- CORE ACTIONS ---
-   */
-  const handleLogin = async () => {
-    setAuthError(null);
-    try {
-      const provider = new GoogleAuthProvider();
-      await signInWithPopup(auth, provider);
-      setProfileOpen(false);
-    } catch (e) { 
-      setAuthError("Gagal login. Cek browser Anda."); 
-    }
-  };
-
-  const handleLogout = () => {
-    signOut(auth).then(() => { setView('home'); setProfileOpen(false); });
-  };
-
   const fetchHome = useCallback(async () => {
     if (!window.DramaboxCore) return;
+    if (apiCache.home && Date.now() - apiCache.timestamp < 300000) {
+      setHomeData(apiCache.home);
+      return;
+    }
     try {
       const core = window.DramaboxCore;
       const device = await core.getDevice();
-      const tokenRes = await core.getToken(CONFIG.API_BASE, 'in', device, false);
-      const [pop, lat] = await Promise.all([
+      const tokenRes = await fetchWithRetry(() => core.getToken(CONFIG.API_BASE, 'in', device, false));
+      const [pop, lat, trd] = await Promise.all([
         core.doClassify(CONFIG.API_BASE, 'in', device, tokenRes.token, CONFIG.FEED_IDS.POPULAR, 18),
-        core.doClassify(CONFIG.API_BASE, 'in', device, tokenRes.token, CONFIG.FEED_IDS.LATEST, 12)
+        core.doClassify(CONFIG.API_BASE, 'in', device, tokenRes.token, CONFIG.FEED_IDS.LATEST, 12),
+        core.doClassify(CONFIG.API_BASE, 'in', device, tokenRes.token, CONFIG.FEED_IDS.TRENDING, 12)
       ]);
-      setHomeData({ popular: pop || [], latest: lat || [] });
-      setAllDramaData([...(pop || []), ...(lat || [])].filter((v, i, a) => a.findIndex(t => (t.bookId || t.id) === (v.bookId || v.id)) === i));
+      const data = { popular: pop || [], latest: lat || [], trending: trd || [] };
+      setHomeData(data);
+      apiCache.home = data;
+      apiCache.timestamp = Date.now();
+      setAllDramaData([...(pop || []), ...(lat || []), ...(trd || [])].filter((v, i, a) => a.findIndex(t => (t.bookId || t.id) === (v.bookId || v.id)) === i));
     } catch (e) { console.error("Fetch home error:", e); }
   }, []);
 
@@ -355,7 +296,7 @@ export default function App() {
     try {
       const core = window.DramaboxCore;
       const device = await core.getDevice();
-      const tokenRes = await core.getToken(CONFIG.API_BASE, 'in', device, false);
+      const tokenRes = await fetchWithRetry(() => core.getToken(CONFIG.API_BASE, 'in', device, false));
       const fid = tab === 'popular' ? CONFIG.FEED_IDS.POPULAR : tab === 'latest' ? CONFIG.FEED_IDS.LATEST : CONFIG.FEED_IDS.TRENDING;
       const count = page * CONFIG.PER_PAGE;
       const res = await core.doClassify(CONFIG.API_BASE, 'in', device, tokenRes.token, fid, count);
@@ -363,34 +304,50 @@ export default function App() {
     } catch (e) { console.error("Rank error:", e); } finally { setLoading(false); }
   }, []);
 
-  const handleToggleWatchlist = async (book) => {
-    if (!user || user.isAnonymous) {
-      setAuthError("Silakan masuk akun Google untuk simpan drama.");
-      return;
-    }
+  const handleToggleWatchlist = useCallback((book) => {
     const bid = String(book.bookId || book.id);
-    const docRef = doc(db, 'artifacts', appId, 'users', user.uid, 'watchlist', bid);
-    if (watchlist.some(i => String(i.bookId || i.id) === bid)) await deleteDoc(docRef);
-    else await setDoc(docRef, { ...book, bookId: bid, createdAt: serverTimestamp() });
-  };
-
-  const updateHistory = async (book, episode) => {
-    if (!user || user.isAnonymous) return;
-    const bid = String(book.bookId || book.id);
-    const docRef = doc(db, 'artifacts', appId, 'users', user.uid, 'history', bid);
-    await setDoc(docRef, {
-      bookId: bid,
-      bookName: book.bookName || book.title,
-      cover: book.cover || book.coverWap,
-      lastEpisode: episode,
-      updatedAt: serverTimestamp()
+    setWatchlist(prev => {
+      const exists = prev.find(i => String(i.bookId || i.id) === bid);
+      if (exists) return prev.filter(i => String(i.bookId || i.id) !== bid);
+      return [{ ...book, bookId: bid, addedAt: Date.now() }, ...prev];
     });
-  };
+  }, []);
 
-  const clearHistoryItem = async (bid) => {
-    if (!user) return;
-    await deleteDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'history', String(bid)));
-  };
+  const updateHistory = useCallback((book, episode) => {
+    const bid = String(book.bookId || book.id);
+    setWatchHistory(prev => {
+      const filtered = prev.filter(i => String(i.bookId) !== bid);
+      const newItem = {
+        bookId: bid,
+        bookName: book.bookName || book.title,
+        cover: book.cover || book.coverWap,
+        lastEpisode: episode,
+        updatedAt: Date.now()
+      };
+      return [newItem, ...filtered].slice(0, 20);
+    });
+  }, []);
+
+  const clearHistoryItem = useCallback((bid) => {
+    setWatchHistory(prev => prev.filter(i => String(i.bookId) !== String(bid)));
+  }, []);
+
+  // STABILISASI FUNGSI: Mencegah re-render loop pada Player
+  const handlePlayerBack = useCallback(() => {
+    setPlayerState(null);
+    setView('detail');
+  }, []);
+
+  const handleAudioSettingsUpdate = useCallback((s) => {
+    setAudioSettings(s);
+    localStorage.setItem(STORAGE_KEYS.SETTINGS, JSON.stringify(s));
+  }, []);
+
+  const handleEpisodeChange = useCallback((ep) => {
+    if (playerState?.book) {
+      updateHistory(playerState.book, ep);
+    }
+  }, [playerState?.book, updateHistory]);
 
   useEffect(() => { if (scriptLoaded) fetchHome(); }, [scriptLoaded, fetchHome]);
   useEffect(() => { if (view === 'rank') fetchRank(rankTab, rankPage); }, [view, rankTab, rankPage, fetchRank]);
@@ -403,14 +360,9 @@ export default function App() {
       const tags = [...(i.typeTwoNames || []), ...(i.tags || [])].map(t => String(t).toLowerCase());
       return tags.some(tag => tag.includes(activeFilters.category.toLowerCase()));
     });
-    if (activeFilters.sort === 'popular') result.sort((a, b) => (b.score || 0) - (a.score || 0));
-    else if (activeFilters.sort === 'latest') result.sort((a, b) => (b.bookId || b.id) - (a.bookId || a.id));
     return result;
   }, [allDramaData, activeFilters]);
 
-  /**
-   * --- UI RENDERING ---
-   */
   const ProfileMenu = () => (
     <div className="relative">
       <button onClick={() => setProfileOpen(!profileOpen)} className="flex items-center gap-2 p-1 pl-1.5 pr-2.5 rounded-full bg-white/5 border border-white/10 hover:bg-white/10 transition-all">
@@ -428,16 +380,20 @@ export default function App() {
               </div>
             ) : (
               <div className="p-5 border-b border-white/5 text-center">
-                <p className="text-slate-400 text-[10px] font-black uppercase tracking-widest mb-3">Fitur Terbatas</p>
-                <button onClick={handleLogin} className="w-full py-2 bg-blue-600 text-white rounded-xl text-[10px] font-black uppercase tracking-widest shadow-lg">Masuk Google</button>
+                <p className="text-slate-400 text-[10px] font-black uppercase tracking-widest mb-3">Login untuk Sinkronisasi</p>
+                <button onClick={async () => {
+                   const provider = new GoogleAuthProvider();
+                   await signInWithPopup(auth, provider);
+                   setProfileOpen(false);
+                }} className="w-full py-2 bg-blue-600 text-white rounded-xl text-[10px] font-black uppercase tracking-widest shadow-lg">Masuk Google</button>
               </div>
             )}
             <div className="p-2">
-              <button onClick={() => { setView('watchlist'); setProfileOpen(false); }} className="w-full flex items-center gap-3 px-4 py-3 text-slate-300 hover:bg-white/5 rounded-xl text-left group">
+              <button onClick={() => { setView('watchlist'); setProfileOpen(false); }} className="w-full flex items-center gap-3 px-4 py-3 text-slate-300 hover:bg-white/5 rounded-xl text-left group transition-colors">
                 <Bookmark size={16} className="text-slate-500 group-hover:text-blue-400" />
                 <span className="text-[10px] font-black uppercase tracking-widest">Favorit Saya</span>
               </button>
-              <button onClick={() => { setView('history'); setProfileOpen(false); }} className="w-full flex items-center gap-3 px-4 py-3 text-slate-300 hover:bg-white/5 rounded-xl text-left group">
+              <button onClick={() => { setView('history'); setProfileOpen(false); }} className="w-full flex items-center gap-3 px-4 py-3 text-slate-300 hover:bg-white/5 rounded-xl text-left group transition-colors">
                 <History size={16} className="text-slate-500 group-hover:text-blue-400" />
                 <span className="text-[10px] font-black uppercase tracking-widest">Sudah Ditonton</span>
               </button>
@@ -458,10 +414,10 @@ export default function App() {
   if (playerState) return (
     <CustomPlayerPage 
       book={playerState.book} initialEp={playerState.ep} 
-      onBack={() => { setPlayerState(null); setView('detail'); }}
-      onEpisodeChange={(ep) => updateHistory(playerState.book, ep)}
+      onBack={handlePlayerBack}
+      onEpisodeChange={handleEpisodeChange}
       audioSettings={audioSettings}
-      setAudioSettings={(s) => { setAudioSettings(s); localStorage.setItem('dracin_settings_global', JSON.stringify(s)); }}
+      setAudioSettings={handleAudioSettingsUpdate}
     />
   );
 
@@ -469,11 +425,10 @@ export default function App() {
     <div className="bg-[#0f172a] h-screen text-slate-200 font-sans flex flex-col overflow-hidden selection:bg-blue-600 selection:text-white">
       <nav className="flex-none h-16 bg-[#0f172a]/80 backdrop-blur-xl border-b border-white/5 flex items-center z-40 px-4 sm:px-8">
         <div className="container mx-auto flex justify-between items-center">
-          <button onClick={() => setView('home')} className="flex items-center gap-2 group">
+          <button onClick={() => setView('home')} className="flex items-center gap-2 group transition-all active:scale-95">
             <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center text-white font-black shadow-lg shadow-blue-600/20">D</div>
             <span className="text-base font-black text-white hidden xs:block tracking-tighter">NontonDracin</span>
           </button>
-          
           <div className="flex items-center gap-2">
             <div className="hidden md:flex items-center gap-1 bg-white/5 p-1 rounded-full border border-white/10">
               {[ {id:'home', icon:Home}, {id:'rank', icon:Trophy}, {id:'filter', icon:Filter} ].map(m => (
@@ -501,17 +456,17 @@ export default function App() {
                {homeData.popular[0] && (
                  <div className="mb-10 relative rounded-[2rem] overflow-hidden min-h-[350px] flex items-center bg-slate-900 border border-white/5 shadow-2xl">
                    <div className="absolute inset-0">
-                     <img src={homeData.popular[0].coverWap || homeData.popular[0].cover} className="w-full h-full object-cover opacity-30 blur-sm scale-105" />
+                     <img src={homeData.popular[0].coverWap || homeData.popular[0].cover} className="w-full h-full object-cover opacity-30 blur-sm scale-105" alt="" />
                      <div className="absolute inset-0 bg-gradient-to-t from-[#0f172a] via-[#0f172a]/60 to-transparent"></div>
                    </div>
                    <div className="relative z-10 flex flex-col md:flex-row items-center gap-8 p-10 sm:p-14 w-full">
-                     <div className="hidden lg:block w-[200px] shrink-0 transform -rotate-2 hover:rotate-0 transition-all">
+                     <div className="hidden lg:block w-[200px] shrink-0 transform -rotate-2 hover:rotate-0 transition-all duration-500">
                        <div className="aspect-[2/3] rounded-2xl overflow-hidden shadow-2xl border-2 border-white/10 cursor-pointer" onClick={() => { setSelectedBookId(homeData.popular[0].bookId || homeData.popular[0].id); setView('detail'); }}>
-                         <img src={homeData.popular[0].coverWap || homeData.popular[0].cover} className="w-full h-full object-cover" />
+                         <img src={homeData.popular[0].coverWap || homeData.popular[0].cover} className="w-full h-full object-cover" alt="" />
                        </div>
                      </div>
                      <div className="flex-1 text-center md:text-left">
-                       <div className="inline-flex items-center gap-2 px-3 py-1 bg-blue-600 text-white text-[8px] font-black rounded-full mb-5 uppercase tracking-widest"><Flame size={12} fill="white" /> Rekomendasi</div>
+                       <div className="inline-flex items-center gap-2 px-3 py-1 bg-blue-600 text-white text-[8px] font-black rounded-full mb-5 uppercase tracking-widest"><Flame size={12} fill="white" /> Rekomendasi Hari Ini</div>
                        <h1 className="text-3xl sm:text-6xl font-black text-white mb-6 leading-tight tracking-tighter">{homeData.popular[0].bookName || homeData.popular[0].title}</h1>
                        <div className="flex flex-wrap items-center justify-center md:justify-start gap-4">
                         <button onClick={() => { setSelectedBookId(homeData.popular[0].bookId || homeData.popular[0].id); setView('detail'); }} className="bg-white text-black hover:bg-blue-600 hover:text-white px-8 py-3.5 rounded-xl font-black text-[10px] uppercase tracking-widest transition-all shadow-xl flex items-center gap-2">MULAI TONTON <Play size={16} fill="currentColor"/></button>
@@ -523,7 +478,7 @@ export default function App() {
                    </div>
                  </div>
                )}
-               <Section icon={Flame} title="Drama Populer" onSeeAll={() => setView('rank')}>
+               <Section icon={Flame} title="Drama Populer" onSeeAll={() => { setView('rank'); setRankTab('popular'); }}>
                  <div className="grid grid-cols-2 xs:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-6">
                    {homeData.popular.slice(1, 7).map((item, idx) => <DramaCard key={idx} item={item} onClick={(it) => { setSelectedBookId(it.bookId || it.id); setPreviousView('home'); setView('detail'); }} />)}
                  </div>
@@ -537,6 +492,11 @@ export default function App() {
                    </div>
                  </Section>
                )}
+               <Section icon={Zap} title="Sedang Trending" onSeeAll={() => { setView('rank'); setRankTab('trending'); }}>
+                 <div className="grid grid-cols-2 xs:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-6">
+                   {homeData.trending.slice(0, 6).map((item, idx) => <DramaCard key={idx} item={item} onClick={(it) => { setSelectedBookId(it.bookId || it.id); setPreviousView('home'); setView('detail'); }} />)}
+                 </div>
+               </Section>
                <Section icon={Clock} title="Update Terbaru" onSeeAll={() => { setView('rank'); setRankTab('latest'); }}>
                  <div className="grid grid-cols-2 xs:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-6">
                    {homeData.latest.slice(0, 6).map((item, idx) => <DramaCard key={idx} item={item} onClick={(it) => { setSelectedBookId(it.bookId || it.id); setPreviousView('home'); setView('detail'); }} />)}
@@ -548,7 +508,7 @@ export default function App() {
           {view === 'rank' && (
             <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
                <div className="flex justify-center gap-3 mb-10 overflow-x-auto no-scrollbar py-1">
-                 {[ { id: 'popular', label: 'Populer' }, { id: 'latest', label: 'Terbaru' } ].map(t => (
+                 {[ { id: 'popular', label: 'Populer' }, { id: 'trending', label: 'Trending' }, { id: 'latest', label: 'Terbaru' } ].map(t => (
                     <button key={t.id} onClick={() => { setRankTab(t.id); setRankPage(1); }} className={`px-8 py-2.5 rounded-xl font-black text-[10px] uppercase tracking-widest border transition-all ${rankTab === t.id ? 'bg-blue-600 border-blue-600 text-white shadow-lg' : 'bg-white/5 border-white/10 text-slate-400 hover:border-white/20'}`}>{t.label}</button>
                  ))}
                </div>
@@ -563,25 +523,12 @@ export default function App() {
             </div>
           )}
 
-          {view === 'filter' && (
-            <div className="animate-in fade-in duration-500">
-               <div className="bg-slate-900/50 p-8 rounded-3xl border border-white/5 mb-10 grid grid-cols-1 md:grid-cols-3 gap-8 backdrop-blur-sm">
-                  {STATIC_FILTERS.map(f => (
-                    <div key={f.key}>
-                      <h4 className="text-[8px] font-black text-slate-500 uppercase tracking-widest mb-4 flex items-center gap-2"><div className="w-1 h-1 bg-blue-500 rounded-full"></div> {f.title}</h4>
-                      <div className="flex flex-wrap gap-2">
-                        {f.options.map(o => (
-                          <button key={o.value} onClick={() => setActiveFilters(p => ({...p, [f.key]: p[f.key] === o.value ? '' : o.value}))} className={`px-4 py-2 rounded-xl text-[9px] font-bold uppercase tracking-wider border transition-all ${activeFilters[f.key] === o.value ? 'bg-blue-600 border-blue-600 text-white shadow-lg' : 'bg-white/5 border-white/10 text-slate-400 hover:text-white hover:bg-white/10'}`}>{o.display}</button>
-                        ))}
-                      </div>
-                    </div>
-                  ))}
-               </div>
-               <div className="grid grid-cols-2 xs:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-6">
-                  {filteredItems.map((item, idx) => <DramaCard key={idx} item={item} onClick={(it) => { setSelectedBookId(it.bookId || it.id); setView('detail'); }} />)}
-               </div>
-               {filteredItems.length === 0 && <EmptyState icon={Filter} title="Hasil Kosong" message="Ubah filter pencarian Anda." />}
-            </div>
+          {view === 'detail' && (
+            <DramaDetailPage 
+              bookId={selectedBookId} onBack={() => setView(previousView)} 
+              user={user} watchlist={watchlist} history={watchHistory} onToggleWatchlist={handleToggleWatchlist}
+              onPlayEpisode={(ep, b, c) => { setPlayerState({ book: b, chapters: c, ep }); updateHistory(b, ep); }} 
+            />
           )}
 
           {view === 'watchlist' && (
@@ -591,7 +538,7 @@ export default function App() {
                   <div className="grid grid-cols-2 xs:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-6">
                     {watchlist.map((item, idx) => <DramaCard key={idx} item={item} onRemove={() => handleToggleWatchlist(item)} onClick={(it) => { setSelectedBookId(it.bookId || it.id); setView('detail'); }} />)}
                   </div>
-                ) : <EmptyState icon={Bookmark} title="Favorit Kosong" message="Simpan drama favorit Anda agar mudah ditemukan kembali." actionText="CARI DRAMA" onAction={() => setView('home')} />}
+                ) : <EmptyState icon={Bookmark} title="Favorit Kosong" message="Ayo simpan drama favorit Anda agar mudah ditemukan kembali." actionText="CARI DRAMA" onAction={() => setView('home')} />}
               </Section>
             </div>
           )}
@@ -608,14 +555,6 @@ export default function App() {
             </div>
           )}
 
-          {view === 'detail' && (
-            <DramaDetailPage 
-              bookId={selectedBookId} onBack={() => setView(previousView)} 
-              user={user} watchlist={watchlist} history={watchHistory} onToggleWatchlist={handleToggleWatchlist}
-              onPlayEpisode={(ep, b, c) => { setPlayerState({ book: b, chapters: c, ep }); updateHistory(b, ep); }} 
-            />
-          )}
-
           {view === 'search-results' && (
             <div className="animate-in fade-in duration-700">
                <Section title={`Hasil Cari: ${searchQuery}`} icon={Search} onSeeAll={() => setView('home')}>
@@ -628,10 +567,10 @@ export default function App() {
         </div>
       </main>
 
-      {/* Mobile Nav */}
+      {/* Navigasi Mobile Bawah */}
       <div className="md:hidden fixed bottom-0 left-0 right-0 bg-[#0f172a]/95 backdrop-blur-xl border-t border-white/5 px-6 py-4 flex justify-between items-center z-50">
-        {[ {id:'home', icon:Home, label:'Home'}, {id:'rank', icon:Trophy, label:'Top'}, {id:'filter', icon:Filter, label:'Filter'}, {id:'watchlist', icon:Bookmark, label:'List'} ].map(m => (
-          <button key={m.id} onClick={() => setView(m.id)} className={`flex flex-col items-center gap-1 ${view === m.id ? 'text-blue-500' : 'text-slate-500'}`}><m.icon size={20} /><span className="text-[8px] font-black uppercase tracking-widest">{m.label}</span></button>
+        {[ {id:'home', icon:Home, label:'Home'}, {id:'rank', icon:Trophy, label:'Top'}, {id:'filter', icon:Filter, label:'Filter'}, {id:'watchlist', icon:Bookmark, label:'Favorit'} ].map(m => (
+          <button key={m.id} onClick={() => setView(m.id)} className={`flex flex-col items-center gap-1 transition-all active:scale-90 ${view === m.id ? 'text-blue-500' : 'text-slate-500'}`}><m.icon size={20} /><span className="text-[8px] font-black uppercase tracking-widest">{m.label}</span></button>
         ))}
       </div>
 
@@ -686,7 +625,7 @@ const DramaDetailPage = ({ bookId, onBack, user, watchlist, history, onToggleWat
       <div className="flex flex-col lg:flex-row gap-10 bg-slate-900/40 rounded-[2.5rem] p-6 sm:p-10 border border-white/5 backdrop-blur-xl shadow-2xl">
         <div className="w-full lg:w-[320px] shrink-0">
           <div className="relative aspect-[2/3] rounded-3xl overflow-hidden shadow-2xl border border-white/10">
-            <img src={data.book.cover} className="w-full h-full object-cover" />
+            <img src={data.book.cover} className="w-full h-full object-cover" alt="" />
             <div className="absolute top-4 left-4 flex gap-2">
                <span className="bg-blue-600 text-white text-[8px] font-black px-2 py-1 rounded-lg shadow-lg uppercase tracking-wider">{data.book.chapterCount} EPS</span>
             </div>
@@ -747,36 +686,104 @@ const CustomPlayerPage = ({ book, initialEp, onBack, onEpisodeChange, audioSetti
   const videoRef = useRef(null);
   const hlsRef = useRef(null);
   const timerRef = useRef(null);
+  const lastUrlRef = useRef('');
+  const currentEpRef = useRef(initialEp);
 
   const loadVideo = useCallback(async (ep) => {
+    // Hindari loading berkali-kali untuk episode yang sama
     setLoading(true);
     try {
-      const res = await window.DramaboxCore.loadViaBatch({ apiBase: CONFIG.API_BASE, localeApi: 'in', bookId: book.bookId || book.id, index: ep });
+      const res = await fetchWithRetry(() => window.DramaboxCore.loadViaBatch({ 
+        apiBase: CONFIG.API_BASE, 
+        localeApi: 'in', 
+        bookId: book.bookId || book.id, 
+        index: ep 
+      }));
       const list = res?.data?.chapterList || res?.chapters || [];
       const chapter = list.find(c => String(c.num) === String(ep)) || list[0];
       const url = extractVideoUrlFromChapter(chapter);
-      if (url) { 
+      
+      if (url && url !== lastUrlRef.current) { 
+        lastUrlRef.current = url;
         setVideoUrl(url); 
+        currentEpRef.current = ep;
         if (onEpisodeChange) onEpisodeChange(ep); 
+      } else {
+        // Jika URL sama (misal trigger render saja), matikan loading
+        setLoading(false);
       }
-    } catch (e) { console.error("Player error:", e); } finally { setLoading(false); }
-  }, [book, onEpisodeChange]);
+    } catch (e) { 
+      console.error("Player error:", e); 
+      if (e.message.includes('500')) onBack();
+    }
+  }, [book.bookId, book.id, onBack, onEpisodeChange]);
 
-  useEffect(() => { loadVideo(currentEp); }, [currentEp, loadVideo]);
+  useEffect(() => { 
+    // Hanya panggil API jika episode berubah
+    if (currentEp !== currentEpRef.current || !videoUrl) {
+      loadVideo(currentEp); 
+    }
+  }, [currentEp, loadVideo, videoUrl]);
 
+  // Inisialisasi HLS - HANYA jika URL berubah
   useEffect(() => {
     const video = videoRef.current;
     if (!video || !videoUrl) return;
-    if (hlsRef.current) hlsRef.current.destroy();
+    
+    if (hlsRef.current) {
+      hlsRef.current.destroy();
+      hlsRef.current = null;
+    }
 
-    const startPlay = () => { if(video) { video.playbackRate = audioSettings.playbackRate; video.volume = volume; video.play().catch(() => {}); } };
+    const applyInitialSettings = () => {
+      if(video) {
+        video.playbackRate = audioSettings.playbackRate;
+        video.volume = volume;
+        setLoading(false);
+        video.play().catch(() => {});
+      }
+    };
+
     if (videoUrl.includes('.m3u8')) {
       if (window.Hls && window.Hls.isSupported()) {
-        const hls = new window.Hls(); hls.loadSource(videoUrl); hls.attachMedia(video);
-        hls.on(window.Hls.Events.MANIFEST_PARSED, startPlay); hlsRef.current = hls;
-      } else { video.src = videoUrl; video.oncanplay = startPlay; }
-    } else { video.src = videoUrl; video.oncanplay = startPlay; }
-  }, [videoUrl, audioSettings.playbackRate, volume]);
+        const hls = new window.Hls({
+          enableWorker: true,
+          lowLatencyMode: true,
+          maxBufferLength: 60,
+          maxMaxBufferLength: 120,
+          backBufferLength: 60
+        }); 
+
+        hls.on(window.Hls.Events.ERROR, (event, data) => {
+          if (data.fatal) {
+            switch(data.type) {
+              case window.Hls.ErrorTypes.NETWORK_ERROR: hls.startLoad(); break;
+              case window.Hls.ErrorTypes.MEDIA_ERROR: hls.recoverMediaError(); break;
+              default: hls.destroy(); break;
+            }
+          }
+        });
+
+        hls.loadSource(videoUrl); 
+        hls.attachMedia(video);
+        hls.on(window.Hls.Events.MANIFEST_PARSED, applyInitialSettings); 
+        hlsRef.current = hls;
+      } else { video.src = videoUrl; video.oncanplay = applyInitialSettings; }
+    } else { video.src = videoUrl; video.oncanplay = applyInitialSettings; }
+    
+    return () => {
+       if (hlsRef.current) hlsRef.current.destroy();
+    };
+  }, [videoUrl]); // Dependency sangat spesifik ke videoUrl
+
+  // UPDATE DINAMIS: Hanya manipulasi elemen video secara langsung
+  useEffect(() => {
+    const video = videoRef.current;
+    if (video) {
+      video.playbackRate = audioSettings.playbackRate;
+      video.volume = volume;
+    }
+  }, [audioSettings.playbackRate, volume]);
 
   const togglePlay = () => isPlaying ? videoRef.current.pause() : videoRef.current.play();
 
@@ -788,12 +795,20 @@ const CustomPlayerPage = ({ book, initialEp, onBack, onEpisodeChange, audioSetti
           <h2 className="text-white text-xs font-black uppercase tracking-widest truncate max-w-[250px]">{book.bookName || book.title}</h2>
           <p className="text-blue-500 text-[9px] font-black uppercase tracking-[0.2em]">Episode {currentEp}</p>
         </div>
-        <button className="text-white p-2"><Share2 size={20}/></button>
+        <button className="text-white p-2 transition-transform active:scale-90"><Share2 size={20}/></button>
       </div>
 
       <div className="relative w-full h-full flex items-center justify-center" onClick={togglePlay}>
-        <video ref={videoRef} className="w-full h-full object-contain cursor-pointer" playsInline onPlay={() => setIsPlaying(true)} onPause={() => setIsPlaying(false)} onTimeUpdate={() => setCurrentTime(videoRef.current?.currentTime || 0)} onLoadedMetadata={() => setDuration(videoRef.current?.duration || 0)} onEnded={() => audioSettings.autoNext && setCurrentEp(e => e + 1)} />
-        {loading && <div className="absolute inset-0 flex items-center justify-center bg-black/50 z-10"><Loader2 className="animate-spin text-blue-500" size={48} /></div>}
+        <video ref={videoRef} className="w-full h-full object-contain cursor-pointer" playsInline 
+          onPlay={() => setIsPlaying(true)} 
+          onPause={() => setIsPlaying(false)} 
+          onTimeUpdate={() => setCurrentTime(videoRef.current?.currentTime || 0)} 
+          onLoadedMetadata={() => setDuration(videoRef.current?.duration || 0)} 
+          onEnded={() => audioSettings.autoNext && setCurrentEp(e => e + 1)} 
+          onWaiting={() => setLoading(true)} 
+          onPlaying={() => setLoading(false)} 
+        />
+        {loading && <div className="absolute inset-0 flex items-center justify-center bg-black/30 z-10"><Loader2 className="animate-spin text-blue-500" size={48} /></div>}
         {!isPlaying && !loading && (
           <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
              <div className="p-8 rounded-full bg-blue-600/20 backdrop-blur-xl border border-blue-500/30 shadow-2xl animate-in zoom-in duration-300"><Play size={48} fill="white" className="text-white ml-2"/></div>
@@ -804,7 +819,9 @@ const CustomPlayerPage = ({ book, initialEp, onBack, onEpisodeChange, audioSetti
       <div className={`absolute bottom-0 left-0 right-0 p-8 bg-gradient-to-t from-black/95 via-black/40 to-transparent z-50 transition-all duration-500 ${showControls ? 'translate-y-0 opacity-100' : 'translate-y-10 opacity-0'}`}>
         <div className="max-w-5xl mx-auto flex flex-col gap-6">
           <div className="flex flex-col gap-2">
-             <input type="range" min="0" max={duration || 0} step="0.1" value={currentTime} onChange={(e) => videoRef.current.currentTime = parseFloat(e.target.value)} className="w-full accent-blue-600 h-1.5 bg-white/10 rounded-full appearance-none cursor-pointer hover:scale-y-125 transition-all" />
+             <input type="range" min="0" max={duration || 0} step="0.1" value={currentTime} onChange={(e) => {
+               if (videoRef.current) videoRef.current.currentTime = parseFloat(e.target.value);
+             }} className="w-full accent-blue-600 h-1.5 bg-white/10 rounded-full appearance-none cursor-pointer hover:scale-y-125 transition-all" />
              <div className="flex justify-between text-[10px] font-mono font-bold text-white/40 tracking-tighter"><span>{formatTime(currentTime)}</span><span>{formatTime(duration)}</span></div>
           </div>
           <div className="flex items-center justify-between">
@@ -814,11 +831,19 @@ const CustomPlayerPage = ({ book, initialEp, onBack, onEpisodeChange, audioSetti
               <button onClick={() => setCurrentEp(e => e + 1)} className="text-white/40 hover:text-white transition-colors"><SkipForward size={28} fill="currentColor"/></button>
             </div>
             <div className="flex items-center gap-6">
-               <div className="hidden sm:flex items-center gap-3 group/vol bg-white/5 p-2 rounded-xl border border-white/5">
+               <div className="hidden sm:flex items-center gap-3 group/vol bg-white/5 p-2 rounded-xl border border-white/5 transition-all hover:bg-white/10">
                   <button onClick={() => setVolume(v => v === 0 ? 1 : 0)} className="text-white/70 hover:text-white transition-colors">{volume === 0 ? <VolumeX size={20}/> : <Volume2 size={20}/>}</button>
-                  <div className="w-0 group-hover/vol:w-24 overflow-hidden transition-all duration-300 flex items-center"><input type="range" min="0" max="1" step="0.05" value={volume} onChange={(e) => setVolume(parseFloat(e.target.value))} className="w-24 accent-white h-1 rounded-full appearance-none" /></div>
+                  <div className="w-0 group-hover/vol:w-24 overflow-hidden transition-all duration-300 flex items-center"><input type="range" min="0" max="1" step="0.05" value={volume} onChange={(e) => setVolume(parseFloat(e.target.value))} className="w-24 accent-white h-1 rounded-full appearance-none cursor-pointer" /></div>
                </div>
-               <button onClick={() => setAudioSettings({...audioSettings, playbackRate: audioSettings.playbackRate >= 2 ? 1 : audioSettings.playbackRate + 0.5})} className="px-4 py-2 bg-blue-600 text-white rounded-xl font-black text-[10px] tracking-widest shadow-xl shadow-blue-600/30 active:scale-95 transition-all">{audioSettings.playbackRate}X SPEED</button>
+               <button onClick={() => {
+                 const rates = [1, 1.25, 1.5, 2];
+                 const currentIdx = rates.indexOf(audioSettings.playbackRate);
+                 const nextRate = rates[(currentIdx + 1) % rates.length];
+                 // Gunakan functional update agar stabil
+                 setAudioSettings(prev => ({...prev, playbackRate: nextRate}));
+               }} className="px-4 py-2 bg-blue-600 text-white rounded-xl font-black text-[10px] tracking-widest shadow-xl shadow-blue-600/30 active:scale-95 transition-all">
+                 {audioSettings.playbackRate}X SPEED
+               </button>
             </div>
           </div>
         </div>
