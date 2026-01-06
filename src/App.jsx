@@ -341,9 +341,6 @@ const CustomPlayerPage = ({ book, chapters, initialEp, onBack, audioSettings, se
                     />
                   </div>
                </div>
-               <button onClick={(e) => { e.stopPropagation(); setAudioSettings(s => ({...s, isMuted: !s.isMuted}))}} className="sm:hidden text-white/70">
-                 {getVolumeIcon()}
-               </button>
                <button onClick={(e) => { e.stopPropagation(); setAudioSettings(s => ({...s, playbackRate: s.playbackRate === 1 ? 1.5 : s.playbackRate === 1.5 ? 2 : 1}))}} className="px-3 py-1.5 bg-blue-600 text-white rounded-lg text-[9px] font-black tracking-widest uppercase shadow-lg shadow-blue-600/20 active:scale-95 transition-all">
                  {audioSettings.playbackRate}X SPEED
                </button>
@@ -396,7 +393,7 @@ export default function App() {
   const fbReady = fbApp && fbAuth && fbStore;
 
   /**
-   * --- LOGIKA AKSI (Didefinisikan sebelum dipanggil) ---
+   * --- LOGIKA AKSI (Didefinisikan sebelum dipanggil oleh UI) ---
    */
 
   const handleGoogleLogin = async () => {
@@ -405,12 +402,20 @@ export default function App() {
     try {
       const fb = window.firebase;
       const provider = new fb.auth.GoogleAuthProvider();
-      provider.setCustomParameters({ 'client_id': CONFIG.GOOGLE_CLIENT_ID });
+      // Mengatur Client ID jika diperlukan secara eksplisit
       await fb.auth().signInWithPopup(provider);
     } catch (e) {
       console.error("Login error:", e);
-      if (e.code === 'auth/operation-not-supported-in-this-environment' || String(e).includes('location.protocol')) {
-        setAuthError("Login Google tidak didukung di lingkungan pratinjau (iframe/blob). Fitur ini akan berfungsi normal saat di-deploy ke domain HTTPS asli.");
+      const errStr = String(e);
+      // Deteksi error environment secara lebih luas
+      const isEnvError = e.code === 'auth/operation-not-supported-in-this-environment' || 
+                         errStr.includes('location.protocol') || 
+                         errStr.includes('operation-not-supported');
+      
+      if (isEnvError) {
+        setAuthError("Login Google tidak didukung di lingkungan pratinjau ini ( iframe/blob). Harap coba setelah aplikasi di-deploy ke domain HTTPS asli.");
+      } else if (e.code === 'auth/popup-closed-by-user') {
+        setAuthError("Login dibatalkan oleh pengguna.");
       } else {
         setAuthError("Gagal masuk dengan Google. Silakan coba lagi.");
       }
@@ -494,7 +499,11 @@ export default function App() {
     fetchRank(rankTab, next);
   };
 
-  // Auth & Ad Effect
+  /**
+   * --- EFFECTS ---
+   */
+
+  // Firebase Auth & Ad initialization
   useEffect(() => {
     if (!fbReady || !window.firebase) return;
     const fb = window.firebase;
@@ -527,13 +536,16 @@ export default function App() {
                     const adRef = fb.firestore().doc(`artifacts/${appIdStr}/users/${u.uid}/settings/ad_pref`);
                     const snap = await adRef.get();
                     let show = true;
-                    if (snap.exists()) {
+                    if (snap.exists) {
                         const d = snap.data();
                         const diff = Date.now() - (d.ts || 0);
                         if (d.p ? diff < 86400000 : diff < 3600000) show = false;
                     }
                     if (show) setTimeout(() => setShowAd(true), 3000);
-                } catch(e) { setTimeout(() => setShowAd(true), 3000); }
+                } catch(e) { 
+                   // Fallback jika Firestore dilarang
+                   setTimeout(() => setShowAd(true), 3000); 
+                }
             }
         });
         return unsubscribe;
@@ -541,7 +553,7 @@ export default function App() {
   }, [fbReady]);
 
   useEffect(() => { if (scriptLoaded) fetchHome(); }, [scriptLoaded, fetchHome]);
-  useEffect(() => { if (view === 'rank') fetchRank(rankTab, 1); }, [view, rankTab]);
+  useEffect(() => { if (view === 'rank') fetchRank(rankTab, 1); }, [view, rankTab, fetchRank]);
 
   useEffect(() => {
     let filtered = [...allDramaData];
@@ -590,11 +602,11 @@ export default function App() {
 
       {/* ERROR BAR */}
       {authError && (
-        <div className="bg-orange-600/20 border-b border-orange-500/20 px-6 py-2 flex items-center justify-between">
+        <div className="bg-orange-600/20 border-b border-orange-500/20 px-6 py-2 flex items-center justify-between animate-in slide-in-from-top-full duration-300">
            <div className="flex items-center gap-2 text-orange-400 text-[9px] font-bold uppercase tracking-widest">
               <AlertCircle size={14} /> <span>{authError}</span>
            </div>
-           <button onClick={() => setAuthError(null)} className="text-orange-400/50 hover:text-orange-400"><X size={14}/></button>
+           <button onClick={() => setAuthError(null)} className="text-orange-400/50 hover:text-orange-400 transition-colors"><X size={14}/></button>
         </div>
       )}
 
