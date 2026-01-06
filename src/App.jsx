@@ -67,7 +67,8 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
-const appId = getSafeEnv('VITE_APP_ID', '3KNDH1p5iIG6U7FmuGTS');
+// Perubahan ID Aplikasi di bawah ini
+const appId = getSafeEnv('VITE_APP_ID', 'zxK1vPSy15CtEAAnHLeV');
 
 const STORAGE_KEYS = {
   SETTINGS: `dracin_settings_${appId}`,
@@ -795,7 +796,7 @@ export default function App() {
                 <div className="animate-in fade-in duration-700 text-left">
                    <Section title={`Tag: ${activeTag}`} icon={Tag}>
                      {loading ? (
-                        <div className="flex flex-col items-center justify-center py-20 gap-4 w-full text-left">
+                        <div className="flex flex-col items-center justify-center py-20 gap-4 w-full">
                            <Loader2 size={32} className="animate-spin text-blue-500" />
                            <p className="text-[10px] font-black text-slate-600 uppercase tracking-widest">Mencari Drama...</p>
                         </div>
@@ -1092,7 +1093,7 @@ const CustomPlayerPage = ({ book, initialEp, onBack, onEpisodeChange, audioSetti
               >
                 <div className="flex justify-between items-center text-left">
                   <button onClick={onBack} className="p-2 md:p-2.5 bg-white/10 backdrop-blur-md rounded-full hover:bg-white/20 transition-all border border-white/10 active:scale-90"><ChevronLeft size={20}/></button>
-                  <div className="text-center text-left">
+                  <div className="text-center">
                     <h2 className="text-[10px] md:text-xs font-black uppercase tracking-[0.2em] text-white">EPS {currentEp}</h2>
                   </div>
                   <button onClick={toggleFullScreen} className="p-2 md:p-2.5 bg-white/10 backdrop-blur-md rounded-full hover:bg-white/20 transition-all border border-white/10 active:scale-90"><Maximize size={20}/></button>
