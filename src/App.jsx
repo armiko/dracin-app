@@ -13,7 +13,7 @@ import {
 const CONFIG = {
   SCRIPT_URL: "https://cdn.jsdelivr.net/gh/armiko/dracin-app@169efe4fc99586d445cbf8780629c5ac210ca929/js/dramabox-core.js",
   HLS_URL: "https://cdn.jsdelivr.net/npm/hls.js@latest",
-  // Firebase Compat Scripts untuk stabilitas di lingkungan pratinjau
+  // Firebase Compat Scripts untuk stabilitas lintas platform (ESM)
   FIREBASE_APP: "https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js",
   FIREBASE_AUTH: "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js",
   FIREBASE_FIRESTORE: "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js",
@@ -58,39 +58,6 @@ const STATIC_FILTERS = [
     ]
   }
 ];
-
-/**
- * --- HELPER COMPONENTS (Didefinisikan di awal untuk menghindari ReferenceError) ---
- */
-
-const Section = ({ title, Icon, onSeeAll, children }) => (
-  <section className="mb-12">
-    <div className="flex items-center justify-between mb-6">
-      <div className="flex items-center gap-2">
-        <div className="p-1.5 bg-slate-900 rounded-lg border border-white/5 shadow-inner">
-          <Icon size={16} className={title.includes('Populer') ? 'text-orange-500' : 'text-blue-400'} />
-        </div>
-        <h2 className="text-lg font-black text-white uppercase tracking-tight">{title}</h2>
-      </div>
-      {onSeeAll && (
-        <button 
-          onClick={onSeeAll} 
-          className="flex items-center gap-1 text-[10px] font-black text-blue-500 hover:text-white uppercase tracking-widest transition-all bg-white/5 px-3 py-1 rounded-full border border-white/5"
-        >
-          Lihat Semua <ChevronRight size={12}/>
-        </button>
-      )}
-    </div>
-    {children}
-  </section>
-);
-
-const Skeleton = () => (
-  <div className="flex flex-col gap-2 animate-pulse">
-    <div className="aspect-[2/3] bg-slate-800 rounded-xl"></div>
-    <div className="h-2 bg-slate-800 rounded-full w-2/3"></div>
-  </div>
-);
 
 /**
  * --- UTILS ---
@@ -144,8 +111,38 @@ const formatTime = (seconds) => {
 };
 
 /**
- * --- KOMPONEN POPUP IKLAN ---
+ * --- SUB-KOMPONEN UI ---
  */
+
+const Section = ({ title, Icon, onSeeAll, children }) => (
+  <section className="mb-12">
+    <div className="flex items-center justify-between mb-6">
+      <div className="flex items-center gap-2">
+        <div className="p-1.5 bg-slate-900 rounded-lg border border-white/5 shadow-inner">
+          <Icon size={16} className={title.includes('Populer') ? 'text-orange-500' : 'text-blue-400'} />
+        </div>
+        <h2 className="text-lg font-black text-white uppercase tracking-tight">{title}</h2>
+      </div>
+      {onSeeAll && (
+        <button 
+          onClick={onSeeAll} 
+          className="flex items-center gap-1 text-[10px] font-black text-blue-500 hover:text-white uppercase tracking-widest transition-all bg-white/5 px-3 py-1 rounded-full border border-white/5"
+        >
+          Lihat Semua <ChevronRight size={12}/>
+        </button>
+      )}
+    </div>
+    {children}
+  </section>
+);
+
+const Skeleton = () => (
+  <div className="flex flex-col gap-2 animate-pulse">
+    <div className="aspect-[2/3] bg-slate-800 rounded-xl"></div>
+    <div className="h-2 bg-slate-800 rounded-full w-2/3"></div>
+  </div>
+);
+
 const SanPoiPopup = ({ onClose }) => {
   const [dontShowToday, setDontShowToday] = useState(false);
   return (
@@ -366,12 +363,14 @@ const CustomPlayerPage = ({ book, chapters, initialEp, onBack, audioSettings, se
  * --- MAIN APP ---
  */
 export default function App() {
+  // Scripts Loading
   const { loaded: scriptLoaded } = useExternalScript(CONFIG.SCRIPT_URL);
   const { loaded: hlsLoaded } = useExternalScript(CONFIG.HLS_URL);
   const { loaded: fbApp } = useExternalScript(CONFIG.FIREBASE_APP);
   const { loaded: fbAuth } = useExternalScript(CONFIG.FIREBASE_AUTH);
   const { loaded: fbStore } = useExternalScript(CONFIG.FIREBASE_FIRESTORE);
   
+  // States
   const [view, setView] = useState('home'); 
   const [previousView, setPreviousView] = useState('home');
   const [homeData, setHomeData] = useState({ popular: [], latest: [] });
@@ -391,65 +390,77 @@ export default function App() {
 
   const fbReady = fbApp && fbAuth && fbStore;
 
-  // Mendapatkan config firebase dengan aman
-  const getFirebaseConfig = () => {
+  // Global Config Safe Parser
+  const getEnvConfig = (key) => {
     try {
-      return JSON.parse(typeof __firebase_config !== 'undefined' ? __firebase_config : '{}');
-    } catch (e) {
-      return {};
-    }
+      // Check if global variable exists, if not return null
+      if (key === 'firebase' && typeof __firebase_config !== 'undefined') return JSON.parse(__firebase_config);
+      if (key === 'appId' && typeof __app_id !== 'undefined') return __app_id;
+      if (key === 'token' && typeof __initial_auth_token !== 'undefined') return __initial_auth_token;
+    } catch (e) {}
+    return null;
   };
+
+  const currentAppId = getEnvConfig('appId') || 'nontondracin-external';
 
   // Auth Initialization (Rule 3)
   useEffect(() => {
     if (!fbReady || !window.firebase) return;
     const fb = window.firebase;
-    const fConfig = getFirebaseConfig();
+    const fConfig = getEnvConfig('firebase');
+    const initialToken = getEnvConfig('token');
     
-    if (!fb.apps.length) {
+    // Hanya inisialisasi jika config tersedia
+    if (fConfig && !fb.apps.length) {
       try { fb.initializeApp(fConfig); } catch(e) {}
     }
     
     const initAuth = async () => {
       try {
-        if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
-          await fb.auth().signInWithCustomToken(__initial_auth_token);
-        } else {
-          await fb.auth().signInAnonymously();
+        if (fb.apps.length) {
+            if (initialToken) {
+                await fb.auth().signInWithCustomToken(initialToken);
+            } else {
+                await fb.auth().signInAnonymously();
+            }
         }
       } catch (e) { console.error("Auth failed:", e); }
     };
 
     initAuth();
-    return fb.auth().onAuthStateChanged(setUser);
+    if (fb.apps.length) return fb.auth().onAuthStateChanged(setUser);
   }, [fbReady]);
 
-  // Ad Logic
+  // Ad Logic (Persistensi Firestore)
   useEffect(() => {
-    if (!user || !fbReady || !window.firebase) return;
+    if (!user || !fbReady || !window.firebase || !window.firebase.apps.length) return;
     const fb = window.firebase;
     const checkAd = async () => {
       try {
-        const adRef = fb.firestore().doc(`artifacts/${appId}/users/${user.uid}/settings/ad_pref`);
+        const adRef = fb.firestore().doc(`artifacts/${currentAppId}/users/${user.uid}/settings/ad_pref`);
         const snap = await adRef.get();
         let show = true;
         if (snap.exists) {
           const d = snap.data();
           const diff = Date.now() - (d.ts || 0);
+          // 1 Jam jika tidak dicentang, 1 Hari jika dicentang
           if (d.p ? diff < 86400000 : diff < 3600000) show = false;
         }
         if (show) setTimeout(() => setShowAd(true), 3000);
-      } catch(e) {}
+      } catch(e) {
+          // Fallback jika Firestore dilarang/error
+          setTimeout(() => setShowAd(true), 3000);
+      }
     };
     checkAd();
-  }, [user, fbReady]);
+  }, [user, fbReady, currentAppId]);
 
   const handleCloseAd = async (p) => {
     setShowAd(false);
-    if (user && fbReady && window.firebase) {
+    if (user && fbReady && window.firebase && window.firebase.apps.length) {
       try {
         const fb = window.firebase;
-        await fb.firestore().doc(`artifacts/${appId}/users/${user.uid}/settings/ad_pref`).set({ ts: Date.now(), p });
+        await fb.firestore().doc(`artifacts/${currentAppId}/users/${user.uid}/settings/ad_pref`).set({ ts: Date.now(), p });
       } catch(e) {}
     }
   };
@@ -507,6 +518,7 @@ export default function App() {
 
   return (
     <div className="bg-[#0f172a] h-screen text-slate-200 font-sans flex flex-col overflow-hidden">
+      {/* NAVBAR */}
       <nav className="flex-none h-16 bg-[#0f172a]/80 backdrop-blur-xl border-b border-white/5 flex items-center z-40 px-4 sm:px-8">
         <div className="container mx-auto flex justify-between items-center">
           <button onClick={() => setView('home')} className="flex items-center gap-2 group">
@@ -524,6 +536,7 @@ export default function App() {
         </div>
       </nav>
 
+      {/* MAIN CONTENT */}
       <main className="flex-1 overflow-y-auto pt-4 pb-16 px-4 sm:px-8 no-scrollbar">
         <div className="container mx-auto max-w-7xl">
           {view === 'home' && (
@@ -550,12 +563,12 @@ export default function App() {
                )}
               <Section Icon={Flame} title="Drama Populer" onSeeAll={() => { setView('rank'); setRankTab('popular'); }}>
                 <div className="grid grid-cols-2 xs:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4 sm:gap-6">
-                  {homeData.popular.slice(1, 7).map((item, idx) => <DramaCard key={idx} item={item} onClick={(it) => { setSelectedBookId(it.bookId || it.id); setPreviousView('home'); setView('detail'); }} />)}
+                  {homeData.popular.length > 0 ? homeData.popular.slice(1, 7).map((item, idx) => <DramaCard key={idx} item={item} onClick={(it) => { setSelectedBookId(it.bookId || it.id); setPreviousView('home'); setView('detail'); }} />) : [...Array(6)].map((_, i) => <Skeleton key={i}/>)}
                 </div>
               </Section>
               <Section Icon={Clock} title="Update Terbaru" onSeeAll={() => { setView('rank'); setRankTab('latest'); }}>
                 <div className="grid grid-cols-2 xs:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4 sm:gap-6">
-                  {homeData.latest.slice(0, 6).map((item, idx) => <DramaCard key={idx} item={item} onClick={(it) => { setSelectedBookId(it.bookId || it.id); setPreviousView('home'); setView('detail'); }} />)}
+                  {homeData.latest.length > 0 ? homeData.latest.slice(0, 6).map((item, idx) => <DramaCard key={idx} item={item} onClick={(it) => { setSelectedBookId(it.bookId || it.id); setPreviousView('home'); setView('detail'); }} />) : [...Array(6)].map((_, i) => <Skeleton key={i}/>)}
                 </div>
               </Section>
             </div>
