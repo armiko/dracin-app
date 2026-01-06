@@ -183,7 +183,6 @@ const formatTime = (seconds) => {
   return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
 };
 
-// ===== VIDEO HELPERS (PREVIEW COMPATIBLE) =====
 const isHls = (url) => typeof url === 'string' && url.includes('.m3u8');
 
 /**
@@ -328,7 +327,7 @@ const DramaDetailPage = ({ bookId, onBack, onPlayEpisode, watchlist, onToggleWat
 };
 
 // =============================
-// CUSTOM PLAYER PAGE (LOGIKA VIDEO DIPERBAIKI)
+// CUSTOM PLAYER PAGE (PERBAIKAN SPEED & HISTORY)
 // =============================
 const CustomPlayerPage = ({
   book,
@@ -353,7 +352,6 @@ const CustomPlayerPage = ({
   const reqIdRef = useRef(0);
   const controlTimerRef = useRef(null);
 
-  // LOAD EPISODE (ANTI RACE)
   const loadEpisode = useCallback(async (ep) => {
     const reqId = ++reqIdRef.current;
     setLoading(true);
@@ -386,27 +384,25 @@ const CustomPlayerPage = ({
     }
   }, [book]);
 
-  // VIDEO INIT (PERBAIKAN DOMAIN & NOTSUPPORTEDERROR)
   useEffect(() => {
     const video = videoRef.current;
     if (!video || !videoUrl) return;
 
-    // Bersihkan HLS lama sebelum memulai yang baru
     if (hlsRef.current) {
       hlsRef.current.destroy();
       hlsRef.current = null;
     }
 
-    // Reset video element sepenuhnya untuk mencegah NotSupportedError
     video.pause();
-    video.removeAttribute('src'); // Gunakan removeAttribute daripada string kosong
+    video.removeAttribute('src');
     video.load();
 
     const startPlay = () => {
-      // Putar hanya jika video element benar-benar ada dan memiliki src
       if (video && video.src) {
+        // Terapkan setting audio sebelum play
+        video.playbackRate = audioSettings.playbackRate || 1;
+        video.volume = audioSettings.isMuted ? 0 : (audioSettings.volume || 1);
         video.play().catch(e => {
-          // Abaikan error AbortError (karena pergantian episode cepat)
           if (e.name !== 'AbortError') console.warn("Auto-play failed:", e);
         });
       }
@@ -416,41 +412,27 @@ const CustomPlayerPage = ({
       const hls = new window.Hls({ 
         enableWorker: true, 
         lowLatencyMode: true,
-        // Konfigurasi retry untuk stabilitas domain kustom
         manifestLoadingRetryDelay: 1000,
         manifestLoadingMaxRetry: 4,
-        xhrSetup: function(xhr, url) {
-          xhr.withCredentials = false;
-        }
+        xhrSetup: function(xhr, url) { xhr.withCredentials = false; }
       });
 
       hls.loadSource(videoUrl);
       hls.attachMedia(video);
-      
       hls.on(window.Hls.Events.MANIFEST_PARSED, startPlay);
       
       hls.on(window.Hls.Events.ERROR, (event, data) => {
         if (data.fatal) {
           switch (data.type) {
-            case window.Hls.ErrorTypes.NETWORK_ERROR:
-              hls.startLoad();
-              break;
-            case window.Hls.ErrorTypes.MEDIA_ERROR:
-              hls.recoverMediaError();
-              break;
-            default:
-              setError(true);
-              hls.destroy();
-              break;
+            case window.Hls.ErrorTypes.NETWORK_ERROR: hls.startLoad(); break;
+            case window.Hls.ErrorTypes.MEDIA_ERROR: hls.recoverMediaError(); break;
+            default: setError(true); hls.destroy(); break;
           }
         }
       });
-
       hlsRef.current = hls;
     } else {
-      // Native fallback
       video.src = videoUrl;
-      // Berikan jeda sedikit agar DOM video siap
       setTimeout(startPlay, 50);
     }
 
@@ -460,32 +442,31 @@ const CustomPlayerPage = ({
         hlsRef.current = null;
       }
     };
-  }, [videoUrl]);
+  }, [videoUrl, audioSettings.playbackRate, audioSettings.volume, audioSettings.isMuted]);
 
   useEffect(() => {
     loadEpisode(currentEp);
-    onEpisodeChange?.(currentEp);
+    onEpisodeChange?.(currentEp); // Simpan riwayat otomatis
   }, [currentEp, loadEpisode, onEpisodeChange]);
-
-  useEffect(() => {
-    if (!videoRef.current) return;
-    videoRef.current.volume = audioSettings.isMuted ? 0 : audioSettings.volume;
-    videoRef.current.playbackRate = audioSettings.playbackRate;
-  }, [audioSettings]);
 
   const togglePlay = (e) => {
     if (e) e.stopPropagation();
     if (!videoRef.current) return;
     if (isPlaying) videoRef.current.pause();
-    else {
-      videoRef.current.play().catch(err => console.warn("Play interrupted", err));
-    }
+    else videoRef.current.play().catch(err => console.warn("Play interrupted", err));
   };
 
   const handleMouseMove = () => {
     setShowControls(true);
     clearTimeout(controlTimerRef.current);
     controlTimerRef.current = setTimeout(() => setShowControls(false), 4000);
+  };
+
+  const updatePlaybackRate = () => {
+    const rates = [1, 1.25, 1.5, 2];
+    const currentIndex = rates.indexOf(audioSettings.playbackRate);
+    const nextRate = rates[(currentIndex + 1) % rates.length];
+    setAudioSettings(s => ({...s, playbackRate: nextRate}));
   };
 
   const getVolumeIcon = () => {
@@ -579,8 +560,8 @@ const CustomPlayerPage = ({
                   />
                 </div>
               </div>
-              <button onClick={() => setAudioSettings(s => ({...s, playbackRate: s.playbackRate === 1 ? 1.5 : s.playbackRate === 1.5 ? 2 : 1}))} className="px-3 py-1.5 bg-blue-600 text-white rounded-lg text-[9px] font-black tracking-widest uppercase shadow-lg shadow-blue-600/20 active:scale-95 transition-all">
-                 {audioSettings.playbackRate}X SPEED
+              <button onClick={updatePlaybackRate} className="px-3 py-1.5 bg-blue-600 text-white rounded-lg text-[9px] font-black tracking-widest uppercase shadow-lg shadow-blue-600/20 active:scale-95 transition-all">
+                  {audioSettings.playbackRate}X SPEED
               </button>
             </div>
           </div>
@@ -695,6 +676,15 @@ export default function App() {
     } catch(e) { console.error("History save failed:", e); }
   };
 
+  // PERSISTENCE AUDIO SETTINGS
+  useEffect(() => {
+    if (!user || !fbReady || !window.firebase) return;
+    const fb = window.firebase;
+    const settingsRef = fb.firestore().doc(`artifacts/${customAppId}/users/${user.uid}/settings/audio`);
+    
+    settingsRef.set(audioSettings, { merge: true }).catch(() => {});
+  }, [audioSettings, user, fbReady]);
+
   const handleCloseAd = async (isPersistent) => {
     setShowAd(false);
     if (user && fbReady && window.firebase) {
@@ -760,27 +750,31 @@ export default function App() {
     const fb = window.firebase;
     if (!fb.apps.length) fb.initializeApp(firebaseConfig);
     
-    fb.auth().onAuthStateChanged(async (u) => {
+    const unsubscribeAuth = fb.auth().onAuthStateChanged(async (u) => {
         setUser(u);
         if (u) {
-            // Watchlist Listener
-            fb.firestore().collection(`artifacts/${customAppId}/users/${u.uid}/watchlist`)
+            // Real-time Watchlist
+            const unsubWatchlist = fb.firestore().collection(`artifacts/${customAppId}/users/${u.uid}/watchlist`)
                 .onSnapshot(snap => {
                     const list = [];
                     snap.forEach(doc => list.push(doc.data()));
-                    list.sort((a,b) => b.ts - a.ts);
-                    setWatchlistData(list);
-                });
+                    setWatchlistData(list.sort((a,b) => b.ts - a.ts));
+                }, err => console.error("Watchlist snap error:", err));
 
-            // History Listener
-            fb.firestore().collection(`artifacts/${customAppId}/users/${u.uid}/history`)
+            // Real-time History
+            const unsubHistory = fb.firestore().collection(`artifacts/${customAppId}/users/${u.uid}/history`)
                 .onSnapshot(snap => {
                     const list = [];
                     snap.forEach(doc => list.push(doc.data()));
-                    list.sort((a,b) => b.ts - a.ts);
-                    setHistoryData(list);
-                });
+                    setHistoryData(list.sort((a,b) => b.ts - a.ts));
+                }, err => console.error("History snap error:", err));
 
+            // Load Settings (Audio & Speed)
+            fb.firestore().doc(`artifacts/${customAppId}/users/${u.uid}/settings/audio`).get().then(snap => {
+              if (snap.exists) setAudioSettings(prev => ({ ...prev, ...snap.data() }));
+            });
+
+            // Ad Preferences
             try {
                 const adRef = fb.firestore().doc(`artifacts/${customAppId}/users/${u.uid}/settings/ad_pref`);
                 const snap = await adRef.get();
@@ -791,10 +785,17 @@ export default function App() {
                 }
                 setTimeout(() => setShowAd(true), 3000);
             } catch(e) { setTimeout(() => setShowAd(true), 3000); }
+
+            return () => {
+              unsubWatchlist();
+              unsubHistory();
+            };
         } else {
           fb.auth().signInAnonymously();
         }
     });
+
+    return () => unsubscribeAuth();
   }, [fbReady]);
 
   useEffect(() => { if (scriptLoaded) fetchHome(); }, [scriptLoaded, fetchHome]);
@@ -914,9 +915,9 @@ export default function App() {
           {view === 'rank' && (
             <div className="animate-in fade-in duration-500">
                <div className="flex justify-center gap-3 mb-8 overflow-x-auto no-scrollbar py-1">
-                  {[ { id: 'popular', label: 'Populer' }, { id: 'latest', label: 'Terbaru' }, { id: 'trending', label: 'Trending' } ].map(t => (
+                 {[ { id: 'popular', label: 'Populer' }, { id: 'latest', label: 'Terbaru' }, { id: 'trending', label: 'Trending' } ].map(t => (
                     <button key={t.id} onClick={() => { setRankTab(t.id); setRankPage(1); fetchRank(t.id, 1); }} className={`px-6 py-2 rounded-xl font-black text-[10px] uppercase tracking-widest border transition-all ${rankTab === t.id ? 'bg-blue-600 border-blue-600 text-white shadow-lg' : 'bg-white/5 border-white/10 text-slate-400 hover:border-white/20'}`}>{t.label}</button>
-                  ))}
+                 ))}
                </div>
                <div className="grid grid-cols-2 xs:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-5">
                   {rankData.length > 0 ? rankData.map((item, idx) => <DramaCard key={idx} item={item} rank={idx+1} onClick={(it) => { setSelectedBookId(it.bookId || it.id); setPreviousView('rank'); setView('detail'); }} />) : [...Array(12)].map((_, i) => <Skeleton key={i}/>)}
@@ -954,7 +955,7 @@ export default function App() {
                             <div key={idx} className="flex flex-col">
                                 <DramaCard item={{...item, id: item.bookId}} onClick={() => { setSelectedBookId(item.bookId); setPreviousView('history'); setView('detail'); }} />
                                 <div className="mt-1 flex items-center gap-1 text-blue-400 font-black text-[8px] uppercase tracking-tighter px-1">
-                                    <Clock size={8} /> Terakhir ditonton
+                                    <Clock size={8} /> EP TERAKHIR: {item.lastEpisode || '?'}
                                 </div>
                             </div>
                         )) : (
