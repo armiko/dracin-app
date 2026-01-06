@@ -5,20 +5,9 @@ import {
   Loader2, Trophy, Star, Filter, Plus,
   Pause, Volume2, VolumeX, Share2, ChevronLeft,
   Volume1, Gamepad2, CheckCircle2, ExternalLink,
-  LogOut, LogIn, User as UserIcon, AlertCircle
+  LogOut, LogIn, User as UserIcon, AlertCircle,
+  Bookmark, BookmarkCheck, History
 } from 'lucide-react';
-
-/**
- * --- ARAHAN KONFIGURASI GOOGLE OAUTH ---
- * Galat CONFIGURATION_NOT_FOUND biasanya berarti Google Sign-In belum diaktifkan.
- * Sila pastikan:
- * 1. Di Firebase Console -> Authentication -> Sign-in method -> Tambah 'Google' dan aktifkan.
- * 2. Pastikan domain vercel/lokal sudah masuk ke 'Authorized domains'.
- * 3. Masukkan URI berikut di Google Cloud Console -> Credentials:
- * Authorized redirect URIs:
- * - https://nontondracin-f5065.firebaseapp.com/__/auth/handler
- * - https://nontondracin-f5065.web.app/__/auth/handler
- */
 
 /**
  * --- KONFIGURASI API & FIREBASE ---
@@ -81,7 +70,7 @@ const STATIC_FILTERS = [
 ];
 
 /**
- * --- UTILS ---
+ * --- UTILS & HELPERS ---
  */
 const useExternalScript = (url) => {
   const [state, setState] = useState({ loaded: false, error: false });
@@ -138,7 +127,7 @@ const Section = ({ title, icon: IconComponent, onSeeAll, children }) => (
   <section className="mb-12">
     <div className="flex items-center justify-between mb-6">
       <div className="flex items-center gap-2">
-        <div className="p-1.5 bg-slate-900 rounded-lg border border-white/5 shadow-inner">
+        <div className="p-1.5 bg-slate-900 rounded-lg border border-white/5 shadow-inner text-blue-400">
            {IconComponent && <IconComponent size={16} className={title.includes('Populer') ? 'text-orange-500' : 'text-blue-400'} />}
         </div>
         <h2 className="text-lg font-black text-white uppercase tracking-tight">{title}</h2>
@@ -216,8 +205,10 @@ const DramaCard = ({ item, onClick, rank }) => {
   );
 };
 
-const DramaDetailPage = ({ bookId, onBack, onPlayEpisode }) => {
+const DramaDetailPage = ({ bookId, onBack, onPlayEpisode, watchlist, onToggleWatchlist }) => {
   const [data, setData] = useState(null);
+  const isInWatchlist = watchlist.some(item => String(item.bookId) === String(bookId));
+
   useEffect(() => {
     const fetch = async () => {
       if (!window.DramaboxCore) return;
@@ -233,7 +224,16 @@ const DramaDetailPage = ({ bookId, onBack, onPlayEpisode }) => {
 
   return (
     <div className="animate-in fade-in duration-500">
-      <button onClick={onBack} className="flex items-center gap-1.5 text-slate-400 font-bold mb-6 hover:text-white transition-colors text-[10px]"><ChevronLeft size={16}/> KEMBALI</button>
+      <div className="flex items-center justify-between mb-6">
+        <button onClick={onBack} className="flex items-center gap-1.5 text-slate-400 font-bold hover:text-white transition-colors text-[10px]"><ChevronLeft size={16}/> KEMBALI</button>
+        <button 
+          onClick={() => onToggleWatchlist(data.book)}
+          className={`flex items-center gap-2 px-4 py-2 rounded-xl text-[10px] font-black uppercase transition-all border ${isInWatchlist ? 'bg-blue-600 border-blue-600 text-white' : 'bg-white/5 border-white/10 text-slate-400 hover:text-white hover:bg-white/10'}`}
+        >
+          {isInWatchlist ? <BookmarkCheck size={14}/> : <Bookmark size={14}/>}
+          {isInWatchlist ? 'Tersimpan' : 'Simpan ke Watchlist'}
+        </button>
+      </div>
       <div className="bg-slate-900/60 rounded-[1.5rem] overflow-hidden border border-white/5 flex flex-col md:flex-row shadow-2xl backdrop-blur-sm">
         <div className="w-full md:w-[280px] shrink-0"><img src={data.book?.cover} className="w-full h-full object-cover" alt="Cover" /></div>
         <div className="p-6 sm:p-10 flex-1">
@@ -311,47 +311,68 @@ const CustomPlayerPage = ({ book, chapters, initialEp, onBack, audioSettings, se
   return (
     <div className="fixed inset-0 z-[1000] bg-black flex flex-col items-center justify-center overflow-hidden" onMouseMove={() => { setShowControls(true); setTimeout(() => setShowControls(false), 5000); }}>
       <div className={`absolute top-0 left-0 right-0 p-6 z-50 flex items-center justify-between bg-gradient-to-b from-black/90 via-black/40 to-transparent transition-opacity duration-500 ${showControls ? 'opacity-100' : 'opacity-0'}`}>
-        <button onClick={onBack} className="text-white hover:bg-white/10 p-2 rounded-full transition-all"><ChevronLeft size={28} /></button>
+        <button onClick={onBack} className="text-white hover:bg-white/10 p-2 rounded-full transition-all"><ChevronLeft size={24} /></button>
         <div className="text-center flex-1 max-w-xl">
           <h2 className="text-white font-black text-sm truncate uppercase tracking-tight">{book.bookName}</h2>
-          <p className="text-blue-400 text-[10px] font-black uppercase tracking-[0.2em]">Episode {currentEp}</p>
+          <p className="text-blue-400 text-[8px] font-black uppercase tracking-[0.2em]">Episode {currentEp}</p>
         </div>
-        <button className="text-white p-3 rounded-full"><Share2 size={20} /></button>
+        <button className="text-white p-2 rounded-full"><Share2 size={18} /></button>
       </div>
 
       <div className="relative w-full h-full flex items-center justify-center bg-black" onClick={() => (isPlaying ? videoRef.current.pause() : videoRef.current.play())}>
-        {loading ? <Loader2 className="animate-spin text-blue-500" size={60} /> : error ? <div className="text-white text-xs font-black bg-red-600/40 px-10 py-5 rounded-3xl border border-red-500/20 uppercase tracking-widest">Video Gagal Dimuat</div> : 
+        {loading ? <Loader2 className="animate-spin text-blue-500" size={48} /> : error ? <div className="text-white text-[10px] font-black bg-red-600/40 px-8 py-4 rounded-2xl border border-red-500/20 uppercase tracking-widest">Video Gagal Dimuat</div> : 
           <video ref={videoRef} className="w-full h-full object-contain cursor-pointer" onPlay={() => setIsPlaying(true)} onPause={() => setIsPlaying(false)} onTimeUpdate={() => setCurrentTime(videoRef.current?.currentTime || 0)} onLoadedMetadata={() => setDuration(videoRef.current?.duration || 0)} onEnded={() => setCurrentEp(e => e + 1)} playsInline />
         }
-        {!isPlaying && !loading && <div className="absolute inset-0 flex items-center justify-center pointer-events-none bg-black/30"><div className="bg-white/10 p-10 rounded-full backdrop-blur-md border border-white/20"><Play size={50} fill="white" className="text-white ml-2" /></div></div>}
+        {!isPlaying && !loading && <div className="absolute inset-0 flex items-center justify-center pointer-events-none bg-black/30"><div className="bg-white/10 p-8 rounded-full backdrop-blur-md border border-white/20"><Play size={40} fill="white" className="text-white ml-1.5" /></div></div>}
       </div>
 
-      <div className={`absolute bottom-0 left-0 right-0 p-8 z-50 transition-all duration-500 ${showControls ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-8 pointer-events-none'}`}>
-        <div className="max-w-5xl mx-auto flex flex-col gap-6">
-          <div className="relative group/timeline flex items-center h-4">
-            <input type="range" min="0" max={duration || 0} step="0.1" value={currentTime} onChange={(e) => { videoRef.current.currentTime = e.target.value; }} className="w-full h-1 accent-blue-600 bg-white/20 rounded-full appearance-none cursor-pointer hover:h-2 transition-all" />
-          </div>
-          <div className="flex items-center justify-between bg-slate-900/60 backdrop-blur-2xl p-6 rounded-[2rem] border border-white/10 shadow-2xl">
-            <div className="flex items-center gap-10">
-              <button disabled={currentEp <= 1} onClick={(e) => { e.stopPropagation(); setCurrentEp(e => e - 1); }} className="text-white/40 hover:text-white disabled:opacity-10"><SkipBack size={28} fill="currentColor" /></button>
-              <button onClick={(e) => { e.stopPropagation(); isPlaying ? videoRef.current.pause() : videoRef.current.play(); }} className="text-white transform hover:scale-110 transition-transform">{isPlaying ? <Pause size={48} fill="white" /> : <Play size={48} fill="white" />}</button>
-              <button onClick={(e) => { e.stopPropagation(); setCurrentEp(e => e + 1); }} className="text-white/40 hover:text-white"><SkipForward size={28} fill="currentColor" /></button>
+      <div className={`absolute bottom-0 left-0 right-0 p-6 z-50 transition-all duration-500 ${showControls ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-8 pointer-events-none'}`}>
+        <div className="max-w-4xl mx-auto flex flex-col gap-3">
+          <div className="flex flex-col gap-1.5">
+            <input type="range" min="0" max={duration || 0} step="0.1" value={currentTime} onChange={(e) => { videoRef.current.currentTime = e.target.value; }} className="w-full h-1 accent-blue-600 bg-white/20 rounded-full appearance-none cursor-pointer hover:h-1.5 transition-all" />
+            <div className="flex justify-between items-center px-1 text-[9px] font-mono font-bold text-white/50 tracking-tighter">
+              <span>{formatTime(currentTime)}</span>
+              <span>{formatTime(duration)}</span>
             </div>
-            <div className="flex items-center gap-8">
-               <div className="hidden sm:flex items-center gap-2 group/volume bg-white/5 px-4 py-2 rounded-2xl hover:bg-white/10 transition-all">
-                  <button onClick={(e) => { e.stopPropagation(); setAudioSettings(s => ({...s, isMuted: !s.isMuted}))}} className="text-white/70">{getVolumeIcon()}</button>
-                  <div className="w-0 group-hover/volume:w-32 overflow-hidden transition-all duration-300 ease-out">
-                    <input type="range" min="0" max="1" step="0.01" value={audioSettings.isMuted ? 0 : audioSettings.volume} onChange={(e) => setAudioSettings(s => ({...s, volume: parseFloat(e.target.value), isMuted: parseFloat(e.target.value) === 0}))} style={{background: `linear-gradient(to right, #3b82f6 ${audioSettings.volume*100}%, rgba(255,255,255,0.2) ${audioSettings.volume*100}%)`}} className="volume-premium w-32 h-1 appearance-none rounded-full cursor-pointer" />
+          </div>
+
+          <div className="flex items-center justify-between bg-slate-900/60 backdrop-blur-2xl p-4 rounded-[1.5rem] border border-white/10 shadow-2xl">
+            <div className="flex items-center gap-6">
+              <button disabled={currentEp <= 1} onClick={(e) => { e.stopPropagation(); setCurrentEp(e => e - 1); }} className="text-white/40 hover:text-white disabled:opacity-10"><SkipBack size={24} fill="currentColor" /></button>
+              <button onClick={(e) => { e.stopPropagation(); isPlaying ? videoRef.current.pause() : videoRef.current.play(); }} className="text-white transform active:scale-90 transition-transform">{isPlaying ? <Pause size={40} fill="white" /> : <Play size={40} fill="white" />}</button>
+              <button onClick={(e) => { e.stopPropagation(); setCurrentEp(e => e + 1); }} className="text-white/40 hover:text-white"><SkipForward size={24} fill="currentColor" /></button>
+            </div>
+            <div className="flex items-center gap-6">
+               <div className="hidden sm:flex items-center gap-2 group/vol bg-white/5 px-3 py-1.5 rounded-xl border border-white/5 hover:bg-white/10 transition-all">
+                  <button onClick={(e) => { e.stopPropagation(); setAudioSettings(s => ({...s, isMuted: !s.isMuted}))}} className="text-white/70 hover:text-white transition-colors">
+                    {getVolumeIcon()}
+                  </button>
+                  <div className="w-0 group-hover/vol:w-28 overflow-hidden transition-all duration-300 ease-out flex items-center">
+                    <input 
+                      type="range" min="0" max="1" step="0.01" 
+                      value={volumeVal} 
+                      onChange={(e) => {
+                        const val = parseFloat(e.target.value);
+                        setAudioSettings(s => ({...s, volume: val, isMuted: val === 0}));
+                      }} 
+                      style={{
+                        background: `linear-gradient(to right, #3b82f6 ${volumePercent}%, rgba(255,255,255,0.1) ${volumePercent}%)`
+                      }} 
+                      className="volume-premium w-28 h-1 appearance-none rounded-full cursor-pointer outline-none" 
+                    />
                   </div>
                </div>
-               <button onClick={(e) => { e.stopPropagation(); setAudioSettings(s => ({...s, playbackRate: s.playbackRate === 1 ? 1.5 : s.playbackRate === 1.5 ? 2 : 1}))}} className="px-5 py-2 bg-blue-600 text-white rounded-xl text-[11px] font-black shadow-lg shadow-blue-600/20 active:scale-95 transition-all">KECEPATAN {audioSettings.playbackRate}X</button>
+               <button onClick={(e) => { e.stopPropagation(); setAudioSettings(s => ({...s, playbackRate: s.playbackRate === 1 ? 1.5 : s.playbackRate === 1.5 ? 2 : 1}))}} className="px-3 py-1.5 bg-blue-600 text-white rounded-lg text-[9px] font-black tracking-widest uppercase shadow-lg shadow-blue-600/20 active:scale-95 transition-all">
+                 {audioSettings.playbackRate}X SPEED
+               </button>
             </div>
           </div>
         </div>
       </div>
       <style>{`
-        .volume-premium::-webkit-slider-thumb { -webkit-appearance: none; width: 14px; height: 14px; background: white; border-radius: 50%; border: 3px solid #3b82f6; cursor: pointer; opacity: 0; transition: 0.2s; }
-        .group\\/volume:hover .volume-premium::-webkit-slider-thumb { opacity: 1; }
+        .volume-premium::-webkit-slider-thumb { -webkit-appearance: none; width: 10px; height: 10px; background: white; border-radius: 50%; border: 2px solid #3b82f6; cursor: pointer; opacity: 0; transition: 0.2s; }
+        .group\\/vol:hover .volume-premium::-webkit-slider-thumb { opacity: 1; }
+        .volume-premium::-moz-range-thumb { width: 10px; height: 10px; background: white; border-radius: 50%; border: 2px solid #3b82f6; cursor: pointer; opacity: 0; border: none; }
       `}</style>
     </div>
   );
@@ -369,6 +390,8 @@ export default function App() {
   const [filterData, setFilterData] = useState([]);
   const [allDramaData, setAllDramaData] = useState([]);
   const [searchData, setSearchData] = useState([]);
+  const [watchlistData, setWatchlistData] = useState([]);
+  const [historyData, setHistoryData] = useState([]);
   
   const [user, setUser] = useState(null);
   const [showAd, setShowAd] = useState(false);
@@ -402,23 +425,14 @@ export default function App() {
     try {
       const fb = window.firebase;
       const provider = new fb.auth.GoogleAuthProvider();
-      // MEMASTIKAN LOGIN GOOGLE MENGGUNAKAN KONFIGURASI YANG BENAR
       await fb.auth().signInWithPopup(provider);
     } catch (e) {
-      console.error("Login error:", e);
+      console.error("Gagal login:", e);
       const errStr = String(e);
-      const isEnvError = e.code === 'auth/operation-not-supported-in-this-environment' || 
-                         errStr.includes('location.protocol') || 
-                         errStr.includes('operation-not-supported');
-      
-      if (isEnvError) {
-        setAuthError("Login Google memerlukan protokol HTTPS asli (seperti domain Vercel Anda). Fitur ini tidak dapat berjalan di dalam jendela pratonton sistem.");
-      } else if (e.code === 'auth/configuration-not-found') {
-        setAuthError("Galat: Google belum diaktifkan sebagai Sign-in Provider di Firebase Console Anda.");
-      } else if (e.code === 'auth/popup-closed-by-user') {
-        setAuthError("Login dibatalkan oleh pengguna.");
+      if (e.code === 'auth/operation-not-supported-in-this-environment' || errStr.includes('location.protocol')) {
+        setAuthError("Login Google tidak didukung di lingkungan pratinjau ini. Fitur ini akan berfungsi normal setelah aplikasi Anda di-deploy ke domain asli.");
       } else {
-        setAuthError("Gagal masuk dengan Google. Pastikan konfigurasi OAuth di Konsol Firebase sudah benar.");
+        setAuthError("Gagal masuk dengan Google. Silakan coba lagi.");
       }
     }
   };
@@ -427,7 +441,50 @@ export default function App() {
     if (!fbReady || !window.firebase) return;
     try {
       await window.firebase.auth().signOut();
-    } catch (e) { console.error("Logout failed:", e); }
+      setWatchlistData([]);
+      setHistoryData([]);
+      setView('home');
+    } catch (e) { console.error("Gagal keluar:", e); }
+  };
+
+  const toggleWatchlist = async (drama) => {
+    if (!user || !fbReady || !window.firebase) return;
+    const fb = window.firebase;
+    const dramaId = String(drama.bookId || drama.id);
+    const watchlistRef = fb.firestore().doc(`artifacts/${FIREBASE_CONFIG_OVERRIDE.projectId}/users/${user.uid}/watchlist/${dramaId}`);
+    
+    const exists = watchlistData.some(item => String(item.bookId) === dramaId);
+    
+    try {
+        if (exists) {
+            await watchlistRef.delete();
+        } else {
+            await watchlistRef.set({
+                bookId: dramaId,
+                bookName: drama.bookName || drama.title,
+                coverWap: drama.coverWap || drama.cover || drama.coverUrl,
+                chapterCount: drama.chapterCount || drama.episodeCount || 0,
+                ts: Date.now()
+            });
+        }
+    } catch(e) { console.error("Watchlist toggle failed:", e); }
+  };
+
+  const saveToHistory = async (drama) => {
+    if (!user || !fbReady || !window.firebase) return;
+    const fb = window.firebase;
+    const dramaId = String(drama.bookId || drama.id);
+    const historyRef = fb.firestore().doc(`artifacts/${FIREBASE_CONFIG_OVERRIDE.projectId}/users/${user.uid}/history/${dramaId}`);
+    
+    try {
+        await historyRef.set({
+            bookId: dramaId,
+            bookName: drama.bookName || drama.title,
+            coverWap: drama.coverWap || drama.cover || drama.coverUrl,
+            chapterCount: drama.chapterCount || drama.episodeCount || 0,
+            ts: Date.now()
+        });
+    } catch(e) { console.error("History save failed:", e); }
   };
 
   const handleCloseAd = async (isPersistent) => {
@@ -464,16 +521,14 @@ export default function App() {
       const device = await core.getDevice();
       const tokenResult = await core.getToken(CONFIG.API_BASE, 'in', device, false);
       const token = tokenResult.token;
-      
       const [pop, lat] = await Promise.all([
         core.doClassify(CONFIG.API_BASE, 'in', device, token, CONFIG.FEED_IDS.POPULAR, 18),
         core.doClassify(CONFIG.API_BASE, 'in', device, token, CONFIG.FEED_IDS.LATEST, 12)
       ]);
-      
-      const result = { popular: pop || [], latest: lat || [] };
-      setHomeData(result);
+      setHomeData({ popular: pop || [], latest: lat || [] });
       const combined = [...(pop || []), ...(lat || [])];
-      setAllDramaData(combined.filter((item, index, self) => index === self.findIndex(t => (t.bookId || t.id) === (item.bookId || item.id))));
+      const unique = combined.filter((item, index, self) => index === self.findIndex(t => (t.bookId || t.id) === (item.bookId || item.id)));
+      setAllDramaData(unique);
     } catch (e) { console.error("Home fetch error:", e); }
   }, []);
 
@@ -522,28 +577,54 @@ export default function App() {
 
     initAuth();
     if (fb.apps.length) {
-        const unsubscribe = fb.auth().onAuthStateChanged(async (u) => {
+        const unsubscribeAuth = fb.auth().onAuthStateChanged(async (u) => {
             setUser(u);
-            if (u) {
+            if (u && !u.isAnonymous) {
+                // Listen Watchlist
+                const unsubscribeWatch = fb.firestore()
+                    .collection(`artifacts/${appIdStr}/users/${u.uid}/watchlist`)
+                    .onSnapshot(snap => {
+                        const items = snap.docs.map(doc => doc.data());
+                        setWatchlistData(items);
+                    });
+
+                // Listen History
+                const unsubscribeHist = fb.firestore()
+                    .collection(`artifacts/${appIdStr}/users/${u.uid}/history`)
+                    .onSnapshot(snap => {
+                        const items = snap.docs.map(doc => doc.data());
+                        // Urutkan riwayat berdasarkan waktu terbaru
+                        items.sort((a,b) => b.ts - a.ts);
+                        setHistoryData(items);
+                    });
+
+                // Ad Preference
                 try {
                     const adRef = fb.firestore().doc(`artifacts/${appIdStr}/users/${u.uid}/settings/ad_pref`);
                     const snap = await adRef.get();
                     let show = true;
-                    if (snap.exists) {
+                    if (snap.exists()) {
                         const d = snap.data();
                         const diff = Date.now() - (d.ts || 0);
                         if (d.p ? diff < 86400000 : diff < 3600000) show = false;
                     }
                     if (show) setTimeout(() => setShowAd(true), 3000);
                 } catch(e) { setTimeout(() => setShowAd(true), 3000); }
+
+                return () => {
+                    unsubscribeWatch();
+                    unsubscribeHist();
+                };
+            } else if (u && u.isAnonymous) {
+                setTimeout(() => setShowAd(true), 3000);
             }
         });
-        return unsubscribe;
+        return unsubscribeAuth;
     }
   }, [fbReady]);
 
   useEffect(() => { if (scriptLoaded) fetchHome(); }, [scriptLoaded, fetchHome]);
-  useEffect(() => { if (view === 'rank') fetchRank(rankTab, 1); }, [view, rankTab, fetchRank]);
+  useEffect(() => { if (view === 'rank') fetchRank(rankTab, 1); }, [view, rankTab]);
 
   useEffect(() => {
     let filtered = [...allDramaData];
@@ -566,15 +647,32 @@ export default function App() {
       <nav className="flex-none h-16 bg-[#0f172a]/80 backdrop-blur-xl border-b border-white/5 flex items-center z-40 px-4 sm:px-8">
         <div className="container mx-auto flex justify-between items-center">
           <button onClick={() => setView('home')} className="flex items-center gap-2 group">
-            <div className="w-8 h-8 bg-gradient-to-br from-blue-600 to-indigo-500 rounded-lg flex items-center justify-center text-white font-black shadow-lg">D</div>
+            <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center text-white font-black shadow-lg">D</div>
             <span className="text-base font-black text-white hidden xs:block">NontonDracin</span>
           </button>
-          <div className="flex items-center gap-1.5 bg-white/5 p-1 rounded-full border border-white/10">
-            {[ { id: 'home', label: 'Home', icon: Home }, { id: 'rank', label: 'Ranking', icon: Trophy }, { id: 'filter', label: 'Filter', icon: Filter } ].map((m) => (
+          <div className="flex items-center gap-1.5 bg-white/5 p-1 rounded-full border border-white/10 overflow-hidden">
+            {[ 
+              { id: 'home', label: 'Home', icon: Home }, 
+              { id: 'rank', label: 'Ranking', icon: Trophy },
+              { id: 'filter', label: 'Filter', icon: Filter }
+            ].map((m) => (
               <button key={m.id} onClick={() => setView(m.id)} className={`px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-wider flex items-center gap-1.5 transition-all ${view === m.id ? 'bg-blue-600 text-white shadow-lg' : 'text-slate-400 hover:text-white'}`}>
                 <m.icon size={12} /> <span className="hidden sm:inline">{m.label}</span>
               </button>
             ))}
+            
+            {/* Logged in views */}
+            {user && !user.isAnonymous && (
+                <>
+                    <button onClick={() => setView('watchlist')} className={`px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-wider flex items-center gap-1.5 transition-all ${view === 'watchlist' ? 'bg-blue-600 text-white shadow-lg' : 'text-slate-400 hover:text-white'}`}>
+                        <Bookmark size={12} /> <span className="hidden sm:inline">Watchlist</span>
+                    </button>
+                    <button onClick={() => setView('history')} className={`px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-wider flex items-center gap-1.5 transition-all ${view === 'history' ? 'bg-blue-600 text-white shadow-lg' : 'text-slate-400 hover:text-white'}`}>
+                        <History size={12} /> <span className="hidden sm:inline">Riwayat</span>
+                    </button>
+                </>
+            )}
+
             <button onClick={() => setSearchModalOpen(true)} className="p-2 rounded-full text-slate-400 hover:text-white transition-colors hover:bg-white/5"><Search size={16} /></button>
             
             <div className="h-6 w-[1px] bg-white/10 mx-1 hidden sm:block"></div>
@@ -584,7 +682,7 @@ export default function App() {
                 <button onClick={handleLogout} className="p-1.5 text-slate-400 hover:text-red-400 transition-colors" title="Logout"><LogOut size={14} /></button>
               </div>
             ) : (
-              <button onClick={handleGoogleLogin} className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/5 hover:bg-blue-600 text-slate-300 hover:text-white transition-all text-[10px] font-black uppercase tracking-wider"><LogIn size={12} /> <span className="hidden sm:inline">Login</span></button>
+              <button onClick={handleGoogleLogin} className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/5 hover:bg-blue-600 text-slate-300 hover:text-white transition-all text-[10px] font-black uppercase tracking-wider"><LogIn size={12} /> <span className="hidden sm:inline">Masuk</span></button>
             )}
           </div>
         </div>
@@ -658,6 +756,40 @@ export default function App() {
             </div>
           )}
 
+          {view === 'watchlist' && (
+            <div className="animate-in fade-in duration-500">
+                <Section icon={Bookmark} title="Watchlist Saya">
+                    <div className="grid grid-cols-2 xs:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-5">
+                        {watchlistData.length > 0 ? watchlistData.map((item, idx) => (
+                            <DramaCard key={idx} item={{...item, id: item.bookId}} onClick={(it) => { setSelectedBookId(it.bookId); setPreviousView('watchlist'); setView('detail'); }} />
+                        )) : (
+                            <div className="col-span-full py-20 flex flex-col items-center gap-4 text-slate-500">
+                                <Bookmark size={48} className="opacity-20" />
+                                <p className="text-[10px] font-black uppercase tracking-widest">Belum ada drama yang disimpan.</p>
+                            </div>
+                        )}
+                    </div>
+                </Section>
+            </div>
+          )}
+
+          {view === 'history' && (
+            <div className="animate-in fade-in duration-500">
+                <Section icon={History} title="Riwayat Menonton">
+                    <div className="grid grid-cols-2 xs:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-5">
+                        {historyData.length > 0 ? historyData.map((item, idx) => (
+                            <DramaCard key={idx} item={{...item, id: item.bookId}} onClick={(it) => { setSelectedBookId(it.bookId); setPreviousView('history'); setView('detail'); }} />
+                        )) : (
+                            <div className="col-span-full py-20 flex flex-col items-center gap-4 text-slate-500">
+                                <History size={48} className="opacity-20" />
+                                <p className="text-[10px] font-black uppercase tracking-widest">Belum ada riwayat menonton.</p>
+                            </div>
+                        )}
+                    </div>
+                </Section>
+            </div>
+          )}
+
           {view === 'filter' && (
             <div className="animate-in fade-in duration-500">
                <div className="bg-slate-900/50 p-6 rounded-2xl border border-white/5 mb-8 grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -689,7 +821,18 @@ export default function App() {
           )}
 
           {view === 'detail' && (
-            <DramaDetailPage bookId={selectedBookId} onBack={() => setView(previousView)} onPlayEpisode={(ep, b, c) => { setPlayerState({ book: b, chapters: c, ep }); setPreviousView('detail'); setView('player'); }} />
+            <DramaDetailPage 
+                bookId={selectedBookId} 
+                watchlist={watchlistData}
+                onToggleWatchlist={toggleWatchlist}
+                onBack={() => setView(previousView)} 
+                onPlayEpisode={(ep, b, c) => { 
+                    saveToHistory(b);
+                    setPlayerState({ book: b, chapters: c, ep }); 
+                    setPreviousView('detail'); 
+                    setView('player'); 
+                }} 
+            />
           )}
         </div>
       </main>
@@ -710,7 +853,7 @@ export default function App() {
 
       {showAd && <SanPoiPopup onClose={handleCloseAd} />}
       
-      {/* MODAL PENCARIAN */}
+      {/* SEARCH MODAL */}
       {searchModalOpen && (
         <div className="fixed inset-0 z-[100] flex items-start justify-center pt-32 px-4">
           <div className="absolute inset-0 bg-[#0f172a]/95 backdrop-blur-2xl" onClick={() => setSearchModalOpen(false)}></div>
