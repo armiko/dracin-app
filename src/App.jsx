@@ -21,12 +21,6 @@ import {
 } from 'firebase/auth';
 import { 
   getFirestore,
-  doc, 
-  setDoc, 
-  collection, 
-  onSnapshot, 
-  deleteDoc, 
-  serverTimestamp 
 } from 'firebase/firestore';
 
 /**
@@ -35,7 +29,7 @@ import {
 const getSafeEnv = (key, fallback = '') => {
   try {
     if (key === 'VITE_APP_ID' && typeof __app_id !== 'undefined') return __app_id;
-    // Penanganan aman untuk Vercel Production agar tidak error esbuild
+    // @ts-ignore
     const env = (typeof import.meta !== 'undefined' && import.meta.env) ? import.meta.env : {};
     return env[key] || fallback;
   } catch (e) {
@@ -279,6 +273,74 @@ const SanPoiPromoModal = ({ onClose }) => {
 };
 
 /**
+ * --- COMPONENT: PROFILE DROPDOWN MENU ---
+ * Dipisahkan agar render lebih aman
+ */
+const ProfileDropdown = ({ isOpen, onClose, user, setView, handleLogout }) => {
+  if (!isOpen) return null;
+
+  const handleLoginPopup = async () => {
+    try {
+      const provider = new GoogleAuthProvider();
+      await signInWithPopup(auth, provider);
+      onClose();
+    } catch (e) {
+      console.error("Login failed", e);
+    }
+  };
+
+  return (
+    <>
+      <div className="fixed inset-0 z-[100]" onClick={onClose}></div>
+      <div className="absolute right-0 mt-3 w-64 bg-slate-900 border border-white/10 rounded-2xl shadow-2xl z-[101] overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+        {user && !user.isAnonymous ? (
+          <div className="p-5 border-b border-white/5 bg-gradient-to-br from-blue-600/10 to-transparent text-left">
+            <p className="text-white font-black text-xs truncate mb-0.5">{user.displayName || "User"}</p>
+            <p className="text-slate-500 text-[10px] font-bold truncate uppercase tracking-widest">{user.email || ""}</p>
+          </div>
+        ) : (
+          <div className="p-5 border-b border-white/5 text-center">
+            <p className="text-slate-400 text-[10px] font-black uppercase tracking-widest mb-3">Fitur Terbatas</p>
+            <button 
+              onClick={handleLoginPopup}
+              className="w-full py-2 bg-blue-600 text-white rounded-xl text-[10px] font-black uppercase tracking-widest shadow-lg"
+            >
+              Masuk Google
+            </button>
+          </div>
+        )}
+        <div className="p-2">
+          <button 
+            onClick={() => { setView('watchlist'); onClose(); }} 
+            className="w-full flex items-center gap-3 px-4 py-3 text-slate-300 hover:bg-white/5 rounded-xl text-left group transition-colors"
+          >
+            <Bookmark size={16} className="text-slate-500 group-hover:text-blue-400" />
+            <span className="text-[10px] font-black uppercase tracking-widest">Favorit Saya</span>
+          </button>
+          <button 
+            onClick={() => { setView('history'); onClose(); }} 
+            className="w-full flex items-center gap-3 px-4 py-3 text-slate-300 hover:bg-white/5 rounded-xl text-left group transition-colors"
+          >
+            <History size={16} className="text-slate-500 group-hover:text-blue-400" />
+            <span className="text-[10px] font-black uppercase tracking-widest">Sudah Ditonton</span>
+          </button>
+          <div className="my-2 h-[1px] bg-white/5 mx-2"></div>
+          {user && !user.isAnonymous && (
+            <button 
+              onClick={handleLogout} 
+              className="w-full flex items-center gap-3 px-4 py-3 text-red-400 hover:bg-red-400/10 rounded-xl transition-colors text-left group"
+            >
+              <LogOut size={16} />
+              <span className="text-[10px] font-black uppercase tracking-widest">Logout</span>
+            </button>
+          )}
+        </div>
+      </div>
+    </>
+  );
+};
+
+/**
  * --- MAIN APP ---
  */
 export default function App() {
@@ -337,7 +399,6 @@ export default function App() {
     const unsubscribe = onAuthStateChanged(auth, (u) => {
       if (u) {
         setUser(u);
-        // Popup Promo Logic
         const dismissed = localStorage.getItem(STORAGE_KEYS.PROMO_DISMISSED);
         if (!dismissed) {
           setTimeout(() => setShowPromo(true), 3500);
@@ -435,6 +496,10 @@ export default function App() {
     localStorage.setItem(STORAGE_KEYS.PROMO_DISMISSED, 'true');
   }, []);
 
+  const handleLogout = useCallback(() => {
+    signOut(auth).then(() => { setView('home'); setProfileOpen(false); });
+  }, []);
+
   useEffect(() => { if (scriptLoaded) fetchHome(); }, [scriptLoaded, fetchHome]);
   useEffect(() => { if (view === 'rank') fetchRank(rankTab, rankPage); }, [view, rankTab, rankPage, fetchRank]);
 
@@ -448,52 +513,6 @@ export default function App() {
     });
     return result;
   }, [allDramaData, activeFilters]);
-
-  /**
-   * --- SUB-COMPONENTS (FIXED FOR PROD) ---
-   */
-  const renderProfileMenu = () => {
-    if (!profileOpen) return null;
-    return (
-      <>
-        <div className="fixed inset-0 z-[100]" onClick={() => setProfileOpen(false)}></div>
-        <div className="absolute right-0 mt-3 w-64 bg-slate-900 border border-white/10 rounded-2xl shadow-2xl z-[101] overflow-hidden animate-in fade-in zoom-in-95 duration-200">
-          {user && !user.isAnonymous ? (
-            <div className="p-5 border-b border-white/5 bg-gradient-to-br from-blue-600/10 to-transparent text-left">
-              <p className="text-white font-black text-xs truncate mb-0.5">{user.displayName || "User"}</p>
-              <p className="text-slate-500 text-[10px] font-bold truncate uppercase tracking-widest">{user.email || ""}</p>
-            </div>
-          ) : (
-            <div className="p-5 border-b border-white/5 text-center">
-              <p className="text-slate-400 text-[10px] font-black uppercase tracking-widest mb-3">Fitur Terbatas</p>
-              <button onClick={async () => {
-                 const provider = new GoogleAuthProvider();
-                 await signInWithPopup(auth, provider);
-                 setProfileOpen(false);
-              }} className="w-full py-2 bg-blue-600 text-white rounded-xl text-[10px] font-black uppercase tracking-widest shadow-lg">Masuk Google</button>
-            </div>
-          )}
-          <div className="p-2">
-            <button onClick={() => { setView('watchlist'); setProfileOpen(false); }} className="w-full flex items-center gap-3 px-4 py-3 text-slate-300 hover:bg-white/5 rounded-xl text-left group transition-colors">
-              <Bookmark size={16} className="text-slate-500 group-hover:text-blue-400" />
-              <span className="text-[10px] font-black uppercase tracking-widest">Favorit Saya</span>
-            </button>
-            <button onClick={() => { setView('history'); setProfileOpen(false); }} className="w-full flex items-center gap-3 px-4 py-3 text-slate-300 hover:bg-white/5 rounded-xl text-left group transition-colors">
-              <History size={16} className="text-slate-500 group-hover:text-blue-400" />
-              <span className="text-[10px] font-black uppercase tracking-widest">Sudah Ditonton</span>
-            </button>
-            <div className="my-2 h-[1px] bg-white/5 mx-2"></div>
-            {user && !user.isAnonymous && (
-              <button onClick={handleLogout} className="w-full flex items-center gap-3 px-4 py-3 text-red-400 hover:bg-red-400/10 rounded-xl transition-colors text-left group">
-                <LogOut size={16} />
-                <span className="text-[10px] font-black uppercase tracking-widest">Logout</span>
-              </button>
-            )}
-          </div>
-        </div>
-      </>
-    );
-  };
 
   if (playerState) return (
     <CustomPlayerPage 
@@ -524,16 +543,27 @@ export default function App() {
             <button onClick={() => setSearchModalOpen(true)} className="p-2 text-slate-400 hover:text-white transition-colors"><Search size={20} /></button>
             <div className="h-6 w-[1px] bg-white/10 mx-1"></div>
             
-            {/* Profil Button */}
+            {/* Profil Button Container */}
             <div className="relative">
-              <button onClick={() => setProfileOpen(!profileOpen)} className="flex items-center gap-2 p-1 pl-1.5 pr-2.5 rounded-full bg-white/5 border border-white/10 hover:bg-white/10 transition-all active:scale-95">
+              <button 
+                onClick={() => setProfileOpen(!profileOpen)} 
+                className="flex items-center gap-2 p-1 pl-1.5 pr-2.5 rounded-full bg-white/5 border border-white/10 hover:bg-white/10 transition-all active:scale-95"
+              >
                 {user && !user.isAnonymous && user.photoURL ? 
                   <img src={user.photoURL} alt="User" className="w-7 h-7 rounded-full border border-white/20" /> : 
                   <div className="w-7 h-7 rounded-full bg-slate-800 flex items-center justify-center text-slate-400"><UserIcon size={14}/></div>
                 }
                 <ChevronDown size={14} className={`text-slate-500 transition-transform ${profileOpen ? 'rotate-180' : ''}`} />
               </button>
-              {renderProfileMenu()}
+              
+              {/* Menu Profil Terpisah */}
+              <ProfileDropdown 
+                isOpen={profileOpen} 
+                onClose={() => setProfileOpen(false)} 
+                user={user} 
+                setView={setView} 
+                handleLogout={handleLogout} 
+              />
             </div>
           </div>
         </div>
@@ -731,7 +761,7 @@ const DramaDetailPage = ({ bookId, onBack, user, watchlist, history, onToggleWat
           </div>
         </div>
 
-        <div className="flex-1 flex flex-col justify-center">
+        <div className="flex-1 flex flex-col justify-center text-left">
           <h2 className="text-3xl sm:text-5xl font-black text-white mb-6 leading-tight tracking-tighter">{data.book.bookName}</h2>
           
           <div className="flex flex-wrap gap-3 mb-8">
@@ -840,7 +870,9 @@ const CustomPlayerPage = ({ book, initialEp, onBack, onEpisodeChange, audioSetti
     };
 
     if (videoUrl.includes('.m3u8')) {
+      // @ts-ignore
       if (window.Hls && window.Hls.isSupported()) {
+        // @ts-ignore
         const hls = new window.Hls({
           enableWorker: true,
           lowLatencyMode: true,
