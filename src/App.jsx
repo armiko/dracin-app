@@ -638,7 +638,7 @@ export default function App() {
                      </div>
                    )}
                    <Section icon={Flame} title="Drama Populer" onSeeAll={() => { setRankTab('popular'); setView('rank'); }}>
-                     <div className="grid grid-cols-3 xs:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3 md:gap-6 text-left">
+                     <div className="grid grid-cols-3 xs:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3 md:gap-6 text-left text-left">
                        {homeData.popular.slice(1, 7).map((item, idx) => <DramaCard key={idx} item={item} onClick={(it) => { setSelectedBookId(it.bookId || it.id); setPreviousView('home'); setView('detail'); }} />)}
                      </div>
                    </Section>
@@ -650,12 +650,12 @@ export default function App() {
                      </Section>
                    )}
                    <Section icon={Zap} title="Sedang Trending" onSeeAll={() => { setRankTab('trending'); setView('rank'); }}>
-                     <div className="grid grid-cols-3 xs:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3 md:gap-6 text-left">
+                     <div className="grid grid-cols-3 xs:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3 md:gap-6 text-left text-left">
                        {homeData.trending.slice(0, 6).map((item, idx) => <DramaCard key={idx} item={item} onClick={(it) => { setSelectedBookId(it.bookId || it.id); setPreviousView('home'); setView('detail'); }} />)}
                      </div>
                    </Section>
                    <Section icon={Clock} title="Update Terbaru" onSeeAll={() => { setRankTab('latest'); setView('rank'); }}>
-                     <div className="grid grid-cols-3 xs:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3 md:gap-6 text-left">
+                     <div className="grid grid-cols-3 xs:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3 md:gap-6 text-left text-left">
                        {homeData.latest.slice(0, 6).map((item, idx) => <DramaCard key={idx} item={item} onClick={(it) => { setSelectedBookId(it.bookId || it.id); setPreviousView('home'); setView('detail'); }} />)}
                      </div>
                    </Section>
@@ -668,7 +668,7 @@ export default function App() {
                         <button key={t.id} onClick={() => { setRankTab(t.id); setRankPage(1); }} className={`px-5 md:px-8 py-2 md:py-2.5 rounded-xl font-black text-[9px] md:text-[10px] uppercase tracking-widest border transition-all ${rankTab === t.id ? 'bg-blue-600 border-blue-600 text-white shadow-lg shadow-blue-600/20' : 'bg-white/5 border-white/10 text-slate-400 hover:border-white/20'}`}>{t.label}</button>
                      ))}
                    </div>
-                   <div className="grid grid-cols-3 xs:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3 md:gap-6 text-left">
+                   <div className="grid grid-cols-3 xs:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3 md:gap-6 text-left text-left text-left">
                       {rankData.map((item, idx) => <DramaCard key={idx} item={item} rank={idx+1} onClick={(it) => { setSelectedBookId(it.bookId || it.id); setView('detail'); }} />)}
                    </div>
                    <div className="mt-12 flex justify-center">
@@ -692,7 +692,7 @@ export default function App() {
                         </div>
                       ))}
                    </div>
-                   <div className="grid grid-cols-3 xs:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3 md:gap-6 text-left">
+                   <div className="grid grid-cols-3 xs:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3 md:gap-6 text-left text-left text-left">
                       {filteredItems.map((item, idx) => <DramaCard key={idx} item={item} onClick={(it) => { setSelectedBookId(it.bookId || it.id); setView('detail'); }} />)}
                    </div>
                 </div>
@@ -723,7 +723,7 @@ export default function App() {
                 </div>
               )}
               {view === 'search-results' && (
-                <div className="animate-in fade-in duration-700 text-left">
+                <div className="animate-in fade-in duration-700 text-left text-left">
                    <Section title={`Hasil Pencarian: ${searchQuery}`} icon={Search} onSeeAll={() => setView('home')}>
                      <div className="grid grid-cols-3 xs:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3 md:gap-6 text-left">
                        {searchData.map((item, idx) => <DramaCard key={idx} item={item} onClick={(it) => { setSelectedBookId(it.bookId || it.id); setPreviousView('search-results'); setView('detail'); }} />)}
@@ -776,7 +776,7 @@ const DramaDetailPage = ({ bookId, onBack, user, watchlist, history, onToggleWat
   const lastWatched = useMemo(() => history.find(i => String(i.bookId) === String(bookId))?.lastEpisode, [history, bookId]);
   if (loading) return <div className="flex flex-col items-center justify-center p-20 gap-4 text-center"><Loader2 className="animate-spin text-blue-500" size={40} /><p className="text-[10px] font-black text-slate-600 uppercase tracking-[0.3em]">Memuat Drama...</p></div>;
   return (
-    <div className="animate-in fade-in duration-700 text-left">
+    <div className="animate-in fade-in duration-700 text-left text-left">
       <button onClick={onBack} className="flex items-center gap-2 text-slate-500 font-bold hover:text-white transition-colors text-[10px] uppercase tracking-widest mb-8"><ChevronLeft size={18} /> Kembali</button>
       <div className="flex flex-col lg:flex-row gap-10 bg-slate-900/40 rounded-[2.5rem] p-6 sm:p-10 border border-white/5 backdrop-blur-xl shadow-2xl">
         <div className="w-full lg:w-[320px] shrink-0 text-left">
@@ -802,7 +802,7 @@ const DramaDetailPage = ({ bookId, onBack, user, watchlist, history, onToggleWat
             <h4 className="text-[9px] font-black text-slate-500 uppercase tracking-[0.3em] mb-3">SINOPSIS</h4>
             <div className="p-5 bg-white/5 rounded-2xl border border-white/5 text-slate-400 text-xs leading-relaxed italic line-clamp-4 hover:line-clamp-none transition-all duration-300">{cleanIntro(data.book.introduction)}</div>
           </div>
-          <div className="text-left">
+          <div className="text-left text-left">
              <h4 className="text-[9px] font-black text-slate-500 uppercase tracking-[0.3em] mb-4 text-slate-400 text-left">DAFTAR EPISODE</h4>
              <div className="grid grid-cols-5 xs:grid-cols-6 sm:grid-cols-8 lg:grid-cols-12 gap-2 max-h-[160px] overflow-y-auto pr-3 no-scrollbar pb-2 text-left">
               {data.chapters?.map((ch, i) => {
@@ -922,10 +922,26 @@ const CustomPlayerPage = ({ book, initialEp, onBack, onEpisodeChange, audioSetti
           {/* PLAYER PORTRAIT (9:16) */}
           <div className="w-full lg:flex-1 max-w-[450px] mx-auto">
             <div 
+              id="player-container-root"
               ref={containerRef}
               className="relative w-full aspect-[9/16] bg-black rounded-3xl overflow-hidden shadow-2xl border border-white/5 group"
               onMouseMove={() => { setShowControls(true); clearTimeout(timerRef.current); timerRef.current = setTimeout(() => setShowControls(false), 3000); }}
             >
+              <style>{`
+                #player-container-root:fullscreen {
+                  background: black !important;
+                  display: flex !important;
+                  align-items: center !important;
+                  justify-content: center !important;
+                }
+                #player-container-root:fullscreen video {
+                  height: 100vh !important;
+                  width: auto !important;
+                  max-width: 100vw !important;
+                  object-fit: contain !important;
+                  aspect-ratio: 9/16 !important;
+                }
+              `}</style>
               <video 
                 ref={videoRef} 
                 className="w-full h-full object-cover cursor-pointer" 
@@ -968,8 +984,8 @@ const CustomPlayerPage = ({ book, initialEp, onBack, onEpisodeChange, audioSetti
                     <div className="flex items-center gap-3">
                        <input type="range" min="0" max={duration || 0} step="0.1" value={currentTime} onChange={(e) => { if (videoRef.current) videoRef.current.currentTime = parseFloat(e.target.value); }} className="flex-1 h-1 md:h-1.5 accent-blue-600 bg-white/20 rounded-full appearance-none cursor-pointer" />
                        
-                       {/* VOLUME SLIDER */}
-                       <div className="hidden sm:flex items-center gap-2 group/vol relative">
+                       {/* VOLUME SLIDER (DIBERSIHKAN & AKTIF DI SEMUA DEVICE) */}
+                       <div className="flex items-center gap-2 group/vol relative">
                          <div className="p-1.5 bg-white/10 rounded-lg hover:bg-white/20 transition-colors">
                            {volume === 0 ? <VolumeX size={16} /> : <Volume2 size={16} />}
                          </div>
@@ -978,7 +994,7 @@ const CustomPlayerPage = ({ book, initialEp, onBack, onEpisodeChange, audioSetti
                            min="0" max="1" step="0.05" 
                            value={volume} 
                            onChange={(e) => setVolume(parseFloat(e.target.value))} 
-                           className="w-16 h-1 accent-white appearance-none bg-white/20 rounded-full cursor-pointer opacity-0 group-hover/vol:opacity-100 transition-opacity" 
+                           className="w-12 md:w-16 h-1 accent-white appearance-none bg-white/20 rounded-full cursor-pointer transition-opacity" 
                          />
                        </div>
                     </div>
