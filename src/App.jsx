@@ -35,7 +35,7 @@ const FIREBASE_CONFIG_OVERRIDE = {
   measurementId: "G-6B89Y55E2F"
 };
 
-// MANDATORY RULE 1: Menggunakan appId statis sesuai permintaan user
+// MANDATORY RULE 1: Menggunakan appId statis untuk sinkronisasi data lintas sesi
 const customAppId = '3KNDH1p5iIG6U7FmuGTS';
 
 const STATIC_FILTERS = [
@@ -102,18 +102,20 @@ const cleanIntro = (h) => h ? String(h).replace(/<[^>]*>/g, ' ').replace(/&nbsp;
 
 const extractVideoUrl = (c) => {
   if (!c) return '';
+  // Mendukung berbagai struktur response Dramabox API
   let s = c.raw || c;
-  if (s.m3u8Url) return s.m3u8Url;
+  if (s.m3u8Url || s.playUrl || s.videoUrl) return s.m3u8Url || s.playUrl || s.videoUrl;
   if (s.mp4) return s.mp4;
+  
   const cdn = s.cdnList?.[0];
   if (cdn) {
     const v = cdn.videoPathList?.[0];
-    const path = v?.videoPath || v?.path || '';
-    if (path && !path.startsWith('http')) {
+    const path = v?.videoPath || v?.path || s.path || '';
+    if (path) {
+      if (path.startsWith('http')) return path;
       const domain = cdn.cdnDomain.startsWith('http') ? cdn.cdnDomain : 'https://' + cdn.cdnDomain;
       return domain.replace(/\/+$/, '') + '/' + path.replace(/^\/+/, '');
     }
-    return path;
   }
   return '';
 };
@@ -288,20 +290,56 @@ const CustomPlayerPage = ({ book, chapters, initialEp, onBack, audioSettings, se
       const list = res.data?.chapterList || res.chapters || [];
       const batchCh = list.find(item => String(item.num) === String(epNum) || item.index === (epNum - 1)) || list[0];
       const url = extractVideoUrl(batchCh);
-      if (url) setVideoUrl(url); else throw new Error();
-    } catch (e) { if (requestId === requestRef.current) setError(true); } finally { if (requestId === requestRef.current) setLoading(false); }
+      if (url) {
+        setVideoUrl(url);
+      } else {
+        throw new Error('Video URL not found');
+      }
+    } catch (e) { 
+      if (requestId === requestRef.current) {
+        console.error("Playback load error:", e);
+        setError(true); 
+      }
+    } finally { 
+      if (requestId === requestRef.current) setLoading(false); 
+    }
   }, [book]);
 
   useEffect(() => {
     if (!videoRef.current || !videoUrl) return;
     const video = videoRef.current;
-    if (hlsRef.current) hlsRef.current.destroy();
-    if (videoUrl.includes('.m3u8') && window.Hls && window.Hls.isSupported()) {
-      const hls = new window.Hls(); hls.loadSource(videoUrl); hls.attachMedia(video);
-      hls.on(window.Hls.Events.MANIFEST_PARSED, () => video.play().catch(() => {}));
-      hlsRef.current = hls;
-    } else { video.src = videoUrl; video.play().catch(() => {}); }
-    return () => hlsRef.current && hlsRef.current.destroy();
+    
+    if (hlsRef.current) {
+      hlsRef.current.destroy();
+      hlsRef.current = null;
+    }
+
+    if (videoUrl.includes('.m3u8')) {
+      if (window.Hls && window.Hls.isSupported()) {
+        const hls = new window.Hls({
+          enableWorker: true,
+          lowLatencyMode: true,
+        });
+        hls.loadSource(videoUrl);
+        hls.attachMedia(video);
+        hls.on(window.Hls.Events.MANIFEST_PARSED, () => {
+          video.play().catch(e => console.warn("Auto-play blocked:", e));
+        });
+        hlsRef.current = hls;
+      } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
+        video.src = videoUrl;
+        video.play().catch(e => console.warn("Native auto-play blocked:", e));
+      } else {
+        setError(true);
+      }
+    } else {
+      video.src = videoUrl;
+      video.play().catch(e => console.warn("Direct play blocked:", e));
+    }
+
+    return () => {
+      if (hlsRef.current) hlsRef.current.destroy();
+    };
   }, [videoUrl]);
 
   useEffect(() => { 
@@ -329,10 +367,15 @@ const CustomPlayerPage = ({ book, chapters, initialEp, onBack, audioSettings, se
       </div>
 
       <div className="relative w-full h-full flex items-center justify-center bg-black" onClick={() => (isPlaying ? videoRef.current.pause() : videoRef.current.play())}>
-        {loading ? <Loader2 className="animate-spin text-blue-500" size={48} /> : error ? <div className="text-white text-[10px] font-black bg-red-600/40 px-8 py-4 rounded-2xl border border-red-500/20 uppercase tracking-widest">Video Gagal Dimuat</div> : 
+        {loading ? <Loader2 className="animate-spin text-blue-500" size={48} /> : error ? (
+          <div className="flex flex-col items-center gap-4 text-center px-6">
+            <AlertTriangle className="text-orange-500" size={48} />
+            <div className="text-white text-[10px] font-black bg-orange-600/40 px-8 py-4 rounded-2xl border border-orange-500/20 uppercase tracking-widest">Gagal Memutar Video di Browser Ini</div>
+          </div>
+        ) : (
           <video ref={videoRef} className="w-full h-full object-contain cursor-pointer" onPlay={() => setIsPlaying(true)} onPause={() => setIsPlaying(false)} onTimeUpdate={() => setCurrentTime(videoRef.current?.currentTime || 0)} onLoadedMetadata={() => setDuration(videoRef.current?.duration || 0)} onEnded={() => audioSettings.autoNext && setCurrentEp(e => e + 1)} playsInline />
-        }
-        {!isPlaying && !loading && <div className="absolute inset-0 flex items-center justify-center pointer-events-none bg-black/30"><div className="bg-white/10 p-8 rounded-full backdrop-blur-md border border-white/20"><Play size={40} fill="white" className="text-white ml-1.5" /></div></div>}
+        )}
+        {!isPlaying && !loading && !error && <div className="absolute inset-0 flex items-center justify-center pointer-events-none bg-black/30"><div className="bg-white/10 p-8 rounded-full backdrop-blur-md border border-white/20"><Play size={40} fill="white" className="text-white ml-1.5" /></div></div>}
       </div>
 
       <div className={`absolute bottom-0 left-0 right-0 p-6 z-50 transition-all duration-500 ${showControls ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-8 pointer-events-none'}`}>
@@ -567,61 +610,66 @@ export default function App() {
    * --- EFFECTS ---
    */
 
-  // Inisialisasi Firebase
+  // Firebase Setup & Auth
   useEffect(() => {
     if (!fbReady || !window.firebase) return;
     const fb = window.firebase;
     if (!fb.apps.length) {
       try { fb.initializeApp(FIREBASE_CONFIG_OVERRIDE); } catch(e) {}
     }
-  }, [fbReady]);
 
-  // Auth State Listener
-  useEffect(() => {
-    if (!fbReady || !window.firebase || !window.firebase.apps.length) return;
-    const fb = window.firebase;
-    
-    const unsubscribeAuth = fb.auth().onAuthStateChanged((u) => {
+    const auth = fb.auth();
+    const unsubscribeAuth = auth.onAuthStateChanged(async (u) => {
       setUser(u);
-      if (u && u.isAnonymous) {
-        setTimeout(() => setShowAd(true), 3000);
+      
+      // Kecepatan Sinkronisasi: Listener dipasang secepat mungkin setelah auth ready
+      if (u) {
+        // RULE 1: Sync Watchlist
+        const unsubWatch = fb.firestore()
+          .collection(`artifacts/${customAppId}/users/${u.uid}/watchlist`)
+          .onSnapshot(snap => {
+              setWatchlistData(snap.docs.map(doc => doc.data()));
+          }, err => console.error("Watchlist sync failed:", err));
+
+        // RULE 1: Sync History
+        const unsubHist = fb.firestore()
+          .collection(`artifacts/${customAppId}/users/${u.uid}/history`)
+          .onSnapshot(snap => {
+              const items = snap.docs.map(doc => doc.data());
+              items.sort((a,b) => b.ts - a.ts);
+              setHistoryData(items);
+          }, err => console.error("History sync failed:", err));
+
+        return () => {
+          unsubWatch();
+          unsubHist();
+        };
+      } else {
+        // RULE 3: Auto-signin anonim jika user belum ada
+        try { await auth.signInAnonymously(); } catch(e) {}
       }
     });
-
-    const initAuth = async () => {
-      if (!fb.auth().currentUser) {
-        try { await fb.auth().signInAnonymously(); } catch(e) {}
-      }
-    };
-    initAuth();
 
     return () => unsubscribeAuth();
   }, [fbReady]);
 
-  // Firestore Sync (Watchlist & History)
+  // Ad Preference sync (terpisah agar tidak memperlambat data utama)
   useEffect(() => {
-    if (!user || !fbReady || !window.firebase || !window.firebase.apps.length) return;
+    if (!user || !fbReady || !window.firebase) return;
     const fb = window.firebase;
-
-    const unsubscribeWatch = fb.firestore()
-      .collection(`artifacts/${customAppId}/users/${user.uid}/watchlist`)
-      .onSnapshot(snap => {
-          const items = snap.docs.map(doc => doc.data());
-          setWatchlistData(items);
-      }, err => console.error("Watchlist sync error:", err));
-
-    const unsubscribeHist = fb.firestore()
-      .collection(`artifacts/${customAppId}/users/${user.uid}/history`)
-      .onSnapshot(snap => {
-          const items = snap.docs.map(doc => doc.data());
-          items.sort((a,b) => b.ts - a.ts);
-          setHistoryData(items);
-      }, err => console.error("History sync error:", err));
-
-    return () => {
-      if (unsubscribeWatch) unsubscribeWatch();
-      if (unsubscribeHist) unsubscribeHist();
+    const checkAdPref = async () => {
+      try {
+        const adRef = fb.firestore().doc(`artifacts/${customAppId}/users/${user.uid}/settings/ad_pref`);
+        const snap = await adRef.get();
+        if (snap.exists()) {
+          const d = snap.data();
+          const diff = Date.now() - (d.ts || 0);
+          if (d.p ? diff < 86400000 : diff < 3600000) return;
+        }
+        setTimeout(() => setShowAd(true), 3000);
+      } catch(e) { setTimeout(() => setShowAd(true), 3000); }
     };
+    checkAdPref();
   }, [user, fbReady]);
 
   useEffect(() => { if (scriptLoaded) fetchHome(); }, [scriptLoaded, fetchHome]);
@@ -788,7 +836,7 @@ export default function App() {
                     <div className="grid grid-cols-2 xs:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-5">
                         {historyData.length > 0 ? historyData.map((item, idx) => (
                             <div key={idx} className="flex flex-col">
-                                <DramaCard item={{...item, id: item.bookId}} onClick={(it) => { setSelectedBookId(it.bookId); setPreviousView('history'); setView('detail'); }} />
+                                <DramaCard item={{...item, id: item.bookId}} onClick={(it) => { setSelectedBookId(item.bookId); setPreviousView('history'); setView('detail'); }} />
                                 <div className="mt-1 flex items-center gap-1 text-blue-400 font-black text-[8px] uppercase tracking-tighter px-1">
                                     <Clock size={8} /> Episode Terakhir: {item.lastEpisode || '?'}
                                 </div>
