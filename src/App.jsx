@@ -11,34 +11,26 @@ import {
 } from 'lucide-react';
 
 /**
- * --- FIREBASE IMPORTS ---
+ * --- KONFIGURASI API & CDN ---
  */
-import { initializeApp } from 'firebase/app';
-import { 
-  getAuth, 
-  signInAnonymously, 
-  signInWithPopup, 
-  GoogleAuthProvider, 
-  onAuthStateChanged, 
-  signOut 
-} from 'firebase/auth';
-import { 
-  getFirestore,
-  doc, 
-  setDoc, 
-  collection, 
-  onSnapshot, 
-  deleteDoc, 
-  serverTimestamp 
-} from 'firebase/firestore';
+const CONFIG = {
+  SCRIPT_URL: "https://cdn.jsdelivr.net/gh/armiko/dracin-app@169efe4fc99586d445cbf8780629c5ac210ca929/js/dramabox-core.js",
+  HLS_URL: "https://cdn.jsdelivr.net/npm/hls.js@latest",
+  API_BASE: "https://drachin.dicky.app",
+  LOCALE_API: "in",
+  FEED_IDS: { POPULAR: 1, LATEST: 2, TRENDING: 3 },
+  PER_PAGE: 24,
+  // Script Firebase Compat SDK via CDN (Lebih stabil untuk lingkungan tanpa node_modules)
+  FIREBASE_SCRIPTS: [
+    "https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js",
+    "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js",
+    "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"
+  ]
+};
 
 /**
- * --- KONFIGURASI FIREBASE & API ---
- * Catatan: Karena lingkungan pratinjau tidak mendukung import.meta, 
- * kita menggunakan pengecekan variabel global atau fallback.
+ * --- KONFIGURASI FIREBASE ---
  */
-
-// Konfigurasi default (ambil dari data yang Anda berikan)
 const defaultFirebaseConfig = {
   apiKey: "AIzaSyDm5JBMP_NZTpiM-EmgvXNwRCLNtdROy8s",
   authDomain: "nontondracin-f5065.firebaseapp.com",
@@ -49,26 +41,23 @@ const defaultFirebaseConfig = {
   measurementId: "G-6B89Y55E2F"
 };
 
-// Inisialisasi Firebase secara internal untuk mengatasi error resolusi './firebase'
-const firebaseConfig = typeof __firebase_config !== 'undefined' 
-  ? JSON.parse(__firebase_config) 
-  : defaultFirebaseConfig;
-
-const app = initializeApp(firebaseConfig);
-const auth = getAuth(app);
-const db = getFirestore(app);
-
-// App ID unik untuk koleksi Firestore
-const appId = typeof __app_id !== 'undefined' ? __app_id : '3KNDH1p5iIG6U7FmuGTS';
-
-const CONFIG = {
-  SCRIPT_URL: "https://cdn.jsdelivr.net/gh/armiko/dracin-app@169efe4fc99586d445cbf8780629c5ac210ca929/js/dramabox-core.js",
-  HLS_URL: "https://cdn.jsdelivr.net/npm/hls.js@latest",
-  API_BASE: "https://drachin.dicky.app",
-  LOCALE_API: "in",
-  FEED_IDS: { POPULAR: 1, LATEST: 2, TRENDING: 3 },
-  PER_PAGE: 24
+/**
+ * Helper untuk mengambil konfigurasi secara aman tanpa menyebabkan build error (import.meta)
+ */
+const getFirebaseConfig = () => {
+  // 1. Coba variabel global dari lingkungan pratinjau (MANDATORY RULE)
+  if (typeof __firebase_config !== 'undefined') return JSON.parse(__firebase_config);
+  
+  // 2. Fallback ke default hardcoded (dari prompt user)
+  return defaultFirebaseConfig;
 };
+
+const getAppId = () => {
+  if (typeof __app_id !== 'undefined') return __app_id;
+  return '3KNDH1p5iIG6U7FmuGTS';
+};
+
+const appId = getAppId();
 
 const STATIC_FILTERS = [
   {
@@ -115,24 +104,39 @@ const STATIC_FILTERS = [
 /**
  * --- UTILS ---
  */
-const useExternalScript = (url) => {
+const useExternalScripts = (urls) => {
   const [state, setState] = useState({ loaded: false, error: false });
   useEffect(() => {
-    let script = document.querySelector(`script[src="${url}"]`);
-    if (!script) {
-      script = document.createElement("script");
-      script.src = url; script.async = true;
-      document.body.appendChild(script);
-    }
-    const onScriptLoad = () => setState({ loaded: true, error: false });
-    const onScriptError = () => setState({ loaded: true, error: true });
-    script.addEventListener("load", onScriptLoad);
-    script.addEventListener("error", onScriptError);
-    return () => {
-      script.removeEventListener("load", onScriptLoad);
-      script.removeEventListener("error", onScriptError);
+    const scripts = Array.isArray(urls) ? urls : [urls];
+    let loadedCount = 0;
+
+    const onScriptLoad = (e) => {
+      loadedCount++;
+      if (loadedCount === scripts.length) setState({ loaded: true, error: false });
     };
-  }, [url]);
+
+    const onScriptError = () => setState({ loaded: true, error: true });
+
+    scripts.forEach(url => {
+      let script = document.querySelector(`script[src="${url}"]`);
+      if (!script) {
+        script = document.createElement("script");
+        script.src = url;
+        script.async = false;
+        document.body.appendChild(script);
+      }
+
+      if (script.getAttribute('data-loaded') === 'true') {
+        onScriptLoad();
+      } else {
+        script.addEventListener("load", () => {
+          script.setAttribute('data-loaded', 'true');
+          onScriptLoad();
+        });
+        script.addEventListener("error", onScriptError);
+      }
+    });
+  }, [urls]);
   return state;
 };
 
@@ -169,9 +173,8 @@ const formatTime = (seconds) => {
 };
 
 /**
- * --- UI COMPONENTS ---
+ * --- KOMPONEN UI ---
  */
-
 const Section = ({ title, icon: IconComponent, onSeeAll, children }) => (
   <section className="mb-12">
     <div className="flex items-center justify-between mb-6">
@@ -247,6 +250,7 @@ export default function App() {
   const [view, setView] = useState('home');
   const [previousView, setPreviousView] = useState('home');
   const [user, setUser] = useState(null);
+  const [fbReady, setFbReady] = useState(false);
   
   // Data States
   const [homeData, setHomeData] = useState({ popular: [], latest: [] });
@@ -268,7 +272,8 @@ export default function App() {
   const [playerState, setPlayerState] = useState(null);
   const [authError, setAuthError] = useState(null);
 
-  const { loaded: scriptLoaded } = useExternalScript(CONFIG.SCRIPT_URL);
+  const { loaded: scriptLoaded } = useExternalScripts(CONFIG.SCRIPT_URL);
+  const { loaded: firebaseLoaded } = useExternalScripts(CONFIG.FIREBASE_SCRIPTS);
 
   const [audioSettings, setAudioSettings] = useState(() => {
     const saved = localStorage.getItem('dracin_settings_global');
@@ -276,55 +281,89 @@ export default function App() {
   });
 
   /**
-   * --- AUTHENTICATION ---
+   * --- FIREBASE INITIALIZATION (MANDATORY RULE 3) ---
    */
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (u) => {
+    if (!firebaseLoaded || !window.firebase) return;
+
+    const firebase = window.firebase;
+    const config = getFirebaseConfig();
+
+    if (!firebase.apps.length) {
+      firebase.initializeApp(config);
+    }
+
+    const auth = firebase.auth();
+    
+    // Auth Listener
+    const unsubscribe = auth.onAuthStateChanged(async (u) => {
       if (u) {
         setUser(u);
+        setFbReady(true);
       } else {
-        signInAnonymously(auth).catch(err => console.warn("SignIn Anonymously failed", err));
+        try {
+          if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+            await auth.signInWithCustomToken(__initial_auth_token);
+          } else {
+            await auth.signInAnonymously();
+          }
+        } catch (err) {
+          console.warn("Auth initialization silent warning", err);
+        }
       }
     });
+
     return () => unsubscribe();
-  }, []);
+  }, [firebaseLoaded]);
 
   /**
-   * --- FIRESTORE SYNC ---
+   * --- FIRESTORE SYNC (MANDATORY RULE 1 & 2) ---
    */
   useEffect(() => {
-    if (!user) return;
+    if (!fbReady || !user || !window.firebase) return;
 
-    // Path absolut sesuai aturan RULE 1
-    const watchlistRef = collection(db, 'artifacts', appId, 'users', user.uid, 'watchlist');
-    const historyRef = collection(db, 'artifacts', appId, 'users', user.uid, 'history');
+    const db = window.firebase.firestore();
+    
+    // Path: /artifacts/{appId}/users/{userId}/{collectionName}
+    const watchlistRef = db.collection('artifacts').doc(appId).collection('users').doc(user.uid).collection('watchlist');
+    const historyRef = db.collection('artifacts').doc(appId).collection('users').doc(user.uid).collection('history');
 
-    const unsubWatchlist = onSnapshot(watchlistRef, (snap) => {
+    const unsubWatchlist = watchlistRef.onSnapshot((snap) => {
       const data = snap.docs.map(doc => doc.data()).sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
       setWatchlist(data);
     }, (err) => console.error("Sync Watchlist Gagal:", err));
 
-    const unsubHistory = onSnapshot(historyRef, (snap) => {
+    const unsubHistory = historyRef.onSnapshot((snap) => {
       const data = snap.docs.map(doc => doc.data()).sort((a, b) => (b.updatedAt?.seconds || 0) - (a.updatedAt?.seconds || 0));
-      setWatchHistory(data.slice(0, 20));
+      setWatchHistory(data.slice(0, 20)); // Keep only recent 20
     }, (err) => console.error("Sync History Gagal:", err));
 
     return () => { unsubWatchlist(); unsubHistory(); };
-  }, [user]);
+  }, [fbReady, user]);
 
   /**
    * --- CORE ACTIONS ---
    */
   const handleLogin = async () => {
+    if (!window.firebase) return;
     setAuthError(null);
     try {
-      const provider = new GoogleAuthProvider();
-      await signInWithPopup(auth, provider);
+      const provider = new window.firebase.auth.GoogleAuthProvider();
+      await window.firebase.auth().signInWithPopup(provider);
       setProfileOpen(false);
-    } catch (e) { setAuthError("Gagal masuk. Pastikan pop-up diizinkan."); }
+    } catch (e) { 
+      setAuthError("Gagal masuk. Pastikan pop-up diizinkan."); 
+    }
   };
 
-  const handleLogout = () => signOut(auth).then(() => { setView('home'); setProfileOpen(false); });
+  const handleLogout = () => {
+    if (window.firebase) {
+      window.firebase.auth().signOut().then(() => { 
+        setView('home'); 
+        setProfileOpen(false); 
+      });
+    }
+  };
 
   const fetchHome = useCallback(async () => {
     if (!window.DramaboxCore) return;
@@ -356,32 +395,43 @@ export default function App() {
   }, []);
 
   const handleToggleWatchlist = async (book) => {
-    if (!user || user.isAnonymous) {
-      setAuthError("Silakan masuk akun untuk menyimpan ke favorit.");
+    if (!fbReady || !user || user.isAnonymous) {
+      setAuthError("Silakan masuk akun untuk menyimpan drama.");
       return;
     }
     const bid = String(book.bookId || book.id);
-    const docRef = doc(db, 'artifacts', appId, 'users', user.uid, 'watchlist', bid);
-    if (watchlist.some(i => String(i.bookId || i.id) === bid)) await deleteDoc(docRef);
-    else await setDoc(docRef, { ...book, bookId: bid, createdAt: serverTimestamp() });
+    const db = window.firebase.firestore();
+    const docRef = db.collection('artifacts').doc(appId).collection('users').doc(user.uid).collection('watchlist').doc(bid);
+    
+    if (watchlist.some(i => String(i.bookId || i.id) === bid)) {
+      await docRef.delete();
+    } else {
+      await docRef.set({ 
+        ...book, 
+        bookId: bid, 
+        createdAt: window.firebase.firestore.FieldValue.serverTimestamp() 
+      });
+    }
   };
 
   const updateHistory = async (book, episode) => {
-    if (!user || user.isAnonymous) return;
+    if (!fbReady || !user || user.isAnonymous) return;
     const bid = String(book.bookId || book.id);
-    const docRef = doc(db, 'artifacts', appId, 'users', user.uid, 'history', bid);
-    await setDoc(docRef, {
+    const db = window.firebase.firestore();
+    const docRef = db.collection('artifacts').doc(appId).collection('users').doc(user.uid).collection('history').doc(bid);
+    await docRef.set({
       bookId: bid,
       bookName: book.bookName || book.title,
       cover: book.cover || book.coverWap,
       lastEpisode: episode,
-      updatedAt: serverTimestamp()
+      updatedAt: window.firebase.firestore.FieldValue.serverTimestamp()
     });
   };
 
   const clearHistoryItem = async (bid) => {
-    if (!user) return;
-    await deleteDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'history', String(bid)));
+    if (!fbReady || !user) return;
+    const db = window.firebase.firestore();
+    await db.collection('artifacts').doc(appId).collection('users').doc(user.uid).collection('history').doc(String(bid)).delete();
   };
 
   useEffect(() => { if (scriptLoaded) fetchHome(); }, [scriptLoaded, fetchHome]);
@@ -401,9 +451,8 @@ export default function App() {
   }, [allDramaData, activeFilters]);
 
   /**
-   * --- COMPONENTS ---
+   * --- UI VIEWS ---
    */
-
   const ProfileMenu = () => (
     <div className="relative">
       <button onClick={() => setProfileOpen(!profileOpen)} className="flex items-center gap-2 p-1 pl-1.5 pr-2.5 rounded-full bg-white/5 border border-white/10 hover:bg-white/10 transition-all group">
@@ -436,11 +485,11 @@ export default function App() {
               </button>
               <button onClick={() => { setView('history'); setProfileOpen(false); }} className="w-full flex items-center gap-3 px-4 py-3 text-slate-300 hover:bg-white/5 rounded-xl transition-colors text-left group">
                 <History size={16} className="text-slate-500 group-hover:text-blue-400" />
-                <span className="text-[10px] font-black uppercase tracking-widest">Terakhir Dilihat</span>
+                <span className="text-[10px] font-black uppercase tracking-widest">Riwayat Tonton</span>
               </button>
               <div className="my-2 h-[1px] bg-white/5 mx-2"></div>
               {user && !user.isAnonymous && (
-                <button onClick={handleLogout} className="w-full flex items-center gap-3 px-4 py-3 text-red-400 hover:bg-red-400/10 rounded-xl transition-colors text-left">
+                <button onClick={handleLogout} className="w-full flex items-center gap-3 px-4 py-3 text-red-400 hover:bg-red-400/10 rounded-xl transition-colors text-left group">
                   <LogOut size={16} />
                   <span className="text-[10px] font-black uppercase tracking-widest">Logout</span>
                 </button>
@@ -475,11 +524,12 @@ export default function App() {
           <div className="flex items-center gap-2">
             <div className="hidden md:flex items-center gap-1 bg-white/5 p-1 rounded-full border border-white/10">
               {[ {id:'home', icon:Home}, {id:'rank', icon:Trophy}, {id:'filter', icon:Filter} ].map(m => (
-                <button key={m.id} onClick={() => setView(m.id)} className={`p-2 rounded-full transition-all ${view === m.id ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/20' : 'text-slate-400 hover:text-white'}`}>
+                <button key={m.id} onClick={() => setView(m.id)} className={`p-2 rounded-full transition-all ${view === m.id ? 'bg-blue-600 text-white shadow-lg' : 'text-slate-400 hover:text-white'}`}>
                   <m.icon size={16} />
                 </button>
               ))}
             </div>
+            
             <button onClick={() => setSearchModalOpen(true)} className="p-2 text-slate-400 hover:text-white transition-colors"><Search size={20} /></button>
             <div className="h-6 w-[1px] bg-white/10 mx-1"></div>
             <ProfileMenu />
@@ -514,7 +564,7 @@ export default function App() {
                        <div className="inline-flex items-center gap-2 px-3 py-1 bg-blue-600 text-white text-[8px] font-black rounded-full mb-5 uppercase tracking-widest"><Flame size={12} fill="white" /> Rekomendasi Hari Ini</div>
                        <h1 className="text-3xl sm:text-6xl font-black text-white mb-6 leading-tight tracking-tighter">{homeData.popular[0].bookName || homeData.popular[0].title}</h1>
                        <div className="flex flex-wrap items-center justify-center md:justify-start gap-4">
-                        <button onClick={() => { setSelectedBookId(homeData.popular[0].bookId || homeData.popular[0].id); setView('detail'); }} className="bg-white text-black hover:bg-blue-600 hover:text-white px-8 py-3.5 rounded-xl font-black text-[10px] uppercase tracking-widest transition-all shadow-xl flex items-center gap-2">TONTON <Play size={16} fill="currentColor"/></button>
+                        <button onClick={() => { setSelectedBookId(homeData.popular[0].bookId || homeData.popular[0].id); setView('detail'); }} className="bg-white text-black hover:bg-blue-600 hover:text-white px-8 py-3.5 rounded-xl font-black text-[10px] uppercase tracking-widest transition-all shadow-xl flex items-center gap-2">MULAI TONTON <Play size={16} fill="currentColor"/></button>
                         <button onClick={() => handleToggleWatchlist(homeData.popular[0])} className="bg-white/10 hover:bg-white/20 text-white px-6 py-3.5 rounded-xl font-black text-[10px] uppercase tracking-widest transition-all backdrop-blur-md border border-white/10 flex items-center gap-2">
                            {watchlist.some(i => String(i.bookId || i.id) === String(homeData.popular[0].bookId || homeData.popular[0].id)) ? <BookmarkCheck size={18} className="text-blue-400" /> : <Bookmark size={18} />} FAVORIT
                         </button>
@@ -599,7 +649,7 @@ export default function App() {
                     ))}
                   </div>
                 ) : (
-                  <EmptyState icon={Bookmark} title="Favorit Kosong" message="Simpan drama favorit Anda agar mudah ditemukan kembali." actionText="JELAJAHI DRAMA" onAction={() => setView('home')} />
+                  <EmptyState icon={Bookmark} title="Favorit Kosong" message="Simpan drama favorit Anda agar mudah ditemukan kembali." actionText="CARI DRAMA" onAction={() => setView('home')} />
                 )}
               </Section>
             </div>
@@ -632,7 +682,7 @@ export default function App() {
               onPlayEpisode={(ep, b, c) => { setPlayerState({ book: b, chapters: c, ep }); updateHistory(b, ep); }} 
             />
           )}
-          
+
           {view === 'search-results' && (
             <div className="animate-in fade-in duration-700">
                <Section title={`Hasil Cari: ${searchQuery}`} icon={Search} onSeeAll={() => setView('home')}>
@@ -645,9 +695,9 @@ export default function App() {
         </div>
       </main>
 
-      {/* Footer Mobile Bar */}
+      {/* Mobile Bar */}
       <div className="md:hidden fixed bottom-0 left-0 right-0 bg-[#0f172a]/95 backdrop-blur-xl border-t border-white/5 px-6 py-4 flex justify-between items-center z-50">
-        {[ {id:'home', icon:Home, label:'Home'}, {id:'rank', icon:Trophy, label:'Ranking'}, {id:'filter', icon:Filter, label:'Filter'}, {id:'watchlist', icon:Bookmark, label:'Favorit'} ].map(m => (
+        {[ {id:'home', icon:Home, label:'Home'}, {id:'rank', icon:Trophy, label:'Top'}, {id:'filter', icon:Filter, label:'Filter'}, {id:'watchlist', icon:Bookmark, label:'Favorit'} ].map(m => (
           <button key={m.id} onClick={() => setView(m.id)} className={`flex flex-col items-center gap-1 ${view === m.id ? 'text-blue-500' : 'text-slate-500'}`}>
             <m.icon size={20} />
             <span className="text-[8px] font-black uppercase tracking-widest">{m.label}</span>
@@ -700,7 +750,7 @@ const DramaDetailPage = ({ bookId, onBack, user, watchlist, history, onToggleWat
   if (loading) return (
     <div className="flex flex-col items-center justify-center p-20 gap-4">
       <Loader2 className="animate-spin text-blue-500" size={40} />
-      <p className="text-[10px] font-black text-slate-600 uppercase tracking-[0.3em]">Memuat Koleksi...</p>
+      <p className="text-[10px] font-black text-slate-600 uppercase tracking-[0.3em]">Memuat Drama...</p>
     </div>
   );
 
@@ -796,7 +846,6 @@ const CustomPlayerPage = ({ book, initialEp, onBack, onEpisodeChange, audioSetti
 
     const startPlay = () => { if(video) { video.playbackRate = audioSettings.playbackRate; video.volume = volume; video.play().catch(() => {}); } };
     if (videoUrl.includes('.m3u8')) {
-      // Pengecekan aman untuk Hls yang dimuat dari CDN script eksternal
       if (window.Hls && window.Hls.isSupported()) {
         const hls = new window.Hls(); hls.loadSource(videoUrl); hls.attachMedia(video);
         hls.on(window.Hls.Events.MANIFEST_PARSED, startPlay); hlsRef.current = hls;
@@ -841,14 +890,12 @@ const CustomPlayerPage = ({ book, initialEp, onBack, onEpisodeChange, audioSetti
                 <span>{formatTime(duration)}</span>
              </div>
           </div>
-          
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-8">
               <button disabled={currentEp <= 1} onClick={() => setCurrentEp(e => e - 1)} className="text-white/40 hover:text-white transition-colors disabled:opacity-10"><SkipBack size={28} fill="currentColor"/></button>
               <button onClick={togglePlay} className="text-white transform active:scale-90 transition-transform">{isPlaying ? <Pause size={42} fill="white" /> : <Play size={42} fill="white" />}</button>
               <button onClick={() => setCurrentEp(e => e + 1)} className="text-white/40 hover:text-white transition-colors"><SkipForward size={28} fill="currentColor"/></button>
             </div>
-
             <div className="flex items-center gap-6">
                <div className="hidden sm:flex items-center gap-3 group/vol bg-white/5 p-2 rounded-xl border border-white/5">
                   <button onClick={() => setVolume(v => v === 0 ? 1 : 0)} className="text-white/70 hover:text-white transition-colors">
