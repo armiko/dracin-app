@@ -7,14 +7,9 @@ import {
   Volume1, Gamepad2, CheckCircle2, ExternalLink,
   LogOut, LogIn, User as UserIcon, AlertCircle,
   Bookmark, BookmarkCheck, History, Trash2, 
-  ChevronDown, Settings
+  ChevronDown
 } from 'lucide-react';
 
-/**
- * --- FIREBASE IMPORTS ---
- * Bagian ini adalah inti dari manajemen data di aplikasi Anda.
- * Gunakan versi SDK terbaru (v9+ atau v11) untuk performa optimal.
- */
 import { initializeApp } from 'firebase/app';
 import { 
   getAuth, 
@@ -29,13 +24,10 @@ import {
   getFirestore, 
   doc, 
   setDoc, 
-  getDoc, 
   collection, 
-  query, 
   onSnapshot, 
   deleteDoc, 
-  serverTimestamp,
-  updateDoc
+  serverTimestamp
 } from 'firebase/firestore';
 
 /**
@@ -50,23 +42,28 @@ const CONFIG = {
   PER_PAGE: 24
 };
 
-// Inisialisasi Firebase menggunakan variabel lingkungan atau global config
-// Saat diupload ke GitHub, pastikan kredensial ini aman (gunakan .env)
+// Fallback Firebase Config jika variabel global tidak tersedia
+const defaultFirebaseConfig = {
+  apiKey: "AIzaSyDm5JBMP_NZTpiM-EmgvXNwRCLNtdROy8s",
+  authDomain: "nontondracin-f5065.firebaseapp.com",
+  projectId: "nontondracin-f5065",
+  storageBucket: "nontondracin-f5065.firebasestorage.app",
+  messagingSenderId: "166957230434",
+  appId: "1:166957230434:web:dc20d828a59048765da43b",
+  measurementId: "G-6B89Y55E2F"
+};
+
+// Menggunakan variabel global yang disediakan lingkungan (Gunakan JSON.parse untuk __firebase_config)
 const firebaseConfig = typeof __firebase_config !== 'undefined' 
   ? JSON.parse(__firebase_config) 
-  : {
-      apiKey: "YOUR_API_KEY",
-      authDomain: "YOUR_PROJECT.firebaseapp.com",
-      projectId: "YOUR_PROJECT_ID",
-      storageBucket: "YOUR_PROJECT.appspot.com",
-      messagingSenderId: "YOUR_SENDER_ID",
-      appId: "YOUR_APP_ID"
-    };
+  : defaultFirebaseConfig;
 
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
-const appId = typeof __app_id !== 'undefined' ? __app_id : 'nonton-dracin-v1';
+
+// App ID unik untuk Firestore (Gunakan __app_id jika tersedia)
+const appId = typeof __app_id !== 'undefined' ? __app_id : '3KNDH1p5iIG6U7FmuGTS';
 
 const STORAGE_KEYS = {
   SETTINGS: `dracin_settings_${appId}`
@@ -93,17 +90,13 @@ const STATIC_FILTERS = [
       { display: "Balas Dendam", value: "balas dendam" },
       { display: "CEO", value: "ceo" },
       { display: "Keluarga", value: "keluarga" },
-      { display: "Kekuatan Khusus", value: "keluarga khusus" },
-      { display: "Pembalikan Identitas", value: "pembalikan identitas" },
-      { display: "Perselingkuhan", value: "perselingkuhan" },
-      { display: "Terlahir Kembali", value: "terlahir kembali" },
-      { display: "Sejarah", value: "sejarah" }
+      { display: "Kekuatan Khusus", value: "keluarga khusus" }
     ]
   }
 ];
 
 /**
- * --- UTILS & HELPERS ---
+ * --- UTILS ---
  */
 const useExternalScript = (url) => {
   const [state, setState] = useState({ loaded: false, error: false });
@@ -159,7 +152,7 @@ const formatTime = (seconds) => {
 };
 
 /**
- * --- KOMPONEN UI ---
+ * --- KOMPONEN UI SHARED ---
  */
 
 const Section = ({ title, icon: IconComponent, onSeeAll, children }) => (
@@ -238,13 +231,13 @@ export default function App() {
   const [previousView, setPreviousView] = useState('home');
   const [user, setUser] = useState(null);
   
-  // States Data
+  // Data States
   const [homeData, setHomeData] = useState({ popular: [], latest: [] });
   const [allDramaData, setAllDramaData] = useState([]);
   const [watchlist, setWatchlist] = useState([]);
   const [watchHistory, setWatchHistory] = useState([]);
   
-  // States UI
+  // UI States
   const [searchModalOpen, setSearchModalOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedBookId, setSelectedBookId] = useState(null);
@@ -262,7 +255,7 @@ export default function App() {
   });
 
   /**
-   * --- AUTHENTICATION (RULE 3) ---
+   * --- FIREBASE AUTH (MANDATORY RULE 3) ---
    */
   useEffect(() => {
     const initAuth = async () => {
@@ -273,7 +266,7 @@ export default function App() {
           await signInAnonymously(auth);
         }
       } catch (err) {
-        console.error("Auth init failed:", err);
+        console.error("Autentikasi gagal:", err);
       }
     };
     initAuth();
@@ -282,27 +275,24 @@ export default function App() {
   }, []);
 
   /**
-   * --- FIRESTORE SYNC (RULE 1 & 2) ---
+   * --- FIRESTORE SYNC (MANDATORY RULE 1 & 2) ---
    */
   useEffect(() => {
-    if (!user || user.isAnonymous) {
-      setWatchlist([]);
-      setWatchHistory([]);
-      return;
-    }
+    if (!user) return;
 
+    // RULE 1: Selalu gunakan path yang ketat
     const watchlistRef = collection(db, 'artifacts', appId, 'users', user.uid, 'watchlist');
     const historyRef = collection(db, 'artifacts', appId, 'users', user.uid, 'history');
 
     const unsubWatchlist = onSnapshot(watchlistRef, (snap) => {
       const data = snap.docs.map(doc => doc.data()).sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
       setWatchlist(data);
-    }, (err) => console.error("Watchlist sync failed:", err));
+    }, (err) => console.error("Sinkronisasi Favorit gagal:", err));
 
     const unsubHistory = onSnapshot(historyRef, (snap) => {
       const data = snap.docs.map(doc => doc.data()).sort((a, b) => (b.updatedAt?.seconds || 0) - (a.updatedAt?.seconds || 0));
-      setWatchHistory(data.slice(0, 20));
-    }, (err) => console.error("History sync failed:", err));
+      setWatchHistory(data.slice(0, 20)); // Limit data di memori
+    }, (err) => console.error("Sinkronisasi Riwayat gagal:", err));
 
     return () => {
       unsubWatchlist();
@@ -320,7 +310,7 @@ export default function App() {
       await signInWithPopup(auth, provider);
       setProfileOpen(false);
     } catch (e) {
-      setAuthError("Gagal masuk. Pastikan browser mengizinkan pop-up.");
+      setAuthError("Gagal masuk. Silakan coba kembali.");
     }
   };
 
@@ -343,7 +333,7 @@ export default function App() {
 
   const handleToggleWatchlist = async (book) => {
     if (!user || user.isAnonymous) {
-      setAuthError("Silakan masuk untuk menggunakan fitur Watchlist.");
+      setAuthError("Silakan masuk dengan Google untuk menyimpan drama.");
       return;
     }
     const bid = String(book.bookId || book.id);
@@ -388,7 +378,7 @@ export default function App() {
   }, [allDramaData, activeFilters]);
 
   /**
-   * --- SUB-VIEWS ---
+   * --- NAVIGATION & COMPONENTS ---
    */
 
   const ProfileMenu = () => (
@@ -416,8 +406,8 @@ export default function App() {
               </div>
             ) : (
               <div className="p-5 border-b border-white/5 text-center">
-                <p className="text-slate-400 text-[10px] font-black uppercase tracking-widest mb-3">Login Dibutuhkan</p>
-                <button onClick={handleLogin} className="w-full py-2 bg-blue-600 text-white rounded-xl text-[10px] font-black uppercase tracking-widest shadow-lg shadow-blue-600/20">Login Google</button>
+                <p className="text-slate-400 text-[10px] font-black uppercase tracking-widest mb-3">Fitur Terbatas</p>
+                <button onClick={handleLogin} className="w-full py-2 bg-blue-600 text-white rounded-xl text-[10px] font-black uppercase tracking-widest shadow-lg shadow-blue-600/20">Masuk Akun</button>
               </div>
             )}
             
@@ -428,7 +418,7 @@ export default function App() {
               </button>
               <button onClick={() => { setView('history'); setProfileOpen(false); }} className="w-full flex items-center gap-3 px-4 py-3 text-slate-300 hover:bg-white/5 rounded-xl transition-colors text-left group">
                 <History size={16} className="text-slate-500 group-hover:text-blue-400" />
-                <span className="text-[10px] font-black uppercase tracking-widest">Terakhir Dilihat</span>
+                <span className="text-[10px] font-black uppercase tracking-widest">Sudah Ditonton</span>
               </button>
               <div className="my-2 h-[1px] bg-white/5 mx-2"></div>
               {user && !user.isAnonymous && (
@@ -456,7 +446,7 @@ export default function App() {
   );
 
   return (
-    <div className="bg-[#0f172a] h-screen text-slate-200 font-sans flex flex-col overflow-hidden">
+    <div className="bg-[#0f172a] h-screen text-slate-200 font-sans flex flex-col overflow-hidden selection:bg-blue-600 selection:text-white">
       <nav className="flex-none h-16 bg-[#0f172a]/80 backdrop-blur-xl border-b border-white/5 flex items-center z-40 px-4 sm:px-8">
         <div className="container mx-auto flex justify-between items-center">
           <button onClick={() => setView('home')} className="flex items-center gap-2 group">
@@ -498,18 +488,18 @@ export default function App() {
                      <div className="absolute inset-0 bg-gradient-to-t from-[#0f172a] via-[#0f172a]/60 to-transparent"></div>
                    </div>
                    <div className="relative z-10 flex flex-col md:flex-row items-center gap-8 p-10 sm:p-14 w-full">
-                     <div className="hidden lg:block w-[200px] shrink-0">
+                     <div className="hidden lg:block w-[200px] shrink-0 transform -rotate-2 hover:rotate-0 transition-all duration-500">
                        <div className="aspect-[2/3] rounded-2xl overflow-hidden shadow-2xl border-2 border-white/10 cursor-pointer" onClick={() => { setSelectedBookId(homeData.popular[0].bookId || homeData.popular[0].id); setView('detail'); }}>
                          <img src={homeData.popular[0].coverWap || homeData.popular[0].cover} className="w-full h-full object-cover" />
                        </div>
                      </div>
                      <div className="flex-1 text-center md:text-left">
-                       <div className="inline-flex items-center gap-2 px-3 py-1 bg-blue-600 text-white text-[8px] font-black rounded-full mb-5 uppercase tracking-widest"><Flame size={12} fill="white" /> Rekomendasi</div>
+                       <div className="inline-flex items-center gap-2 px-3 py-1 bg-blue-600 text-white text-[8px] font-black rounded-full mb-5 uppercase tracking-widest"><Flame size={12} fill="white" /> Populer</div>
                        <h1 className="text-3xl sm:text-6xl font-black text-white mb-6 leading-tight tracking-tighter">{homeData.popular[0].bookName || homeData.popular[0].title}</h1>
                        <div className="flex flex-wrap items-center justify-center md:justify-start gap-4">
-                        <button onClick={() => { setSelectedBookId(homeData.popular[0].bookId || homeData.popular[0].id); setView('detail'); }} className="bg-white text-black hover:bg-blue-600 hover:text-white px-8 py-3.5 rounded-xl font-black text-[10px] uppercase tracking-widest transition-all shadow-xl flex items-center gap-2">TONTON <Play size={16} fill="currentColor"/></button>
+                        <button onClick={() => { setSelectedBookId(homeData.popular[0].bookId || homeData.popular[0].id); setView('detail'); }} className="bg-white text-black hover:bg-blue-600 hover:text-white px-8 py-3.5 rounded-xl font-black text-[10px] uppercase tracking-widest transition-all shadow-xl flex items-center gap-2 shadow-white/10">LIHAT DETAIL <Play size={16} fill="currentColor"/></button>
                         <button onClick={() => handleToggleWatchlist(homeData.popular[0])} className="bg-white/10 hover:bg-white/20 text-white px-6 py-3.5 rounded-xl font-black text-[10px] uppercase tracking-widest transition-all backdrop-blur-md border border-white/10 flex items-center gap-2">
-                           {watchlist.some(i => String(i.bookId || i.id) === String(homeData.popular[0].bookId || homeData.popular[0].id)) ? <BookmarkCheck size={18} className="text-blue-400" /> : <Bookmark size={18} />} FAVORIT
+                           {watchlist.some(i => String(i.bookId || i.id) === String(homeData.popular[0].bookId || homeData.popular[0].id)) ? <BookmarkCheck size={18} className="text-blue-400" /> : <Bookmark size={18} />} SIMPAN
                         </button>
                        </div>
                      </div>
@@ -517,7 +507,7 @@ export default function App() {
                  </div>
                )}
 
-               <Section icon={Flame} title="Lagi Rame" onSeeAll={() => setView('rank')}>
+               <Section icon={Flame} title="Drama Populer" onSeeAll={() => setView('rank')}>
                  <div className="grid grid-cols-2 xs:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-6">
                    {homeData.popular.slice(1, 7).map((item, idx) => <DramaCard key={idx} item={item} onClick={(it) => { setSelectedBookId(it.bookId || it.id); setPreviousView('home'); setView('detail'); }} />)}
                  </div>
@@ -540,7 +530,7 @@ export default function App() {
                  </Section>
                )}
 
-               <Section icon={Clock} title="Baru Update" onSeeAll={() => { setView('rank'); setRankTab('latest'); }}>
+               <Section icon={Clock} title="Update Terbaru" onSeeAll={() => { setView('rank'); setRankTab('latest'); }}>
                  <div className="grid grid-cols-2 xs:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-6">
                    {homeData.latest.slice(0, 6).map((item, idx) => <DramaCard key={idx} item={item} onClick={(it) => { setSelectedBookId(it.bookId || it.id); setPreviousView('home'); setView('detail'); }} />)}
                  </div>
@@ -552,7 +542,7 @@ export default function App() {
             <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
                <div className="flex justify-center gap-3 mb-10 overflow-x-auto no-scrollbar py-1">
                  {[ { id: 'popular', label: 'Populer' }, { id: 'latest', label: 'Terbaru' } ].map(t => (
-                    <button key={t.id} onClick={() => setRankTab(t.id)} className={`px-8 py-2.5 rounded-xl font-black text-[10px] uppercase tracking-widest border transition-all ${rankTab === t.id ? 'bg-blue-600 border-blue-600 text-white shadow-lg' : 'bg-white/5 border-white/10 text-slate-400 hover:border-white/20'}`}>{t.label}</button>
+                    <button key={t.id} onClick={() => setRankTab(t.id)} className={`px-8 py-2.5 rounded-xl font-black text-[10px] uppercase tracking-widest border transition-all ${rankTab === t.id ? 'bg-blue-600 border-blue-600 text-white shadow-lg shadow-blue-600/20' : 'bg-white/5 border-white/10 text-slate-400 hover:border-white/20'}`}>{t.label}</button>
                  ))}
                </div>
                <div className="grid grid-cols-2 xs:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-6">
@@ -580,7 +570,7 @@ export default function App() {
                <div className="grid grid-cols-2 xs:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-6">
                   {filteredItems.map((item, idx) => <DramaCard key={idx} item={item} onClick={(it) => { setSelectedBookId(it.bookId || it.id); setView('detail'); }} />)}
                </div>
-               {filteredItems.length === 0 && <EmptyState icon={Filter} title="Belum Ada Hasil" message="Gunakan filter yang berbeda." />}
+               {filteredItems.length === 0 && <EmptyState icon={Filter} title="Hasil Kosong" message="Ubah filter pencarian Anda." />}
             </div>
           )}
 
@@ -594,7 +584,13 @@ export default function App() {
                     ))}
                   </div>
                 ) : (
-                  <EmptyState icon={Bookmark} title="Kosong" message="Ayo simpan drama favoritmu!" actionText="Cari Drama" onAction={() => setView('home')} />
+                  <EmptyState 
+                    icon={Bookmark} 
+                    title="Favorit Kosong" 
+                    message="Simpan drama favorit Anda agar mudah ditemukan kembali."
+                    actionText="JELAJAHI DRAMA"
+                    onAction={() => setView('home')}
+                  />
                 )}
               </Section>
             </div>
@@ -606,11 +602,24 @@ export default function App() {
                 {watchHistory.length > 0 ? (
                   <div className="grid grid-cols-2 xs:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-6">
                     {watchHistory.map((item, idx) => (
-                      <DramaCard key={idx} item={item} isHistory lastEpisode={item.lastEpisode} onRemove={clearHistoryItem} onClick={(it) => { setSelectedBookId(it.bookId); setView('detail'); }} />
+                      <DramaCard 
+                        key={idx} 
+                        item={item} 
+                        isHistory 
+                        lastEpisode={item.lastEpisode}
+                        onRemove={clearHistoryItem}
+                        onClick={(it) => { setSelectedBookId(it.bookId); setView('detail'); }} 
+                      />
                     ))}
                   </div>
                 ) : (
-                  <EmptyState icon={History} title="Belum Ada Riwayat" message="Kamu belum menonton apapun." actionText="Mulai Nonton" onAction={() => setView('home')} />
+                  <EmptyState 
+                    icon={History} 
+                    title="Riwayat Kosong" 
+                    message="Anda belum menonton drama apapun baru-baru ini."
+                    actionText="MULAI NONTON"
+                    onAction={() => setView('home')}
+                  />
                 )}
               </Section>
             </div>
@@ -630,9 +639,8 @@ export default function App() {
         </div>
       </main>
 
-      {/* Mobile Bar */}
       <div className="md:hidden fixed bottom-0 left-0 right-0 bg-[#0f172a]/95 backdrop-blur-xl border-t border-white/5 px-6 py-4 flex justify-between items-center z-50">
-        {[ {id:'home', icon:Home, label:'Home'}, {id:'rank', icon:Trophy, label:'Top'}, {id:'filter', icon:Filter, label:'Filter'}, {id:'watchlist', icon:Bookmark, label:'Favorit'} ].map(m => (
+        {[ {id:'home', icon:Home, label:'Home'}, {id:'rank', icon:Trophy, label:'Ranking'}, {id:'filter', icon:Filter, label:'Filter'}, {id:'watchlist', icon:Bookmark, label:'Favorit'} ].map(m => (
           <button key={m.id} onClick={() => setView(m.id)} className={`flex flex-col items-center gap-1 ${view === m.id ? 'text-blue-500' : 'text-slate-500'}`}>
             <m.icon size={20} />
             <span className="text-[8px] font-black uppercase tracking-widest">{m.label}</span>
@@ -641,8 +649,8 @@ export default function App() {
       </div>
 
       {searchModalOpen && (
-        <div className="fixed inset-0 z-[100] flex items-start justify-center pt-32 px-4 animate-in fade-in">
-          <div className="absolute inset-0 bg-[#0f172a]/95 backdrop-blur-md" onClick={() => setSearchModalOpen(false)}></div>
+        <div className="fixed inset-0 z-[100] flex items-start justify-center pt-32 px-4">
+          <div className="absolute inset-0 bg-[#0f172a]/95 backdrop-blur-md animate-in fade-in" onClick={() => setSearchModalOpen(false)}></div>
           <div className="relative w-full max-w-2xl animate-in slide-in-from-top-8">
              <div className="relative group">
                 <Search className="absolute left-6 top-1/2 -translate-y-1/2 text-slate-500" size={24} />
@@ -652,7 +660,7 @@ export default function App() {
                       setSearchData(res.items || []); setView('search-results'); setSearchModalOpen(false);
                     });
                   }
-                }} placeholder="Cari judul drama..." className="w-full bg-slate-900 border border-white/10 rounded-3xl pl-16 pr-8 py-5 text-lg font-bold text-white outline-none focus:border-blue-600 transition-all shadow-2xl" />
+                }} placeholder="Cari drama favorit..." className="w-full bg-slate-900 border border-white/10 rounded-3xl pl-16 pr-8 py-5 text-lg font-bold text-white outline-none focus:border-blue-600 transition-all shadow-2xl" />
              </div>
           </div>
         </div>
@@ -662,7 +670,7 @@ export default function App() {
 }
 
 /**
- * --- MODUL DETAIL ---
+ * --- DETAIL MODULE ---
  */
 const DramaDetailPage = ({ bookId, onBack, user, watchlist, history, onToggleWatchlist, onPlayEpisode }) => {
   const [data, setData] = useState(null);
@@ -685,7 +693,7 @@ const DramaDetailPage = ({ bookId, onBack, user, watchlist, history, onToggleWat
   if (loading) return (
     <div className="flex flex-col items-center justify-center p-20 gap-4">
       <Loader2 className="animate-spin text-blue-500" size={40} />
-      <p className="text-[10px] font-black text-slate-600 uppercase tracking-[0.3em]">Memuat Data...</p>
+      <p className="text-[10px] font-black text-slate-600 uppercase tracking-[0.3em]">Menyinkronkan...</p>
     </div>
   );
 
@@ -697,6 +705,9 @@ const DramaDetailPage = ({ bookId, onBack, user, watchlist, history, onToggleWat
         <div className="w-full lg:w-[320px] shrink-0">
           <div className="relative aspect-[2/3] rounded-3xl overflow-hidden shadow-2xl border border-white/10">
             <img src={data.book.cover} className="w-full h-full object-cover" />
+            <div className="absolute top-4 left-4 flex gap-2">
+               <span className="bg-blue-600 text-white text-[8px] font-black px-2 py-1 rounded-lg shadow-lg uppercase tracking-wider">{data.book.chapterCount} EPS</span>
+            </div>
           </div>
         </div>
 
@@ -704,28 +715,31 @@ const DramaDetailPage = ({ bookId, onBack, user, watchlist, history, onToggleWat
           <h2 className="text-3xl sm:text-5xl font-black text-white mb-6 leading-tight tracking-tighter">{data.book.bookName}</h2>
           
           <div className="flex flex-wrap gap-3 mb-8">
-            <button onClick={() => onPlayEpisode(lastWatched || 1, data.book, data.chapters)} className="bg-blue-600 hover:bg-blue-500 text-white px-8 py-3.5 rounded-2xl font-black text-[10px] uppercase tracking-widest shadow-xl flex items-center gap-2">
-              <Play size={18} fill="currentColor" /> {lastWatched ? `LANJUT EPS ${lastWatched}` : 'TONTON'}
+            <button onClick={() => onPlayEpisode(lastWatched || 1, data.book, data.chapters)} className="bg-blue-600 hover:bg-blue-500 text-white px-8 py-3.5 rounded-2xl font-black text-[10px] uppercase tracking-widest shadow-xl shadow-blue-600/30 transition-all flex items-center gap-2">
+              <Play size={18} fill="currentColor" /> {lastWatched ? `LANJUT EPS ${lastWatched}` : 'TONTON SEKARANG'}
             </button>
-            <button onClick={() => onToggleWatchlist(data.book)} className={`px-6 py-3.5 rounded-2xl font-black text-[10px] uppercase tracking-widest transition-all border flex items-center gap-2 ${isBookmarked ? 'bg-blue-600/10 border-blue-500/30 text-blue-400' : 'bg-white/5 border-white/10 text-white'}`}>
-              {isBookmarked ? <BookmarkCheck size={18} /> : <Bookmark size={18} />} {isBookmarked ? 'FAVORIT' : 'SIMPAN'}
+            <button onClick={() => onToggleWatchlist(data.book)} className={`px-6 py-3.5 rounded-2xl font-black text-[10px] uppercase tracking-widest transition-all border flex items-center gap-2 ${isBookmarked ? 'bg-blue-600/10 border-blue-500/30 text-blue-400' : 'bg-white/5 border-white/10 text-white hover:bg-white/10'}`}>
+              {isBookmarked ? <BookmarkCheck size={18} /> : <Bookmark size={18} />} {isBookmarked ? 'DISIMPAN' : 'SIMPAN'}
             </button>
           </div>
 
           <div className="mb-10">
-            <h4 className="text-[9px] font-black text-slate-500 uppercase tracking-[0.3em] mb-3">Sinopsis</h4>
+            <h4 className="text-[9px] font-black text-slate-500 uppercase tracking-[0.3em] mb-3">SINOPSIS</h4>
             <div className="p-5 bg-white/5 rounded-2xl border border-white/5 text-slate-400 text-xs leading-relaxed italic">{cleanIntro(data.book.introduction)}</div>
           </div>
 
-          <div className="grid grid-cols-4 xs:grid-cols-6 sm:grid-cols-8 lg:grid-cols-12 gap-2 max-h-[160px] overflow-y-auto pr-3 no-scrollbar">
-            {data.chapters?.map((ch, i) => {
-              const num = ch.num || (ch.index + 1);
-              return (
-                <button key={i} onClick={() => onPlayEpisode(num, data.book, data.chapters)} className={`aspect-square rounded-xl text-[10px] font-black flex items-center justify-center transition-all border ${num === lastWatched ? 'bg-blue-600 border-blue-600 text-white' : 'bg-slate-800 border-white/5 text-slate-500'}`}>
-                  {num}
-                </button>
-              );
-            })}
+          <div>
+             <h4 className="text-[9px] font-black text-slate-500 uppercase tracking-[0.3em] mb-4">DAFTAR EPISODE</h4>
+             <div className="grid grid-cols-4 xs:grid-cols-6 sm:grid-cols-8 lg:grid-cols-12 gap-2 max-h-[160px] overflow-y-auto pr-3 no-scrollbar pb-2">
+              {data.chapters?.map((ch, i) => {
+                const num = ch.num || (ch.index + 1);
+                return (
+                  <button key={i} onClick={() => onPlayEpisode(num, data.book, data.chapters)} className={`aspect-square rounded-xl text-[10px] font-black flex items-center justify-center transition-all border ${num === lastWatched ? 'bg-blue-600 border-blue-600 text-white shadow-lg' : 'bg-slate-800 border-white/5 text-slate-500 hover:text-white'}`}>
+                    {num}
+                  </button>
+                );
+              })}
+            </div>
           </div>
         </div>
       </div>
@@ -734,7 +748,7 @@ const DramaDetailPage = ({ bookId, onBack, user, watchlist, history, onToggleWat
 };
 
 /**
- * --- MODUL PLAYER ---
+ * --- PLAYER MODULE ---
  */
 const CustomPlayerPage = ({ book, initialEp, onBack, onEpisodeChange, audioSettings, setAudioSettings }) => {
   const [currentEp, setCurrentEp] = useState(initialEp);
@@ -756,7 +770,10 @@ const CustomPlayerPage = ({ book, initialEp, onBack, onEpisodeChange, audioSetti
       const list = res?.data?.chapterList || res?.chapters || [];
       const chapter = list.find(c => String(c.num) === String(ep)) || list[0];
       const url = extractVideoUrlFromChapter(chapter);
-      if (url) { setVideoUrl(url); onEpisodeChange && onEpisodeChange(ep); }
+      if (url) { 
+        setVideoUrl(url); 
+        if (onEpisodeChange) onEpisodeChange(ep); 
+      }
     } catch (e) { console.error("Player error:", e); } finally { setLoading(false); }
   }, [book, onEpisodeChange]);
 
@@ -767,11 +784,11 @@ const CustomPlayerPage = ({ book, initialEp, onBack, onEpisodeChange, audioSetti
     if (!video || !videoUrl) return;
     if (hlsRef.current) hlsRef.current.destroy();
 
-    const start = () => { video.playbackRate = audioSettings.playbackRate; video.play().catch(() => {}); };
+    const startPlay = () => { if(video) { video.playbackRate = audioSettings.playbackRate; video.play().catch(() => {}); } };
     if (videoUrl.includes('.m3u8')) {
       const hls = new window.Hls(); hls.loadSource(videoUrl); hls.attachMedia(video);
-      hls.on(window.Hls.Events.MANIFEST_PARSED, start); hlsRef.current = hls;
-    } else { video.src = videoUrl; video.oncanplay = start; }
+      hls.on(window.Hls.Events.MANIFEST_PARSED, startPlay); hlsRef.current = hls;
+    } else { video.src = videoUrl; video.oncanplay = startPlay; }
   }, [videoUrl, audioSettings.playbackRate]);
 
   return (
@@ -779,7 +796,7 @@ const CustomPlayerPage = ({ book, initialEp, onBack, onEpisodeChange, audioSetti
       <div className={`absolute top-0 left-0 right-0 p-6 flex items-center justify-between bg-gradient-to-b from-black/90 to-transparent z-50 transition-opacity ${showControls ? 'opacity-100' : 'opacity-0'}`}>
         <button onClick={onBack} className="text-white p-2 rounded-full hover:bg-white/10"><ChevronLeft size={24}/></button>
         <div className="text-center">
-          <h2 className="text-white text-xs font-black uppercase tracking-widest">{book.bookName || book.title}</h2>
+          <h2 className="text-white text-xs font-black uppercase tracking-widest truncate max-w-[200px]">{book.bookName || book.title}</h2>
           <p className="text-blue-500 text-[9px] font-black uppercase tracking-[0.2em]">Episode {currentEp}</p>
         </div>
         <div className="w-10"></div>
@@ -788,7 +805,7 @@ const CustomPlayerPage = ({ book, initialEp, onBack, onEpisodeChange, audioSetti
       {loading && <div className="absolute inset-0 flex items-center justify-center bg-black/50"><Loader2 className="animate-spin text-blue-500" size={48} /></div>}
       <div className={`absolute bottom-0 left-0 right-0 p-6 bg-gradient-to-t from-black/90 to-transparent z-50 transition-all ${showControls ? 'translate-y-0 opacity-100' : 'translate-y-10 opacity-0'}`}>
         <div className="max-w-4xl mx-auto flex flex-col gap-4">
-          <input type="range" min="0" max={duration || 0} step="0.1" value={currentTime} onChange={(e) => videoRef.current.currentTime = e.target.value} className="w-full accent-blue-600" />
+          <input type="range" min="0" max={duration || 0} step="0.1" value={currentTime} onChange={(e) => videoRef.current.currentTime = parseFloat(e.target.value)} className="w-full accent-blue-600 h-1" />
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-6">
               <button disabled={currentEp <= 1} onClick={() => setCurrentEp(e => e - 1)} className="text-white/40 hover:text-white"><SkipBack size={24}/></button>
