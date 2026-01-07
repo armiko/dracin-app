@@ -1047,14 +1047,35 @@ const CustomPlayerPage = ({ book, initialEp, onBack, onEpisodeChange, audioSetti
     return () => { if (hlsRef.current) hlsRef.current.destroy(); };
   }, [videoUrl, audioSettings.autoPlay]); 
 
+  // FIX: Apply Volume Change
+  useEffect(() => {
+    if (videoRef.current) {
+      videoRef.current.volume = volume;
+    }
+  }, [volume]);
+
+  // FIX: Apply Speed Change
+  useEffect(() => {
+    if (videoRef.current) {
+      videoRef.current.playbackRate = audioSettings.playbackRate;
+    }
+  }, [audioSettings.playbackRate]);
+
   const togglePlay = () => {
     const video = videoRef.current;
     if (!video) return;
     if (video.paused) { video.play().catch(() => {}); } else { video.pause(); }
   };
 
+  // FIX: Overlay Click Handler
+  const handleOverlayClick = (e) => {
+    if (e.target === e.currentTarget) {
+      togglePlay();
+    }
+  };
+
   const toggleFullScreen = () => { if (!containerRef.current) return; if (!document.fullscreenElement) { containerRef.current.requestFullscreen().catch(err => console.error(err)); } else { document.exitFullscreen(); } };
-  const handleNext = () => { const total = details?.book?.chapterCount || 0; if (currentEp < total) setCurrentEp(prev => prev + 1); };
+  const handleNext = () => { const total = Number(details?.book?.chapterCount || 0); if (currentEp < total) setCurrentEp(prev => prev + 1); };
   const handlePrev = () => { if (currentEp > 1) setCurrentEp(prev => prev - 1); };
 
   return (
@@ -1069,7 +1090,7 @@ const CustomPlayerPage = ({ book, initialEp, onBack, onEpisodeChange, audioSetti
             >
               <video 
                 ref={videoRef} 
-                className="w-full h-full object-cover cursor-pointer" 
+                className="w-full h-full object-contain cursor-pointer bg-black" 
                 playsInline 
                 onPlay={() => setIsPlaying(true)} 
                 onPause={() => setIsPlaying(false)} 
@@ -1081,13 +1102,16 @@ const CustomPlayerPage = ({ book, initialEp, onBack, onEpisodeChange, audioSetti
                 onClick={togglePlay} 
               />
               {loading && <div className="absolute inset-0 flex items-center justify-center bg-black/60 backdrop-blur-sm z-10"><Loader2 className="animate-spin text-blue-500" size={48} /></div>}
-              <div className={`absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-black/60 flex flex-col justify-between p-4 md:p-8 transition-opacity duration-500 ${showControls ? 'opacity-100' : 'opacity-0'}`}>
-                <div className="flex justify-between items-center">
+              <div 
+                className={`absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-black/60 flex flex-col justify-between p-4 md:p-8 transition-opacity duration-500 ${showControls ? 'opacity-100' : 'opacity-0'}`}
+                onClick={handleOverlayClick}
+              >
+                <div className="flex justify-between items-center" onClick={(e) => e.stopPropagation()}>
                   <button onClick={onBack} className="p-2 md:p-2.5 bg-white/10 backdrop-blur-md rounded-full hover:bg-white/20 transition-all border border-white/10 active:scale-90"><ChevronLeft size={20} /></button>
                   <div className="text-center"><h2 className="text-[10px] md:text-xs font-black uppercase tracking-[0.2em] text-white">EPS {currentEp}</h2></div>
                   <button onClick={toggleFullScreen} className="p-2 md:p-2.5 bg-white/10 backdrop-blur-md rounded-full hover:bg-white/20 transition-all border border-white/10 active:scale-90"><Maximize size={20} /></button>
                 </div>
-                <div className="flex flex-col gap-4">
+                <div className="flex flex-col gap-4" onClick={(e) => e.stopPropagation()}>
                   <div className="flex items-center justify-center gap-10">
                     <button onClick={handlePrev} disabled={currentEp <= 1} className="text-white/60 hover:text-blue-400 disabled:opacity-20 transition-colors"><SkipBack size={32} fill="currentColor" /></button>
                     <button onClick={togglePlay} className="text-white transform active:scale-90 transition-transform">
