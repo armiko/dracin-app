@@ -317,7 +317,7 @@ const ProfileDropdown = ({ isOpen, onClose, user, setView, handleLogout }) => {
     try {
       const provider = new GoogleAuthProvider();
       await signInWithPopup(auth, provider);
-      onClose();
+      window.location.reload();
     } catch (e) {
       console.error("Login gagal", e);
     }
@@ -334,9 +334,8 @@ const ProfileDropdown = ({ isOpen, onClose, user, setView, handleLogout }) => {
           </div>
         ) : (
           <div className="p-5 border-b border-white/5 text-center">
-            <p className="text-slate-400 text-[10px] font-black uppercase tracking-widest mb-3">Fitur Terbatas</p>
+            <p className="text-slate-400 text-[10px] font-black uppercase tracking-widest mb-3">Login Untuk Menyimpan History</p>
             <button onClick={handleLoginPopup} className="w-full py-2 bg-blue-600 text-white rounded-xl text-[10px] font-black uppercase tracking-widest shadow-lg">Masuk Google</button>
-            {user && <p className="text-slate-700 text-[7px] font-mono mt-2 break-all">{user.uid}</p>}
           </div>
         )}
         <div className="p-2 text-left">
@@ -400,9 +399,24 @@ export function App() {
   const isInternalNav = useRef(false);
 
   // LOGIKA ROUTING / HISTORY SYNC
-  const changeView = useCallback((v, bid = null, ps = null, tag = null) => {
+  const changeView = useCallback((v, bid = null, ps = null, tag = null, title = '') => {
     if (!isInternalNav.current) {
-      window.history.pushState({ view: v, bookId: bid, playerState: ps, activeTag: tag }, '');
+        let path = window.location.pathname; 
+        const slug = title ? title.toLowerCase().replace(/[^a-z0-9]+/g, '-') : 'drama';
+        
+        if (v === 'home') path = '/';
+        else if (v === 'detail') {
+            if (ps) path = `/watch/${bid}/${slug}/ep/${ps.ep}`;
+            else path = `/drama/${bid}/${slug}`;
+        }
+        else if (v === 'rank') path = '/rank';
+        else if (v === 'filter') path = '/filter';
+        else if (v === 'watchlist') path = '/watchlist';
+        else if (v === 'history') path = '/history';
+        else if (v === 'tag-dramas') path = `/tag/${tag}`;
+        else if (v === 'search-results') path = '/search';
+
+        window.history.pushState({ view: v, bookId: bid, playerState: ps, activeTag: tag }, '', path);
     }
     setView(v);
     setSelectedBookId(bid);
@@ -630,7 +644,9 @@ export function App() {
   }, [playerState?.book, updateHistory]);
 
   const handleLogout = useCallback(() => {
-    signOut(auth).then(() => { changeView('home'); setProfileOpen(false); });
+    signOut(auth).then(() => { 
+        window.location.reload(); 
+    });
   }, [changeView]);
 
   const handleTagClick = useCallback((tagName) => {
@@ -748,7 +764,7 @@ export function App() {
                        </div>
                        <div className="relative z-10 flex flex-col md:flex-row items-center gap-8 p-10 sm:p-14 w-full">
                          <div className="hidden lg:block w-[200px] shrink-0 transform -rotate-2 hover:rotate-0 transition-all duration-500">
-                           <div className="aspect-[2/3] rounded-2xl overflow-hidden shadow-2xl border-2 border-white/10 cursor-pointer" onClick={() => changeView('detail', homeData.popular[0].bookId || homeData.popular[0].id)}>
+                           <div className="aspect-[2/3] rounded-2xl overflow-hidden shadow-2xl border-2 border-white/10 cursor-pointer" onClick={() => changeView('detail', homeData.popular[0].bookId || homeData.popular[0].id, null, null, homeData.popular[0].bookName || homeData.popular[0].title)}>
                              <img src={homeData.popular[0].coverWap || homeData.popular[0].cover} className="w-full h-full object-cover" alt="" />
                            </div>
                          </div>
@@ -756,7 +772,7 @@ export function App() {
                            <div className="inline-flex items-center gap-2 px-3 py-1 bg-blue-600 text-white text-[8px] font-black rounded-full mb-5 uppercase tracking-widest"><Flame size={12} fill="white" /> Rekomendasi Hari Ini</div>
                            <h1 className="text-3xl sm:text-6xl font-black text-white mb-6 leading-tight tracking-tighter">{homeData.popular[0].bookName || homeData.popular[0].title}</h1>
                            <div className="flex flex-wrap items-center justify-center md:justify-start gap-4">
-                             <button onClick={() => changeView('detail', homeData.popular[0].bookId || homeData.popular[0].id)} className="bg-white text-black hover:bg-blue-600 hover:text-white px-8 py-3.5 rounded-xl font-black text-[10px] uppercase tracking-widest transition-all shadow-xl flex items-center gap-2">MULAI TONTON <Play size={16} fill="currentColor"/></button>
+                             <button onClick={() => changeView('detail', homeData.popular[0].bookId || homeData.popular[0].id, null, null, homeData.popular[0].bookName || homeData.popular[0].title)} className="bg-white text-black hover:bg-blue-600 hover:text-white px-8 py-3.5 rounded-xl font-black text-[10px] uppercase tracking-widest transition-all shadow-xl flex items-center gap-2">MULAI TONTON <Play size={16} fill="currentColor"/></button>
                              <button onClick={() => handleToggleWatchlist(homeData.popular[0])} className="bg-white/10 hover:bg-white/20 text-white px-6 py-3.5 rounded-xl font-black text-[10px] uppercase tracking-widest transition-all backdrop-blur-md border border-white/10 flex items-center gap-2">
                                {watchlist.some(i => String(i.bookId || i.id) === String(homeData.popular[0].bookId || homeData.popular[0].id)) ? <BookmarkCheck size={18} className="text-blue-400" /> : <Bookmark size={18} />} SIMPAN
                              </button>
@@ -767,24 +783,24 @@ export function App() {
                    )}
                    <Section icon={Flame} title="Drama Populer" onSeeAll={() => { setRankTab('popular'); changeView('rank'); }}>
                      <div className="grid grid-cols-3 xs:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3 md:gap-6">
-                       {homeData.popular.slice(1, 7).map((item, idx) => <DramaCard key={idx} item={item} onClick={(it) => changeView('detail', it.bookId || it.id)} />)}
+                       {homeData.popular.slice(1, 7).map((item, idx) => <DramaCard key={idx} item={item} onClick={(it) => changeView('detail', it.bookId || it.id, null, null, it.bookName || it.title)} />)}
                      </div>
                    </Section>
                    {watchHistory.length > 0 && (
                      <Section icon={History} title="Lanjutkan Nonton">
                        <div className="grid grid-cols-3 xs:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3 md:gap-6">
-                         {watchHistory.slice(0, 6).map((item, idx) => (<DramaCard key={idx} item={item} isHistory lastEpisode={item.lastEpisode} onRemove={clearHistoryItem} onClick={(it) => changeView('detail', it.bookId)} />))}
+                         {watchHistory.slice(0, 6).map((item, idx) => (<DramaCard key={idx} item={item} isHistory lastEpisode={item.lastEpisode} onRemove={clearHistoryItem} onClick={(it) => changeView('detail', it.bookId, null, null, it.bookName || it.title)} />))}
                        </div>
                      </Section>
                    )}
                    <Section icon={Zap} title="Sedang Trending" onSeeAll={() => { setRankTab('trending'); changeView('rank'); }}>
                      <div className="grid grid-cols-3 xs:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3 md:gap-6">
-                       {homeData.trending.slice(0, 6).map((item, idx) => <DramaCard key={idx} item={item} onClick={(it) => changeView('detail', it.bookId || it.id)} />)}
+                       {homeData.trending.slice(0, 6).map((item, idx) => <DramaCard key={idx} item={item} onClick={(it) => changeView('detail', it.bookId || it.id, null, null, it.bookName || it.title)} />)}
                      </div>
                    </Section>
                    <Section icon={Clock} title="Update Terbaru" onSeeAll={() => { setRankTab('latest'); changeView('rank'); }}>
                      <div className="grid grid-cols-3 xs:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3 md:gap-6">
-                       {homeData.latest.slice(0, 6).map((item, idx) => <DramaCard key={idx} item={item} onClick={(it) => changeView('detail', it.bookId || it.id)} />)}
+                       {homeData.latest.slice(0, 6).map((item, idx) => <DramaCard key={idx} item={item} onClick={(it) => changeView('detail', it.bookId || it.id, null, null, it.bookName || it.title)} />)}
                      </div>
                    </Section>
                 </div>
@@ -797,7 +813,7 @@ export function App() {
                      ))}
                    </div>
                    <div className="grid grid-cols-3 xs:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3 md:gap-6">
-                      {rankData.map((item, idx) => <DramaCard key={idx} item={item} rank={idx+1} onClick={(it) => changeView('detail', it.bookId || it.id)} />)}
+                      {rankData.map((item, idx) => <DramaCard key={idx} item={item} rank={idx+1} onClick={(it) => changeView('detail', it.bookId || it.id, null, null, it.bookName || it.title)} />)}
                    </div>
                    <div className="mt-12 flex justify-center">
                       <button onClick={() => setRankPage(p => p + 1)} disabled={loading} className="px-10 py-3.5 bg-blue-600 hover:bg-blue-500 text-white rounded-2xl font-black text-[10px] uppercase tracking-[0.2em] shadow-xl flex items-center gap-3 disabled:opacity-50 transition-all">
@@ -821,7 +837,7 @@ export function App() {
                       ))}
                    </div>
                    <div className="grid grid-cols-3 xs:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3 md:gap-6">
-                      {filteredItems.map((item, idx) => <DramaCard key={idx} item={item} onClick={(it) => changeView('detail', it.bookId || it.id)} />)}
+                      {filteredItems.map((item, idx) => <DramaCard key={idx} item={item} onClick={(it) => changeView('detail', it.bookId || it.id, null, null, it.bookName || it.title)} />)}
                    </div>
                 </div>
               )}
@@ -836,7 +852,7 @@ export function App() {
                      ) : tagData.length > 0 ? (
                         <div className="grid grid-cols-3 xs:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3 md:gap-6">
                            {tagData.map((item, idx) => (
-                             <DramaCard key={idx} item={item} onClick={(it) => changeView('detail', it.bookId || it.id)} />
+                             <DramaCard key={idx} item={item} onClick={(it) => changeView('detail', it.bookId || it.id, null, null, it.bookName || it.title)} />
                            ))}
                         </div>
                      ) : (
@@ -857,7 +873,7 @@ export function App() {
                   locale={currentLocale} 
                   onPlayEpisode={(ep, b, c) => { 
                     const ps = { book: b, chapters: c, ep };
-                    changeView('detail', b.bookId || b.id, ps);
+                    changeView('detail', b.bookId || b.id, ps, null, b.bookName || b.title);
                     updateHistory(b, ep); 
                   }} 
                 />
@@ -867,7 +883,7 @@ export function App() {
                   <Section icon={Bookmark} title="Koleksi Favorit Saya">
                     {watchlist.length > 0 ? (
                       <div className="grid grid-cols-3 xs:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3 md:gap-6">
-                        {watchlist.map((item, idx) => <DramaCard key={idx} item={item} onRemove={() => handleToggleWatchlist(item)} onClick={(it) => changeView('detail', it.bookId || it.id)} />)}
+                        {watchlist.map((item, idx) => <DramaCard key={idx} item={item} onRemove={() => handleToggleWatchlist(item)} onClick={(it) => changeView('detail', it.bookId || it.id, null, null, it.bookName || it.title)} />)}
                       </div>
                     ) : <EmptyState icon={Bookmark} title="Favorit Kosong" message="Ayo simpan drama favoritmu agar mudah ditemukan kembali." actionText="CARI DRAMA" onAction={() => changeView('home')} />}
                   </Section>
@@ -878,7 +894,7 @@ export function App() {
                   <Section icon={History} title="Sudah Ditonton">
                     {watchHistory.length > 0 ? (
                       <div className="grid grid-cols-3 xs:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3 md:gap-6">
-                        {watchHistory.map((item, idx) => <DramaCard key={idx} item={item} isHistory lastEpisode={item.lastEpisode} onRemove={clearHistoryItem} onClick={(it) => changeView('detail', it.bookId)} />)}
+                        {watchHistory.map((item, idx) => <DramaCard key={idx} item={item} isHistory lastEpisode={item.lastEpisode} onRemove={clearHistoryItem} onClick={(it) => changeView('detail', it.bookId, null, null, it.bookName || it.title)} />)}
                       </div>
                     ) : <EmptyState icon={History} title="Riwayat Kosong" message="Anda belum pernah menonton drama apa pun." actionText="NONTON SEKARANG" onAction={() => changeView('home')} />}
                   </Section>
@@ -888,7 +904,7 @@ export function App() {
                 <div className="animate-in fade-in duration-700">
                    <Section title={`Hasil Pencarian: ${searchQuery}`} icon={Search} onSeeAll={() => changeView('home')}>
                      <div className="grid grid-cols-3 xs:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3 md:gap-6">
-                       {searchData.map((item, idx) => <DramaCard key={idx} item={item} onClick={(it) => { changeView('detail', it.bookId || it.id); }} />)}
+                       {searchData.map((item, idx) => <DramaCard key={idx} item={item} onClick={(it) => { changeView('detail', it.bookId || it.id, null, null, it.bookName || it.title); }} />)}
                      </div>
                    </Section>
                 </div>
@@ -1074,6 +1090,27 @@ const CustomPlayerPage = ({ book, initialEp, onBack, onEpisodeChange, audioSetti
     }
   };
 
+  const handleShare = () => {
+    const url = window.location.href;
+    const title = book.bookName || 'Nonton Drama';
+    const text = `Nonton ${title} di NontonDracin`;
+    
+    if (navigator.share) {
+        navigator.share({ title, text, url }).catch(console.error);
+    } else {
+        const textarea = document.createElement('textarea');
+        textarea.value = url;
+        document.body.appendChild(textarea);
+        textarea.select();
+        try {
+            document.execCommand('copy');
+        } catch (err) {
+            console.error('Fallback copy failed', err);
+        }
+        document.body.removeChild(textarea);
+    }
+  };
+
   const toggleFullScreen = () => { if (!containerRef.current) return; if (!document.fullscreenElement) { containerRef.current.requestFullscreen().catch(err => console.error(err)); } else { document.exitFullscreen(); } };
   const handleNext = () => { const total = Number(details?.book?.chapterCount || 0); if (currentEp < total) setCurrentEp(prev => prev + 1); };
   const handlePrev = () => { if (currentEp > 1) setCurrentEp(prev => prev - 1); };
@@ -1109,7 +1146,12 @@ const CustomPlayerPage = ({ book, initialEp, onBack, onEpisodeChange, audioSetti
                 <div className="flex justify-between items-center" onClick={(e) => e.stopPropagation()}>
                   <button onClick={onBack} className="p-2 md:p-2.5 bg-white/10 backdrop-blur-md rounded-full hover:bg-white/20 transition-all border border-white/10 active:scale-90"><ChevronLeft size={20} /></button>
                   <div className="text-center"><h2 className="text-[10px] md:text-xs font-black uppercase tracking-[0.2em] text-white">EPS {currentEp}</h2></div>
-                  <button onClick={toggleFullScreen} className="p-2 md:p-2.5 bg-white/10 backdrop-blur-md rounded-full hover:bg-white/20 transition-all border border-white/10 active:scale-90"><Maximize size={20} /></button>
+                  <div className="flex items-center gap-2">
+                    <button onClick={handleShare} className="p-2 md:p-2.5 bg-white/10 backdrop-blur-md rounded-full hover:bg-white/20 transition-all border border-white/10 active:scale-90">
+                        <Share2 size={20} />
+                    </button>
+                    <button onClick={toggleFullScreen} className="p-2 md:p-2.5 bg-white/10 backdrop-blur-md rounded-full hover:bg-white/20 transition-all border border-white/10 active:scale-90"><Maximize size={20} /></button>
+                  </div>
                 </div>
                 <div className="flex flex-col gap-4" onClick={(e) => e.stopPropagation()}>
                   <div className="flex items-center justify-center gap-10">
