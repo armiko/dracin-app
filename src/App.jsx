@@ -401,22 +401,24 @@ export function App() {
   // LOGIKA ROUTING / HISTORY SYNC
   const changeView = useCallback((v, bid = null, ps = null, tag = null, title = '') => {
     if (!isInternalNav.current) {
-        let path = window.location.pathname; 
+        // Construct Hash Path to prevent 404 on reload
+        let hash = '';
         const slug = title ? title.toLowerCase().replace(/[^a-z0-9]+/g, '-') : 'drama';
         
-        if (v === 'home') path = '/';
+        if (v === 'home') hash = '/';
         else if (v === 'detail') {
-            if (ps) path = `/watch/${bid}/${slug}/ep/${ps.ep}`;
-            else path = `/drama/${bid}/${slug}`;
+            if (ps) hash = `/watch/${bid}/${slug}/ep/${ps.ep}`;
+            else hash = `/drama/${bid}/${slug}`;
         }
-        else if (v === 'rank') path = '/rank';
-        else if (v === 'filter') path = '/filter';
-        else if (v === 'watchlist') path = '/watchlist';
-        else if (v === 'history') path = '/history';
-        else if (v === 'tag-dramas') path = `/tag/${tag}`;
-        else if (v === 'search-results') path = '/search';
+        else if (v === 'rank') hash = '/rank';
+        else if (v === 'filter') hash = '/filter';
+        else if (v === 'watchlist') hash = '/watchlist';
+        else if (v === 'history') hash = '/history';
+        else if (v === 'tag-dramas') hash = `/tag/${tag}`;
+        else if (v === 'search-results') hash = '/search';
 
-        window.history.pushState({ view: v, bookId: bid, playerState: ps, activeTag: tag }, '', path);
+        // Use pushState with Hash
+        window.history.pushState({ view: v, bookId: bid, playerState: ps, activeTag: tag }, '', '#' + hash);
     }
     setView(v);
     setSelectedBookId(bid);
@@ -445,22 +447,20 @@ export function App() {
   // FIRESTORE SYNC LOGIC (Watchlist & History)
   // RULE 3: Auth BEFORE queries
   useEffect(() => {
-    const initAuth = async () => {
-      try {
-        if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
-          await signInWithCustomToken(auth, __initial_auth_token);
-        } else {
-          await signInAnonymously(auth);
-        }
-      } catch (err) {
-        console.error("Auth failed:", err);
-      }
-    };
-    initAuth();
+    // Check for custom token logic (if any)
+    if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+        signInWithCustomToken(auth, __initial_auth_token).catch(console.error);
+    }
+
+    // Listen to Auth State
     const unsubscribe = onAuthStateChanged(auth, (u) => {
       if (u) {
         setUser(u);
         setTimeout(() => setShowPromo(true), 3500);
+      } else {
+        // If no user detected (and not loading initial state implicitly handled by SDK),
+        // Sign in anonymously. This prevents overwriting a Google session if it's currently restoring.
+        signInAnonymously(auth).catch((e) => console.error("Anon auth failed", e));
       }
     });
     return () => unsubscribe();
