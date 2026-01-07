@@ -369,7 +369,23 @@ export function App() {
   const [allDramaData, setAllDramaData] = useState([]);
   const [searchData, setSearchData] = useState([]);
   const [tagData, setTagData] = useState([]);
-  const [currentLocale, setCurrentLocale] = useState(() => localStorage.getItem(STORAGE_KEYS.LOCALE) || 'in');
+  // Initial locale state now checks URL first
+  const [currentLocale, setCurrentLocale] = useState(() => {
+    try {
+        const segments = window.location.pathname.split('/').filter(Boolean);
+        if (segments.length > 0) {
+            const first = segments[0];
+            // Map 'id' from URL back to 'in' for API/Internal logic if needed
+            // But SUPPORTED_LANGUAGES uses 'in' for Indonesia code.
+            // If URL is 'id', we map it to 'in'.
+            const mapped = first === 'id' ? 'in' : first;
+            const valid = SUPPORTED_LANGUAGES.find(l => l.code === mapped);
+            if (valid) return valid.code;
+        }
+    } catch(e) {}
+    return localStorage.getItem(STORAGE_KEYS.LOCALE) || 'in';
+  });
+  
   const [langMenuOpen, setLangMenuOpen] = useState(false);
   const [activeTag, setActiveTag] = useState('');
   
@@ -401,30 +417,35 @@ export function App() {
   // LOGIKA ROUTING / HISTORY SYNC
   const changeView = useCallback((v, bid = null, ps = null, tag = null, title = '') => {
     if (!isInternalNav.current) {
-        // Construct Hash Path to prevent 404 on reload
-        let hash = '';
+        let path = '';
         const slug = title ? title.toLowerCase().replace(/[^a-z0-9]+/g, '-') : 'drama';
         
-        if (v === 'home') hash = '/';
-        else if (v === 'detail') {
-            if (ps) hash = `/watch/${bid}/${slug}/ep/${ps.ep}`;
-            else hash = `/drama/${bid}/${slug}`;
-        }
-        else if (v === 'rank') hash = '/rank';
-        else if (v === 'filter') hash = '/filter';
-        else if (v === 'watchlist') hash = '/watchlist';
-        else if (v === 'history') hash = '/history';
-        else if (v === 'tag-dramas') hash = `/tag/${tag}`;
-        else if (v === 'search-results') hash = '/search';
+        // Use 'id' for Indonesia in URL, keep 'in' for internal state/API
+        const urlLocale = currentLocale === 'in' ? 'id' : currentLocale;
 
-        // Use pushState with Hash
-        window.history.pushState({ view: v, bookId: bid, playerState: ps, activeTag: tag }, '', '#' + hash);
+        if (v === 'home') path = '/';
+        else if (v === 'detail') {
+            if (ps) path = `/watch/${bid}/${slug}/ep/${ps.ep}`;
+            else path = `/drama/${bid}/${slug}`;
+        }
+        else if (v === 'rank') path = '/rank';
+        else if (v === 'filter') path = '/filter';
+        else if (v === 'watchlist') path = '/watchlist';
+        else if (v === 'history') path = '/history';
+        else if (v === 'tag-dramas') path = `/tag/${tag}`;
+        else if (v === 'search-results') path = '/search';
+
+        // Construct final URL with locale prefix
+        const finalUrl = `/${urlLocale}${path === '/' ? '' : path}`;
+        
+        // Use standard path pushing
+        window.history.pushState({ view: v, bookId: bid, playerState: ps, activeTag: tag }, '', finalUrl);
     }
     setView(v);
     setSelectedBookId(bid);
     setPlayerState(ps);
     setActiveTag(tag || '');
-  }, []);
+  }, [currentLocale]);
 
   useEffect(() => {
     if (!window.history.state) {
@@ -689,7 +710,24 @@ export function App() {
             <div className="p-2 text-left">
               <p className="px-3 py-2 text-[8px] font-black text-slate-500 uppercase tracking-widest border-b border-white/5 mb-1">Pilih Bahasa</p>
               {SUPPORTED_LANGUAGES.map((lang) => (
-                <button key={lang.code} onClick={() => { setCurrentLocale(lang.code); setLangMenuOpen(false); setHomeData({ popular: [], latest: [], trending: [] }); }} className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-colors ${currentLocale === lang.code ? 'bg-blue-600 text-white' : 'text-slate-300 hover:bg-white/5'}`}>
+                <button key={lang.code} onClick={() => { 
+                    const newCode = lang.code;
+                    const urlLocale = newCode === 'in' ? 'id' : newCode;
+                    const currentUrlLocale = currentLocale === 'in' ? 'id' : currentLocale;
+                    
+                    // Construct new Path
+                    let newPath = window.location.pathname;
+                    if (newPath.startsWith(`/${currentUrlLocale}`)) {
+                        newPath = newPath.replace(`/${currentUrlLocale}`, `/${urlLocale}`);
+                    } else {
+                        // If root or no locale, prepend
+                        newPath = `/${urlLocale}${newPath === '/' ? '' : newPath}`;
+                    }
+                    
+                    localStorage.setItem(STORAGE_KEYS.LOCALE, newCode);
+                    // Refresh page with new URL
+                    window.location.href = newPath;
+                }} className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-colors ${currentLocale === lang.code ? 'bg-blue-600 text-white' : 'text-slate-300 hover:bg-white/5'}`}>
                   <div className="w-6 h-4 overflow-hidden rounded-[2px] flex-shrink-0">
                     <img src={`https://flagcdn.com/w40/${lang.flag}.png`} alt={lang.label} className="w-full h-full object-cover" />
                   </div>
