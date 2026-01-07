@@ -32,7 +32,7 @@ import {
 } from 'firebase/firestore';
 
 /**
- * --- KONFIGURASI ENVIRONMENT ---
+ * --- ENVIRONMENT CONFIGURATION ---
  */
 const getSafeEnv = (key, fallback = '') => {
   try {
@@ -361,7 +361,7 @@ const ProfileDropdown = ({ isOpen, onClose, user, setView, handleLogout }) => {
   );
 };
 
-export default function App() {
+export function App() {
   const [view, setView] = useState('home');
   const [user, setUser] = useState(null);
   const [homeData, setHomeData] = useState({ popular: [], latest: [], trending: [] });
@@ -455,9 +455,12 @@ export default function App() {
   useEffect(() => {
     if (!user) return;
     
+    console.log('[Firestore] Setup listeners for user:', user.uid);
+
     // Rule 1 & 2: Real-time listener for Watchlist (Strict Path & Simple Query)
     const watchlistRef = collection(db, 'artifacts', appId, 'users', user.uid, 'watchlist');
     const unsubWatchlist = onSnapshot(watchlistRef, (snapshot) => {
+      console.log('[Firestore] Watchlist docs:', snapshot.docs.length);
       const data = snapshot.docs.map(doc => ({ 
         ...doc.data(), 
         id: doc.id,
@@ -469,6 +472,7 @@ export default function App() {
     // Rule 1 & 2: Real-time listener for History (Strict Path & Simple Query)
     const historyRef = collection(db, 'artifacts', appId, 'users', user.uid, 'history');
     const unsubHistory = onSnapshot(historyRef, (snapshot) => {
+      console.log('[Firestore] History docs:', snapshot.docs.length);
       const data = snapshot.docs.map(doc => ({ 
         ...doc.data(), 
         id: doc.id,
@@ -484,6 +488,7 @@ export default function App() {
   }, [user]);
 
   const handleToggleWatchlist = useCallback(async (book) => {
+    console.log('[Watchlist] Toggle for:', book.bookId || book.id, 'User:', user?.uid);
     if (!user) return;
     const bid = String(book.bookId || book.id);
     if (!bid || bid === 'undefined') return;
@@ -512,6 +517,7 @@ export default function App() {
   }, [user, watchlist]);
 
   const updateHistory = useCallback(async (book, episode) => {
+    console.log('[History] Update ep', episode, 'for:', book.bookId || book.id, 'User:', user?.uid);
     if (!user) return;
     const bid = String(book.bookId || book.id);
     if (!bid || bid === 'undefined') return;
@@ -1146,3 +1152,5 @@ const CustomPlayerPage = ({ book, initialEp, onBack, onEpisodeChange, audioSetti
     </div>
   );
 };
+
+export default App;
