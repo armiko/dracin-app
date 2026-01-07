@@ -611,12 +611,12 @@ export function App() {
         setView(parsed.view);
         setSelectedBookId(parsed.bookId);
         if (parsed.playerState) {
-             setPlayerState(prev => {
-                 if (prev && prev.book && String(prev.book.id || prev.book.bookId) === String(parsed.playerState.book.id)) {
-                     return { ...prev, ep: parsed.playerState.ep };
-                 }
-                 return parsed.playerState;
-             });
+              setPlayerState(prev => {
+                  if (prev && prev.book && String(prev.book.id || prev.book.bookId) === String(parsed.playerState.book.id)) {
+                      return { ...prev, ep: parsed.playerState.ep };
+                  }
+                  return parsed.playerState;
+              });
         } else {
             setPlayerState(null);
         }
@@ -1401,10 +1401,10 @@ const CustomPlayerPage = ({ book, initialEp, onBack, onEpisodeChange, audioSetti
               <button onClick={() => setLocalAutoNext(!localAutoNext)} className={`flex items-center justify-center gap-2 py-3 rounded-2xl border transition-all text-[10px] font-black uppercase tracking-widest ${localAutoNext ? 'bg-blue-600 border-blue-600 text-white shadow-lg' : 'bg-white/5 border-white/10 text-slate-400'}`}>
                 <RotateCcw size={14} /> Auto {localAutoNext ? 'ON' : 'OFF'}
               </button>
-              <button onClick={() => {
+              <button onClick={() => { 
                   const rates = [1, 1.25, 1.5, 2];
                   const next = rates[(rates.indexOf(audioSettings.playbackRate) + 1) % rates.length];
-                  setAudioSettings({...audioSettings, playbackRate: next});
+                  setAudioSettings({...audioSettings, playbackRate: next}); 
                 }} className="flex items-center justify-center gap-2 py-3 bg-white/5 border border-white/10 rounded-2xl text-[10px] font-black text-slate-200 uppercase tracking-widest transition-all active:scale-95">
                 <Settings size={14} /> Speed {audioSettings.playbackRate}x
               </button>
