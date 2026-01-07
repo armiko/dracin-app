@@ -317,7 +317,7 @@ const ProfileDropdown = ({ isOpen, onClose, user, setView, handleLogout }) => {
     try {
       const provider = new GoogleAuthProvider();
       await signInWithPopup(auth, provider);
-      window.location.reload();
+      onClose(); // REMOVED window.location.reload()
     } catch (e) {
       console.error("Login gagal", e);
     }
@@ -459,11 +459,22 @@ export function App() {
         setPlayerState(event.state.playerState || null);
         setActiveTag(event.state.activeTag || '');
         setTimeout(() => { isInternalNav.current = false; }, 50);
+        
+        // Sync Locale from URL on Back/Forward
+        const segments = window.location.pathname.split('/').filter(Boolean);
+        if (segments.length > 0) {
+            const first = segments[0];
+            const mapped = first === 'id' ? 'in' : first;
+            const valid = SUPPORTED_LANGUAGES.find(l => l.code === mapped);
+            if (valid && valid.code !== currentLocale) {
+                setCurrentLocale(valid.code);
+            }
+        }
       }
     };
     window.addEventListener('popstate', handlePopState);
     return () => window.removeEventListener('popstate', handlePopState);
-  }, []);
+  }, [currentLocale]);
 
   // FIRESTORE SYNC LOGIC (Watchlist & History)
   // RULE 3: Auth BEFORE queries
@@ -666,7 +677,10 @@ export function App() {
 
   const handleLogout = useCallback(() => {
     signOut(auth).then(() => { 
-        window.location.reload(); 
+        // REMOVED window.location.reload();
+        // Just go home
+        changeView('home');
+        setProfileOpen(false);
     });
   }, [changeView]);
 
@@ -795,6 +809,7 @@ export function App() {
         <div className="container mx-auto max-w-7xl">
           {playerState ? (
             <CustomPlayerPage 
+              key={`player-${currentLocale}-${playerState.book.bookId || playerState.book.id}`}
               book={playerState.book} initialEp={playerState.ep} 
               onBack={handlePlayerBack}
               onEpisodeChange={handleEpisodeChange}
@@ -806,7 +821,7 @@ export function App() {
           ) : (
             <>
               {view === 'home' && (
-                <div className="animate-in fade-in duration-700 text-left">
+                <div key={`home-${currentLocale}`} className="animate-in fade-in duration-700 text-left">
                    {homeData.popular[0] && (
                      <div className="mb-10 relative rounded-[2rem] overflow-hidden min-h-[300px] md:min-h-[350px] flex items-center bg-slate-900 border border-white/5 shadow-2xl text-left">
                        <div className="absolute inset-0">
@@ -857,7 +872,7 @@ export function App() {
                 </div>
               )}
               {view === 'rank' && (
-                <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
+                <div key={`rank-${currentLocale}`} className="animate-in fade-in slide-in-from-bottom-4 duration-500">
                    <div className="flex justify-center gap-2 md:gap-3 mb-10 overflow-x-auto no-scrollbar py-1">
                      {[ { id: 'popular', label: 'Populer' }, { id: 'trending', label: 'Trending' }, { id: 'latest', label: 'Terbaru' } ].map(t => (
                         <button key={t.id} onClick={() => { setRankTab(t.id); setRankPage(1); }} className={`px-5 md:px-8 py-2 md:py-2.5 rounded-xl font-black text-[9px] md:text-[10px] uppercase tracking-widest border transition-all ${rankTab === t.id ? 'bg-blue-600 border-blue-600 text-white shadow-lg shadow-blue-600/20' : 'bg-white/5 border-white/10 text-slate-400 hover:border-white/20'}`}>{t.label}</button>
@@ -874,7 +889,7 @@ export function App() {
                 </div>
               )}
               {view === 'filter' && (
-                <div className="animate-in fade-in duration-500">
+                <div key={`filter-${currentLocale}`} className="animate-in fade-in duration-500">
                    <div className="bg-slate-900/50 p-8 rounded-3xl border border-white/5 mb-10 grid grid-cols-1 md:grid-cols-3 gap-8 backdrop-blur-sm">
                       {STATIC_FILTERS.map(f => (
                         <div key={f.key}>
@@ -893,7 +908,7 @@ export function App() {
                 </div>
               )}
               {view === 'tag-dramas' && (
-                <div className="animate-in fade-in duration-700">
+                <div key={`tag-${currentLocale}-${activeTag}`} className="animate-in fade-in duration-700">
                    <Section title={`Tag: ${activeTag}`} icon={Tag}>
                      {loading ? (
                         <div className="flex flex-col items-center justify-center py-20 gap-4 w-full">
@@ -914,6 +929,7 @@ export function App() {
               )}
               {view === 'detail' && (
                 <DramaDetailPage 
+                  key={`detail-${currentLocale}-${selectedBookId}`}
                   bookId={selectedBookId} 
                   onBack={() => window.history.back()} 
                   user={user} 
