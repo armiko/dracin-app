@@ -971,6 +971,7 @@ export function App() {
               setAudioSettings={handleAudioSettingsUpdate}
               locale={currentLocale}
               onTagClick={handleTagClick}
+              scriptLoaded={scriptLoaded}
             />
           ) : (
             <>
@@ -1091,7 +1092,8 @@ export function App() {
                   history={watchHistory} 
                   onToggleWatchlist={handleToggleWatchlist} 
                   onTagClick={handleTagClick} 
-                  locale={currentLocale} 
+                  locale={currentLocale}
+                  scriptLoaded={scriptLoaded} 
                   onPlayEpisode={(ep, b, c) => { 
                     const ps = { book: b, chapters: c, ep };
                     changeView('detail', b.bookId || b.id, ps, null, b.bookName || b.title);
@@ -1155,22 +1157,23 @@ export function App() {
   );
 }
 
-const DramaDetailPage = ({ bookId, onBack, user, watchlist, history, onToggleWatchlist, onPlayEpisode, onTagClick, locale }) => {
+const DramaDetailPage = ({ bookId, onBack, user, watchlist, history, onToggleWatchlist, onPlayEpisode, onTagClick, locale, scriptLoaded }) => {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   useEffect(() => {
     const fetch = async () => {
-      if (!window.DramaboxCore) return;
+      if (!scriptLoaded || !window.DramaboxCore) return;
       try {
+        setLoading(true);
         const res = await window.DramaboxCore.loadDetailWithRecommend({ apiBase: CONFIG.API_BASE, localeApi: locale, bookId, webficBase: 'https://www.webfic.com' });
         setData(res);
       } catch (e) { console.error("Detail error:", e); } finally { setLoading(false); }
     };
     fetch();
-  }, [bookId, locale]);
+  }, [bookId, locale, scriptLoaded]);
   const isBookmarked = useMemo(() => watchlist.some(i => String(i.bookId || i.id) === String(bookId)), [watchlist, bookId]);
   const lastWatched = useMemo(() => history.find(i => String(i.bookId) === String(bookId))?.lastEpisode, [history, bookId]);
-  if (loading) return <div className="flex flex-col items-center justify-center p-20 gap-4 text-center"><Loader2 className="animate-spin text-blue-500" size={40} /><p className="text-[10px] font-black text-slate-600 uppercase tracking-[0.3em]">Memuat Drama...</p></div>;
+  if (loading || !data) return <div className="flex flex-col items-center justify-center p-20 gap-4 text-center"><Loader2 className="animate-spin text-blue-500" size={40} /><p className="text-[10px] font-black text-slate-600 uppercase tracking-[0.3em]">Memuat Drama...</p></div>;
   return (
     <div className="animate-in fade-in duration-700 text-left">
       <button onClick={onBack} className="flex items-center gap-2 text-slate-500 font-bold hover:text-white transition-colors text-[10px] uppercase tracking-widest mb-8"><ChevronLeft size={18} /> Kembali</button>
@@ -1215,7 +1218,7 @@ const DramaDetailPage = ({ bookId, onBack, user, watchlist, history, onToggleWat
   );
 };
 
-const CustomPlayerPage = ({ book, initialEp, onBack, onEpisodeChange, audioSettings, setAudioSettings, locale, onTagClick }) => {
+const CustomPlayerPage = ({ book, initialEp, onBack, onEpisodeChange, audioSettings, setAudioSettings, locale, onTagClick, scriptLoaded }) => {
   const [currentEp, setCurrentEp] = useState(initialEp);
   const [videoUrl, setVideoUrl] = useState('');
   const [loading, setLoading] = useState(true);
@@ -1234,16 +1237,17 @@ const CustomPlayerPage = ({ book, initialEp, onBack, onEpisodeChange, audioSetti
 
   useEffect(() => {
     const fetchDetails = async () => {
-      if (!window.DramaboxCore) return;
+      if (!scriptLoaded || !window.DramaboxCore) return;
       try {
         const res = await window.DramaboxCore.loadDetailWithRecommend({ apiBase: CONFIG.API_BASE, localeApi: locale, bookId: book.bookId || book.id, webficBase: 'https://www.webfic.com' });
         setDetails(res);
       } catch (e) { console.error("Player detail error:", e); }
     };
     fetchDetails();
-  }, [book.bookId, book.id, locale]);
+  }, [book.bookId, book.id, locale, scriptLoaded]);
 
   const loadVideo = useCallback(async (ep) => {
+    if (!scriptLoaded || !window.DramaboxCore) return;
     setLoading(true);
     try {
       const res = await fetchWithRetry(() => window.DramaboxCore.loadViaBatch({ apiBase: CONFIG.API_BASE, localeApi: locale, bookId: book.bookId || book.id, index: ep }));
@@ -1256,9 +1260,9 @@ const CustomPlayerPage = ({ book, initialEp, onBack, onEpisodeChange, audioSetti
         if (onEpisodeChange) onEpisodeChange(ep); 
       } else { setLoading(false); }
     } catch (e) { console.error("Player error:", e); if (e.message.includes('500')) onBack(); }
-  }, [book.bookId, book.id, onBack, onEpisodeChange, locale]);
+  }, [book.bookId, book.id, onBack, onEpisodeChange, locale, scriptLoaded]);
 
-  useEffect(() => { loadVideo(currentEp); }, [currentEp, loadVideo]);
+  useEffect(() => { if (scriptLoaded) loadVideo(currentEp); }, [currentEp, loadVideo, scriptLoaded]);
 
   useEffect(() => {
     const video = videoRef.current;
