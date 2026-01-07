@@ -384,11 +384,20 @@ const EmptyState = ({ icon: Icon, title, message, actionText, onAction }) => (
 );
 
 const SanPoiPromoModal = ({ onClose }) => {
+  const [dontShow, setDontShow] = useState(false);
+
+  const handleClose = () => {
+    if (dontShow) {
+      localStorage.setItem('SANPOI_PROMO_DATE', new Date().toDateString());
+    }
+    onClose();
+  };
+
   return (
     <div className="fixed inset-0 z-[2000] flex items-center justify-center p-4 animate-in fade-in duration-300">
-      <div className="absolute inset-0 bg-black/80 backdrop-blur-sm" onClick={onClose}></div>
+      <div className="absolute inset-0 bg-black/80 backdrop-blur-sm" onClick={handleClose}></div>
       <div className="relative w-full max-w-sm bg-[#1e293b] border border-white/10 rounded-[2.5rem] overflow-hidden shadow-2xl animate-in zoom-in-95 duration-500 text-left">
-        <button onClick={onClose} className="absolute top-6 right-6 p-2 bg-white/5 hover:bg-white/10 rounded-full text-slate-400 hover:text-white transition-colors z-10">
+        <button onClick={handleClose} className="absolute top-6 right-6 p-2 bg-white/5 hover:bg-white/10 rounded-full text-slate-400 hover:text-white transition-colors z-10">
           <X size={18} />
         </button>
         <div className="p-8 pt-10 text-center">
@@ -418,6 +427,17 @@ const SanPoiPromoModal = ({ onClose }) => {
           <a href="https://sanpoi.com" target="_blank" rel="noopener noreferrer" className="group flex items-center justify-center gap-3 w-full py-4 bg-white text-black hover:bg-blue-600 hover:text-white rounded-2xl font-black text-xs uppercase tracking-widest transition-all shadow-xl active:scale-95">
             Top Up Sekarang <ExternalLink size={16} />
           </a>
+          
+          <div 
+            onClick={() => setDontShow(!dontShow)} 
+            className="mt-6 flex items-center justify-center gap-2 cursor-pointer group select-none"
+          >
+            <div className={`w-4 h-4 rounded-full border flex items-center justify-center transition-all ${dontShow ? 'bg-blue-600 border-blue-600' : 'border-slate-600 group-hover:border-slate-400'}`}>
+               {dontShow && <CheckCircle2 size={10} className="text-white" />}
+            </div>
+            <span className={`text-[10px] font-bold transition-colors ${dontShow ? 'text-blue-400' : 'text-slate-500 group-hover:text-slate-400'}`}>Jangan tampilkan untuk hari ini</span>
+          </div>
+
           <p className="mt-4 text-center text-slate-500 text-[9px] font-bold uppercase tracking-widest">WWW.SANPOI.COM</p>
         </div>
       </div>
@@ -640,7 +660,11 @@ export function App() {
     const unsubscribe = onAuthStateChanged(auth, (u) => {
       if (u) {
         setUser(u);
-        setTimeout(() => setShowPromo(true), 3500);
+        const lastPromoDate = localStorage.getItem('SANPOI_PROMO_DATE');
+        const today = new Date().toDateString();
+        if (lastPromoDate !== today) {
+           setTimeout(() => setShowPromo(true), 3500);
+        }
       } else {
         // If no user detected (and not loading initial state implicitly handled by SDK),
         // Sign in anonymously. This prevents overwriting a Google session if it's currently restoring.
