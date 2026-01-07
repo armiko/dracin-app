@@ -157,49 +157,163 @@ const formatTime = (seconds) => {
   return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
 };
 
-const STATIC_FILTERS = [
-  {
-    title: "Tipe Suara",
-    key: "voice",
-    options: [
-      { display: "Semua", value: "" },
-      { display: "Dubbing", value: "1" },
-      { display: "Subtitle", value: "2" }
-    ]
-  },
-  {
-    title: "Genre & Tema",
-    key: "category",
-    options: [
-      { display: "Semua", value: "" },
-      { display: "Romansa", value: "romansa" },
-      { display: "Wanita Kuat", value: "wanita kuat" },
-      { display: "Pria Dominan", value: "pria dominan" },
-      { display: "Balas Dendam", value: "balas dendam" },
-      { display: "CEO", value: "ceo" },
-      { display: "Keluarga", value: "keluarga" },
-      { display: "Kekuatan Khusus", value: "keluatan khusus" },
-      { display: "Pembalikan Identitas", value: "pembalikan identitas" },
-      { display: "Perselingkuhan", value: "perselingkuhan" },
-      { display: "Terlahir Kembali", value: "terlahir kembali" },
-      { display: "Sejarah", value: "sejarah" },
-      { display: "Tokoh Legendaris", value: "tokoh legendaris" },
-      { display: "Cinta Rahasia", value: "cinta rahasia" },
-      { display: "Intrik Keluarga", value: "intrik keluarga" },
-      { display: "Cinta Setelah Menikah", value: "cinta setelah menikah" },
-      { display: "Takdir Cinta", value: "takdir cinta" },
-      { display: "Kesempatan Kedua", value: "kesempatan kedua" }
-    ]
-  },
-  {
-    title: "Urutan",
-    key: "sort",
-    options: [
-      { display: "Terpopuler", value: "popular" },
-      { display: "Terbaru", value: "latest" }
-    ]
-  }
-];
+// --- DYNAMIC FILTERS PER LOCALE ---
+const FILTERS_BY_LOCALE = {
+  'in': [
+    {
+      title: "Tipe Suara",
+      key: "voice",
+      options: [
+        { display: "Semua", value: "" },
+        { display: "Dubbing", value: "1" },
+        { display: "Subtitle", value: "2" }
+      ]
+    },
+    {
+      title: "Genre & Tema",
+      key: "category",
+      options: [
+        { display: "Semua", value: "" },
+        { display: "Romansa", value: "romansa" },
+        { display: "Wanita Kuat", value: "wanita kuat" },
+        { display: "Pria Dominan", value: "pria dominan" },
+        { display: "Balas Dendam", value: "balas dendam" },
+        { display: "CEO", value: "ceo" },
+        { display: "Keluarga", value: "keluarga" },
+        { display: "Kekuatan Khusus", value: "keluatan khusus" },
+        { display: "Pembalikan Identitas", value: "pembalikan identitas" },
+        { display: "Perselingkuhan", value: "perselingkuhan" },
+        { display: "Terlahir Kembali", value: "terlahir kembali" },
+        { display: "Sejarah", value: "sejarah" },
+        { display: "Tokoh Legendaris", value: "tokoh legendaris" },
+        { display: "Cinta Rahasia", value: "cinta rahasia" },
+        { display: "Intrik Keluarga", value: "intrik keluarga" },
+        { display: "Cinta Setelah Menikah", value: "cinta setelah menikah" },
+        { display: "Takdir Cinta", value: "takdir cinta" },
+        { display: "Kesempatan Kedua", value: "kesempatan kedua" }
+      ]
+    },
+    {
+      title: "Urutan",
+      key: "sort",
+      options: [
+        { display: "Terpopuler", value: "popular" },
+        { display: "Terbaru", value: "latest" }
+      ]
+    }
+  ],
+  'en': [
+    {
+      title: "Voice Type",
+      key: "voice",
+      options: [
+        { display: "All", value: "" },
+        { display: "Dubbed", value: "1" },
+        { display: "Subbed", value: "2" }
+      ]
+    },
+    {
+      title: "Genre & Theme",
+      key: "category",
+      options: [
+        { display: "All", value: "" },
+        { display: "Romance", value: "romance" },
+        { display: "Strong Female", value: "strong" },
+        { display: "Dominant Male", value: "dominant" },
+        { display: "Revenge", value: "revenge" },
+        { display: "CEO", value: "ceo" },
+        { display: "Family", value: "family" },
+        { display: "Special Power", value: "power" },
+        { display: "Identity Swap", value: "identity" },
+        { display: "Affair", value: "affair" },
+        { display: "Rebirth", value: "rebirth" },
+        { display: "Historical", value: "historical" },
+        { display: "Secret Love", value: "secret" },
+        { display: "Married Life", value: "married" },
+        { display: "Destiny", value: "destiny" },
+        { display: "Second Chance", value: "chance" }
+      ]
+    },
+    {
+      title: "Sort By",
+      key: "sort",
+      options: [
+        { display: "Popular", value: "popular" },
+        { display: "Latest", value: "latest" }
+      ]
+    }
+  ],
+  'ko': [
+    {
+      title: "음성 유형",
+      key: "voice",
+      options: [
+        { display: "전체", value: "" },
+        { display: "더빙", value: "1" },
+        { display: "자막", value: "2" }
+      ]
+    },
+    {
+      title: "장르 및 테마",
+      key: "category",
+      options: [
+        { display: "전체", value: "" },
+        { display: "로맨스", value: "romance" },
+        { display: "CEO", value: "ceo" },
+        { display: "복수", value: "revenge" },
+        { display: "가족", value: "family" },
+        { display: "역사", value: "historical" },
+        { display: "비밀 연애", value: "secret" },
+        { display: "결혼 생활", value: "married" },
+        { display: "운명", value: "destiny" }
+      ]
+    },
+    {
+      title: "정렬",
+      key: "sort",
+      options: [
+        { display: "인기순", value: "popular" },
+        { display: "최신순", value: "latest" }
+      ]
+    }
+  ],
+  'ja': [
+    {
+      title: "音声タイプ",
+      key: "voice",
+      options: [
+        { display: "すべて", value: "" },
+        { display: "吹き替え", value: "1" },
+        { display: "字幕", value: "2" }
+      ]
+    },
+    {
+      title: "ジャンルとテーマ",
+      key: "category",
+      options: [
+        { display: "すべて", value: "" },
+        { display: "ロマンス", value: "romance" },
+        { display: "CEO", value: "ceo" },
+        { display: "復讐", value: "revenge" },
+        { display: "家族", value: "family" },
+        { display: "歴史", value: "historical" },
+        { display: "秘密の恋", value: "secret" },
+        { display: "結婚生活", value: "married" },
+        { display: "運命", value: "destiny" }
+      ]
+    },
+    {
+      title: "並び替え",
+      key: "sort",
+      options: [
+        { display: "人気順", value: "popular" },
+        { display: "最新順", value: "latest" }
+      ]
+    }
+  ]
+};
+
+const getFilters = (locale) => FILTERS_BY_LOCALE[locale] || FILTERS_BY_LOCALE['en'];
 
 const Section = React.memo(({ title, icon: IconComponent, onSeeAll, children }) => (
   <section className="mb-8 md:mb-12 text-left">
@@ -317,7 +431,7 @@ const ProfileDropdown = ({ isOpen, onClose, user, setView, handleLogout }) => {
     try {
       const provider = new GoogleAuthProvider();
       await signInWithPopup(auth, provider);
-      onClose(); // REMOVED window.location.reload()
+      onClose(); 
     } catch (e) {
       console.error("Login gagal", e);
     }
@@ -330,7 +444,6 @@ const ProfileDropdown = ({ isOpen, onClose, user, setView, handleLogout }) => {
           <div className="p-5 border-b border-white/5 bg-gradient-to-br from-blue-600/10 to-transparent text-left">
             <p className="text-white font-black text-xs truncate mb-0.5">{user.displayName || "User"}</p>
             <p className="text-slate-500 text-[10px] font-bold truncate uppercase tracking-widest">{user.email || ""}</p>
-            <p className="text-slate-600 text-[8px] font-mono mt-2 break-all">{user.uid}</p>
           </div>
         ) : (
           <div className="p-5 border-b border-white/5 text-center">
@@ -360,8 +473,58 @@ const ProfileDropdown = ({ isOpen, onClose, user, setView, handleLogout }) => {
   );
 };
 
+// --- PATH ROUTING HELPER (Clean URLs) ---
+const parsePath = () => {
+  const path = window.location.pathname;
+  const segments = path.split('/').filter(Boolean); // ['id', 'drama', '123', 'slug']
+  
+  let locale = localStorage.getItem(STORAGE_KEYS.LOCALE) || 'in';
+  let view = 'home';
+  let bookId = null;
+  let playerState = null;
+  let tag = '';
+  
+  if (segments.length > 0) {
+      // Segment 0: Locale
+      const urlLocale = segments[0];
+      const mappedLocale = urlLocale === 'id' ? 'in' : urlLocale;
+      if (SUPPORTED_LANGUAGES.find(l => l.code === mappedLocale)) {
+          locale = mappedLocale;
+      }
+      
+      // Segment 1: View
+      if (segments.length > 1) {
+          const type = segments[1];
+          if (type === 'drama' && segments[2]) {
+              view = 'detail';
+              bookId = segments[2];
+          } else if (type === 'watch' && segments[2]) {
+              view = 'detail';
+              bookId = segments[2];
+              // Try to find ep
+              const epIdx = segments.indexOf('ep');
+              if (epIdx > -1 && segments[epIdx+1]) {
+                  playerState = { ep: parseInt(segments[epIdx+1]), book: { id: segments[2] }, chapters: [] }; 
+              }
+          } else if (type === 'rank') view = 'rank';
+          else if (type === 'filter') view = 'filter';
+          else if (type === 'watchlist') view = 'watchlist';
+          else if (type === 'history') view = 'history';
+          else if (type === 'search') view = 'search-results';
+          else if (type === 'tag' && segments[2]) {
+              view = 'tag-dramas';
+              tag = decodeURIComponent(segments[2]);
+          }
+      }
+  }
+  
+  return { locale, view, bookId, playerState, tag };
+};
+
 export function App() {
-  const [view, setView] = useState('home');
+  const initialState = useMemo(() => parsePath(), []);
+  
+  const [view, setView] = useState(initialState.view);
   const [user, setUser] = useState(null);
   const [homeData, setHomeData] = useState({ popular: [], latest: [], trending: [] });
   const [rankData, setRankData] = useState([]);
@@ -369,25 +532,9 @@ export function App() {
   const [allDramaData, setAllDramaData] = useState([]);
   const [searchData, setSearchData] = useState([]);
   const [tagData, setTagData] = useState([]);
-  // Initial locale state now checks URL first
-  const [currentLocale, setCurrentLocale] = useState(() => {
-    try {
-        const segments = window.location.pathname.split('/').filter(Boolean);
-        if (segments.length > 0) {
-            const first = segments[0];
-            // Map 'id' from URL back to 'in' for API/Internal logic if needed
-            // But SUPPORTED_LANGUAGES uses 'in' for Indonesia code.
-            // If URL is 'id', we map it to 'in'.
-            const mapped = first === 'id' ? 'in' : first;
-            const valid = SUPPORTED_LANGUAGES.find(l => l.code === mapped);
-            if (valid) return valid.code;
-        }
-    } catch(e) {}
-    return localStorage.getItem(STORAGE_KEYS.LOCALE) || 'in';
-  });
-  
+  const [currentLocale, setCurrentLocale] = useState(initialState.locale);
   const [langMenuOpen, setLangMenuOpen] = useState(false);
-  const [activeTag, setActiveTag] = useState('');
+  const [activeTag, setActiveTag] = useState(initialState.tag);
   
   // LOGIKA FIRESTORE STATES
   const [watchlist, setWatchlist] = useState([]);
@@ -396,11 +543,11 @@ export function App() {
   const [loading, setLoading] = useState(false);
   const [searchModalOpen, setSearchModalOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
-  const [selectedBookId, setSelectedBookId] = useState(null);
+  const [selectedBookId, setSelectedBookId] = useState(initialState.bookId);
   const [profileOpen, setProfileOpen] = useState(false);
   const [rankTab, setRankTab] = useState('popular');
   const [activeFilters, setActiveFilters] = useState({ voice: '', category: '', sort: 'popular' });
-  const [playerState, setPlayerState] = useState(null);
+  const [playerState, setPlayerState] = useState(initialState.playerState);
   const [showPromo, setShowPromo] = useState(false);
   const [showAppleBanner, setShowAppleBanner] = useState(true);
   const { loaded: scriptLoaded } = useExternalScript(CONFIG.SCRIPT_URL);
@@ -414,66 +561,71 @@ export function App() {
 
   const isInternalNav = useRef(false);
 
-  // LOGIKA ROUTING / HISTORY SYNC
+  // LOGIKA ROUTING / HISTORY SYNC (Clean URLs)
   const changeView = useCallback((v, bid = null, ps = null, tag = null, title = '') => {
-    if (!isInternalNav.current) {
-        let path = '';
-        const slug = title ? title.toLowerCase().replace(/[^a-z0-9]+/g, '-') : 'drama';
-        
-        // Use 'id' for Indonesia in URL, keep 'in' for internal state/API
-        const urlLocale = currentLocale === 'in' ? 'id' : currentLocale;
+    let path = '';
+    const slug = title ? title.toLowerCase().replace(/[^a-z0-9]+/g, '-') : 'drama';
+    
+    // Use 'id' for Indonesia in URL, keep 'in' for internal state/API
+    const urlLocale = currentLocale === 'in' ? 'id' : currentLocale;
 
-        if (v === 'home') path = '/';
-        else if (v === 'detail') {
-            if (ps) path = `/watch/${bid}/${slug}/ep/${ps.ep}`;
-            else path = `/drama/${bid}/${slug}`;
-        }
-        else if (v === 'rank') path = '/rank';
-        else if (v === 'filter') path = '/filter';
-        else if (v === 'watchlist') path = '/watchlist';
-        else if (v === 'history') path = '/history';
-        else if (v === 'tag-dramas') path = `/tag/${tag}`;
-        else if (v === 'search-results') path = '/search';
-
-        // Construct final URL with locale prefix
-        const finalUrl = `/${urlLocale}${path === '/' ? '' : path}`;
-        
-        // Use standard path pushing
-        window.history.pushState({ view: v, bookId: bid, playerState: ps, activeTag: tag }, '', finalUrl);
+    if (v === 'home') path = '';
+    else if (v === 'detail') {
+        if (ps) path = `/watch/${bid}/${slug}/ep/${ps.ep}`;
+        else path = `/drama/${bid}/${slug}`;
     }
+    else if (v === 'rank') path = '/rank';
+    else if (v === 'filter') path = '/filter';
+    else if (v === 'watchlist') path = '/watchlist';
+    else if (v === 'history') path = '/history';
+    else if (v === 'tag-dramas') path = `/tag/${tag}`;
+    else if (v === 'search-results') path = '/search';
+
+    // Construct final URL with locale prefix
+    const finalUrl = `/${urlLocale}${path}`;
+    window.history.pushState({ view: v, bookId: bid, playerState: ps, activeTag: tag }, '', finalUrl);
+    
+    // Manually trigger state updates since pushState doesn't fire listeners by default
     setView(v);
     setSelectedBookId(bid);
     setPlayerState(ps);
     setActiveTag(tag || '');
+    window.scrollTo({ top: 0, behavior: 'smooth' });
   }, [currentLocale]);
 
+  // Listen to Browser Back/Forward (popstate)
   useEffect(() => {
-    if (!window.history.state) {
-      window.history.replaceState({ view: 'home', bookId: null, playerState: null, activeTag: '' }, '');
-    }
-    const handlePopState = (event) => {
-      if (event.state) {
-        isInternalNav.current = true;
-        setView(event.state.view || 'home');
-        setSelectedBookId(event.state.bookId || null);
-        setPlayerState(event.state.playerState || null);
-        setActiveTag(event.state.activeTag || '');
-        setTimeout(() => { isInternalNav.current = false; }, 50);
+    const onPopState = () => {
+        const parsed = parsePath();
         
-        // Sync Locale from URL on Back/Forward
-        const segments = window.location.pathname.split('/').filter(Boolean);
-        if (segments.length > 0) {
-            const first = segments[0];
-            const mapped = first === 'id' ? 'in' : first;
-            const valid = SUPPORTED_LANGUAGES.find(l => l.code === mapped);
-            if (valid && valid.code !== currentLocale) {
-                setCurrentLocale(valid.code);
-            }
+        // Only update states if they changed to prevent loops
+        if (parsed.locale !== currentLocale) {
+            setCurrentLocale(parsed.locale);
+            // Reload data if locale changes
+            setHomeData({ popular: [], latest: [], trending: [] });
+            setRankData([]);
+            setAllDramaData([]);
+            setActiveFilters({ voice: '', category: '', sort: 'popular' });
         }
-      }
+        
+        setView(parsed.view);
+        setSelectedBookId(parsed.bookId);
+        if (parsed.playerState) {
+             setPlayerState(prev => {
+                 if (prev && prev.book && String(prev.book.id || prev.book.bookId) === String(parsed.playerState.book.id)) {
+                     return { ...prev, ep: parsed.playerState.ep };
+                 }
+                 return parsed.playerState;
+             });
+        } else {
+            setPlayerState(null);
+        }
+        
+        setActiveTag(parsed.tag);
     };
-    window.addEventListener('popstate', handlePopState);
-    return () => window.removeEventListener('popstate', handlePopState);
+
+    window.addEventListener('popstate', onPopState);
+    return () => window.removeEventListener('popstate', onPopState);
   }, [currentLocale]);
 
   // FIRESTORE SYNC LOGIC (Watchlist & History)
@@ -677,8 +829,6 @@ export function App() {
 
   const handleLogout = useCallback(() => {
     signOut(auth).then(() => { 
-        // REMOVED window.location.reload();
-        // Just go home
         changeView('home');
         setProfileOpen(false);
     });
@@ -691,6 +841,8 @@ export function App() {
 
   useEffect(() => { if (scriptLoaded) fetchHome(); }, [scriptLoaded, fetchHome]);
   useEffect(() => { if (view === 'rank') fetchRank(rankTab, rankPage); }, [view, rankTab, rankPage, fetchRank]);
+
+  const currentFilters = useMemo(() => getFilters(currentLocale), [currentLocale]);
 
   const filteredItems = useMemo(() => {
     let result = [...allDramaData];
@@ -734,23 +886,25 @@ export function App() {
                     if (newPath.startsWith(`/${currentUrlLocale}`)) {
                         newPath = newPath.replace(`/${currentUrlLocale}`, `/${urlLocale}`);
                     } else {
+                        // If no locale in path, append it
                         newPath = `/${urlLocale}${newPath === '/' ? '' : newPath}`;
                     }
                     
                     // 1. Save preference
                     localStorage.setItem(STORAGE_KEYS.LOCALE, newCode);
                     
-                    // 2. Update URL without reloading (prevents 404)
+                    // 2. Change Path (Clean URL)
                     window.history.pushState({}, '', newPath);
                     
-                    // 3. Update State to trigger re-render and data fetch
+                    // 3. Update State
                     setCurrentLocale(newCode);
                     setLangMenuOpen(false);
                     
-                    // 4. "Soft Refresh" - Reset data to show loading indicators
+                    // 4. "Soft Refresh"
                     setHomeData({ popular: [], latest: [], trending: [] });
                     setRankData([]);
                     setAllDramaData([]);
+                    setActiveFilters({ voice: '', category: '', sort: 'popular' });
                     
                     // 5. Scroll to top
                     window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -891,7 +1045,7 @@ export function App() {
               {view === 'filter' && (
                 <div key={`filter-${currentLocale}`} className="animate-in fade-in duration-500">
                    <div className="bg-slate-900/50 p-8 rounded-3xl border border-white/5 mb-10 grid grid-cols-1 md:grid-cols-3 gap-8 backdrop-blur-sm">
-                      {STATIC_FILTERS.map(f => (
+                      {currentFilters.map(f => (
                         <div key={f.key}>
                           <h4 className="text-[8px] font-black text-slate-500 uppercase tracking-widest mb-4 flex items-center gap-2"><div className="w-1 h-1 bg-blue-500 rounded-full"></div> {f.title}</h4>
                           <div className="flex flex-wrap gap-2">
