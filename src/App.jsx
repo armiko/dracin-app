@@ -471,23 +471,23 @@ const ProfileDropdown = ({ isOpen, onClose, user, setView, handleLogout }) => {
             <button onClick={handleLoginPopup} className="w-full py-2 bg-blue-600 text-white rounded-xl text-[10px] font-black uppercase tracking-widest shadow-lg">Masuk Google</button>
           </div>
         )}
-        <div className="p-2 text-left">
-          <button onClick={() => { setView('watchlist'); onClose(); }} className="w-full flex items-center gap-3 px-4 py-3 text-slate-300 hover:bg-white/5 rounded-xl text-left group transition-colors">
-            <Bookmark size={16} className="text-slate-500 group-hover:text-blue-400" />
-            <span className="text-[10px] font-black uppercase tracking-widest">Favorit Saya</span>
-          </button>
-          <button onClick={() => { setView('history'); onClose(); }} className="w-full flex items-center gap-3 px-4 py-3 text-slate-300 hover:bg-white/5 rounded-xl text-left group transition-colors">
-            <History size={16} className="text-slate-500 group-hover:text-blue-400" />
-            <span className="text-[10px] font-black uppercase tracking-widest">Sudah Ditonton</span>
-          </button>
-          <div className="my-2 h-[1px] bg-white/5 mx-2"></div>
-          {user && !user.isAnonymous && (
+        {user && !user.isAnonymous && (
+          <div className="p-2 text-left">
+            <button onClick={() => { setView('watchlist'); onClose(); }} className="w-full flex items-center gap-3 px-4 py-3 text-slate-300 hover:bg-white/5 rounded-xl text-left group transition-colors">
+              <Bookmark size={16} className="text-slate-500 group-hover:text-blue-400" />
+              <span className="text-[10px] font-black uppercase tracking-widest">Favorit Saya</span>
+            </button>
+            <button onClick={() => { setView('history'); onClose(); }} className="w-full flex items-center gap-3 px-4 py-3 text-slate-300 hover:bg-white/5 rounded-xl text-left group transition-colors">
+              <History size={16} className="text-slate-500 group-hover:text-blue-400" />
+              <span className="text-[10px] font-black uppercase tracking-widest">Sudah Ditonton</span>
+            </button>
+            <div className="my-2 h-[1px] bg-white/5 mx-2"></div>
             <button onClick={handleLogout} className="w-full flex items-center gap-3 px-4 py-3 text-red-400 hover:bg-red-400/10 rounded-xl transition-colors text-left group">
               <LogOut size={16} />
               <span className="text-[10px] font-black uppercase tracking-widest">Logout Akun</span>
             </button>
-          )}
-        </div>
+          </div>
+        )}
       </div>
     </>
   );
@@ -675,7 +675,11 @@ export function App() {
   }, []);
 
   useEffect(() => {
-    if (!user) return;
+    if (!user || user.isAnonymous) {
+      setWatchlist([]);
+      setWatchHistory([]);
+      return;
+    }
     
     console.log('[Firestore] Setup listeners for user:', user.uid);
 
@@ -710,8 +714,8 @@ export function App() {
   }, [user]);
 
   const handleToggleWatchlist = useCallback(async (book) => {
+    if (!user || user.isAnonymous) return;
     console.log('[Watchlist] Toggle for:', book.bookId || book.id, 'User:', user?.uid);
-    if (!user) return;
     const bid = String(book.bookId || book.id);
     if (!bid || bid === 'undefined') return;
     
@@ -739,8 +743,8 @@ export function App() {
   }, [user, watchlist]);
 
   const updateHistory = useCallback(async (book, episode) => {
+    if (!user || user.isAnonymous) return;
     console.log('[History] Update ep', episode, 'for:', book.bookId || book.id, 'User:', user?.uid);
-    if (!user) return;
     const bid = String(book.bookId || book.id);
     if (!bid || bid === 'undefined') return;
     
@@ -763,7 +767,7 @@ export function App() {
   }, [user]);
 
   const clearHistoryItem = useCallback(async (bid) => {
-    if (!user) return;
+    if (!user || user.isAnonymous) return;
     const docRef = doc(db, 'artifacts', appId, 'users', user.uid, 'history', String(bid));
     try {
       await deleteDoc(docRef);
@@ -1018,9 +1022,11 @@ export function App() {
                            <h1 className="text-3xl sm:text-6xl font-black text-white mb-6 leading-tight tracking-tighter">{homeData.popular[0].bookName || homeData.popular[0].title}</h1>
                            <div className="flex flex-wrap items-center justify-center md:justify-start gap-4">
                              <button onClick={() => changeView('detail', homeData.popular[0].bookId || homeData.popular[0].id, null, null, homeData.popular[0].bookName || homeData.popular[0].title)} className="bg-white text-black hover:bg-blue-600 hover:text-white px-8 py-3.5 rounded-xl font-black text-[10px] uppercase tracking-widest transition-all shadow-xl flex items-center gap-2">MULAI TONTON <Play size={16} fill="currentColor"/></button>
-                             <button onClick={() => handleToggleWatchlist(homeData.popular[0])} className="bg-white/10 hover:bg-white/20 text-white px-6 py-3.5 rounded-xl font-black text-[10px] uppercase tracking-widest transition-all backdrop-blur-md border border-white/10 flex items-center gap-2">
-                               {watchlist.some(i => String(i.bookId || i.id) === String(homeData.popular[0].bookId || homeData.popular[0].id)) ? <BookmarkCheck size={18} className="text-blue-400" /> : <Bookmark size={18} />} SIMPAN
-                             </button>
+                             {user && !user.isAnonymous && (
+                               <button onClick={() => handleToggleWatchlist(homeData.popular[0])} className="bg-white/10 hover:bg-white/20 text-white px-6 py-3.5 rounded-xl font-black text-[10px] uppercase tracking-widest transition-all backdrop-blur-md border border-white/10 flex items-center gap-2">
+                                 {watchlist.some(i => String(i.bookId || i.id) === String(homeData.popular[0].bookId || homeData.popular[0].id)) ? <BookmarkCheck size={18} className="text-blue-400" /> : <Bookmark size={18} />} SIMPAN
+                               </button>
+                             )}
                            </div>
                          </div>
                        </div>
@@ -1161,7 +1167,9 @@ export function App() {
         </div>
       </main>
       <div className="md:hidden fixed bottom-0 left-0 right-0 bg-[#0f172a]/95 backdrop-blur-xl border-t border-white/5 px-6 py-4 flex justify-between items-center z-50">
-        {[ {id:'home', icon:Home, label:'Home'}, {id:'rank', icon:Trophy, label:'Top'}, {id:'filter', icon:Filter, label:'Saring'}, {id:'watchlist', icon:Bookmark, label:'Favorit'} ].map(m => (
+        {[ {id:'home', icon:Home, label:'Home'}, {id:'rank', icon:Trophy, label:'Top'}, {id:'filter', icon:Filter, label:'Saring'}, {id:'watchlist', icon:Bookmark, label:'Favorit'} ]
+        .filter(m => user && !user.isAnonymous ? true : m.id !== 'watchlist')
+        .map(m => (
           <button key={m.id} onClick={() => changeView(m.id)} className={`flex flex-col items-center gap-1 transition-all active:scale-90 ${(view === m.id && !playerState) ? 'text-blue-500' : 'text-slate-500'}`}><m.icon size={20} /><span className="text-[8px] font-black uppercase tracking-widest">{m.label}</span></button>
         ))}
       </div>
@@ -1217,9 +1225,11 @@ const DramaDetailPage = ({ bookId, onBack, user, watchlist, history, onToggleWat
           </div>
           <div className="flex flex-wrap gap-3 mb-8">
             <button onClick={() => onPlayEpisode(lastWatched || 1, data.book, data.chapters)} className="bg-blue-600 hover:bg-blue-500 text-white px-8 py-3.5 rounded-2xl font-black text-[10px] uppercase tracking-widest shadow-xl shadow-blue-600/30 transition-all flex items-center gap-2 group active:scale-95"><Play size={18} fill="currentColor" /> {lastWatched ? `LANJUT EPS ${lastWatched}` : 'TONTON SEKARANG'}</button>
-            <button onClick={() => onToggleWatchlist(data.book)} className={`px-6 py-3.5 rounded-2xl font-black text-[10px] uppercase tracking-widest transition-all border flex items-center gap-2 active:scale-95 ${isBookmarked ? 'bg-blue-600/10 border-blue-500/30 text-blue-400' : 'bg-white/5 border-white/10 text-white hover:bg-white/10'}`}>
-              {isBookmarked ? <BookmarkCheck size={18} /> : <Bookmark size={18} />} {isBookmarked ? 'FAVORIT' : 'SIMPAN'}
-            </button>
+            {user && !user.isAnonymous && (
+              <button onClick={() => onToggleWatchlist(data.book)} className={`px-6 py-3.5 rounded-2xl font-black text-[10px] uppercase tracking-widest transition-all border flex items-center gap-2 active:scale-95 ${isBookmarked ? 'bg-blue-600/10 border-blue-500/30 text-blue-400' : 'bg-white/5 border-white/10 text-white hover:bg-white/10'}`}>
+                {isBookmarked ? <BookmarkCheck size={18} /> : <Bookmark size={18} />} {isBookmarked ? 'FAVORIT' : 'SIMPAN'}
+              </button>
+            )}
           </div>
           <div className="mb-10">
             <h4 className="text-[9px] font-black text-slate-500 uppercase tracking-[0.3em] mb-3">SINOPSIS</h4>
