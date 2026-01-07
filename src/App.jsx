@@ -715,18 +715,31 @@ export function App() {
                     const urlLocale = newCode === 'in' ? 'id' : newCode;
                     const currentUrlLocale = currentLocale === 'in' ? 'id' : currentLocale;
                     
-                    // Construct new Path
+                    // Construct new Path for display
                     let newPath = window.location.pathname;
                     if (newPath.startsWith(`/${currentUrlLocale}`)) {
                         newPath = newPath.replace(`/${currentUrlLocale}`, `/${urlLocale}`);
                     } else {
-                        // If root or no locale, prepend
                         newPath = `/${urlLocale}${newPath === '/' ? '' : newPath}`;
                     }
                     
+                    // 1. Save preference
                     localStorage.setItem(STORAGE_KEYS.LOCALE, newCode);
-                    // Refresh page with new URL
-                    window.location.href = newPath;
+                    
+                    // 2. Update URL without reloading (prevents 404)
+                    window.history.pushState({}, '', newPath);
+                    
+                    // 3. Update State to trigger re-render and data fetch
+                    setCurrentLocale(newCode);
+                    setLangMenuOpen(false);
+                    
+                    // 4. "Soft Refresh" - Reset data to show loading indicators
+                    setHomeData({ popular: [], latest: [], trending: [] });
+                    setRankData([]);
+                    setAllDramaData([]);
+                    
+                    // 5. Scroll to top
+                    window.scrollTo({ top: 0, behavior: 'smooth' });
                 }} className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-colors ${currentLocale === lang.code ? 'bg-blue-600 text-white' : 'text-slate-300 hover:bg-white/5'}`}>
                   <div className="w-6 h-4 overflow-hidden rounded-[2px] flex-shrink-0">
                     <img src={`https://flagcdn.com/w40/${lang.flag}.png`} alt={lang.label} className="w-full h-full object-cover" />
